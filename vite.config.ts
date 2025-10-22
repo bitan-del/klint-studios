@@ -17,6 +17,12 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        login: path.resolve(__dirname, 'login.html'),
+        signup: path.resolve(__dirname, 'signup.html'),
+        landing: path.resolve(__dirname, 'landing.html'),
+      },
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
