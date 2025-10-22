@@ -364,7 +364,7 @@ const mockSuggestVideoPrompts = async (imageB64: string): Promise<string[]> => {
 
 export const geminiService = {
   getChatbotResponse: async (question: string, context: string): Promise<string> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockGetChatbotResponse(question, context);
     
     const prompt = `CONTEXT:
@@ -389,7 +389,7 @@ QUESTION: ${question}`;
   },
 
   optimizePrompt: async (prompt: string, context: string): Promise<string> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockOptimizePrompt(prompt, context);
     
     const fullPrompt = `You are a professional prompt engineer. Your task is to rewrite the user's input to make it more descriptive, detailed, and effective for a generative AI model.
@@ -411,7 +411,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
   },
 
   generateWithImagen: async (prompt: string, aspectRatio: AspectRatio['value']): Promise<string> => {
-      const ai = getAI();
+      const ai = await getAI();
       if (!ai) return mockGenerateWithImagen(prompt, aspectRatio);
       try {
           const response = await ai.models.generateImages({
@@ -437,7 +437,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
   },
   
   analyzeApparel: async (imageB64: string): Promise<{ description: string; category: ApparelCategory }> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockAnalyzeApparel(imageB64);
     
     try {
@@ -476,7 +476,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
   },
 
   suggestLayering: async (items: {id: string, description: string, category: ApparelCategory}[]): Promise<string[]> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockSuggestLayering(items);
     
     try {
@@ -511,7 +511,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
   },
 
   describeModel: async (imageB64: string): Promise<Pick<AIModel, 'name' | 'description' | 'gender'>> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockDescribeModel(imageB64);
 
     try {
@@ -546,7 +546,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
   },
 
   getSceneSuggestions: async (imageB64: string): Promise<SceneSuggestion[]> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockGetSceneSuggestions(imageB64);
     
     try {
@@ -592,7 +592,7 @@ Return ONLY the JSON object.` };
   },
 
   removeBackground: async (imageB64: string): Promise<string> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockRemoveBackground(imageB64);
     try {
       const { mimeType, data } = parseDataUrl(imageB64);
@@ -624,7 +624,7 @@ Return ONLY the JSON object.` };
   },
 
   describeImageStyle: async (imageB64: string): Promise<string> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockDescribeImageStyle(imageB64);
 
     try {
@@ -652,7 +652,7 @@ Return ONLY the JSON object.` };
   },
 
   getArtDirectorSuggestions: async (garmentImageB64: string): Promise<ArtDirectorSuggestion[]> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockGetArtDirectorSuggestions(garmentImageB64);
 
     const validShotTypeIds = SHOT_TYPES_LIBRARY.map(p => p.id);
@@ -745,7 +745,7 @@ Return ONLY the JSON object.` };
   },
 
   generateDynamicPOVShots: async (): Promise<{ name: string; description: string }[]> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) { // Mock implementation for development
         console.log("--- MOCK API CALL: generateDynamicPOVShots ---");
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -796,7 +796,7 @@ Return ONLY a JSON array of 4 objects.`;
   },
 
   generatePhotoshootImage: async (baseParts: any[], aspectRatio: AspectRatio['value'], numberOfImages: number, negativePrompt: string | undefined, onImageGenerated: (imageB64: string, index: number) => void): Promise<void> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockGenerateImage(baseParts, aspectRatio, numberOfImages, negativePrompt, onImageGenerated);
 
     try {
@@ -856,7 +856,7 @@ Return ONLY a JSON array of 4 objects.`;
   },
 
   generativeEdit: async (params: { originalImageB64: string, maskImageB64: string, prompt: string, apparelImageB64?: string | null }): Promise<string> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockGenerativeEdit(params);
 
     try {
@@ -931,7 +931,7 @@ Do NOT change any part of the image outside the masked area.`
   
   // FIX: Add missing video generation methods
   generatePhotoshootVideo: async (prompt: string, aspectRatio: '16:9' | '9:16', resolution: '720p' | '1080p', sourceImageB64?: string | null): Promise<any> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockGenerateVideo(prompt, aspectRatio, resolution, sourceImageB64);
 
     try {
@@ -956,7 +956,7 @@ Do NOT change any part of the image outside the masked area.`
   },
   
   getVideoOperationStatus: async (operation: any): Promise<any> => {
-      const ai = getAI();
+      const ai = await getAI();
       if (!ai) return mockGetVideoOperation(operation);
       try {
           return await ai.operations.getVideosOperation({operation: operation});
@@ -967,7 +967,7 @@ Do NOT change any part of the image outside the masked area.`
   },
   
   fetchVideoAsBlobUrl: async (url: string): Promise<string> => {
-      const ai = getAI();
+      const ai = await getAI();
       if (!ai) return mockFetchVideo(url);
       try {
           const apiKey = localStorage.getItem('geminiApiKey') || process.env.API_KEY;
@@ -985,7 +985,7 @@ Do NOT change any part of the image outside the masked area.`
   },
 
   suggestVideoPrompts: async (imageB64: string): Promise<string[]> => {
-    const ai = getAI();
+    const ai = await getAI();
     if (!ai) return mockSuggestVideoPrompts(imageB64);
     
     try {
