@@ -1,0 +1,117 @@
+full contents of styles.css
+/* Shooting Stars Animation */
+.shooting-stars {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.shooting-star {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1), 0 0 0 8px rgba(255, 255, 255, 0.1), 0 0 20px #fff;
+    animation: animate-shooting-star 3s linear infinite;
+}
+
+.shooting-star::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 300px;
+    height: 1px;
+    background: linear-gradient(90deg, #fff, transparent);
+}
+
+@keyframes animate-shooting-star {
+    0% { transform: rotate(315deg) translateX(0); opacity: 1; }
+    70% { opacity: 1; }
+    100% { transform: rotate(315deg) translateX(-1500px); opacity: 0; }
+}
+
+.shooting-star:nth-child(2) {
+    top: 20%;
+    left: 80%;
+    animation-delay: -1s;
+    animation-duration: 2s;
+}
+
+.shooting-star:nth-child(3) {
+    top: 80%;
+    left: 90%;
+    animation-delay: -2s;
+    animation-duration: 4s;
+}
+
+/* Auth Aurora Background */
+.auth-aurora {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    overflow: hidden;
+}
+
+.auth-aurora::before, .auth-aurora::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.2;
+}
+
+.auth-aurora::before {
+    width: 700px;
+    height: 700px;
+    background-color: #059669;
+    animation: aurora-b 30s ease-in-out infinite alternate;
+}
+
+.auth-aurora::after {
+    width: 500px;
+    height: 500px;
+    background-color: #0ea5e9;
+    animation: aurora-b-2 36s ease-in-out infinite alternate;
+    animation-delay: -7s;
+}
+
+@keyframes aurora-b {
+    0% { transform: translate(10vw, 20vh) scale(0.9); }
+    50% { transform: translate(70vw, 80vh) scale(1.2); }
+    100% { transform: translate(-10vw, 30vh) scale(1); }
+}
+
+@keyframes aurora-b-2 {
+    0% { transform: translate(80vw, 10vh) scale(1); }
+    50% { transform: translate(20vw, 70vh) scale(0.8); }
+    100% { transform: translate(90vw, 25vh) scale(1.1); }
+}
+
+/* Auth Noise Overlay */
+.auth-noise-overlay {
+    position: relative;
+    overflow: hidden;
+}
+
+.auth-noise-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJub2lzZSI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjAuODUiIG51bU9jdGF2ZXM9IjEwIiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWx0ZXI9InVybCgjbm9pc2UpIiBvcGFjaXR5PSIwLjA3Ii8+PC9zdmc+');
+    z-index: 1000;
+    opacity: 0.8;
+}
+
