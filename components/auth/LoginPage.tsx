@@ -32,7 +32,7 @@ export const LoginPage: React.FC = () => {
             
             {/* Brand Video */}
             <div className="mb-8 animate-fade-in delay-150">
-                <div className="relative w-full rounded-lg overflow-hidden" style={{ aspectRatio: '16 / 9' }}>
+                <div className="relative w-full rounded-lg overflow-hidden shadow-2xl" style={{ aspectRatio: '16 / 9' }}>
                     <iframe
                         className="absolute top-0 left-0 w-full h-full"
                         src="https://www.youtube.com/embed/EM68s3Lnr5o?autoplay=0&controls=1&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&disablekb=1&fs=1"
