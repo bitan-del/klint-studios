@@ -30,6 +30,20 @@ export const LoginPage: React.FC = () => {
                 <p className="text-sm text-zinc-400 mt-2">Use your Google account to continue.</p>
             </div>
             
+            {/* Brand Video */}
+            <div className="mb-6 animate-fade-in delay-150 rounded-lg overflow-hidden">
+                <iframe
+                    width="100%"
+                    height="240"
+                    src="https://www.youtube.com/embed/EM68s3Lnr5o?autoplay=0&controls=1&modestbranding=1&rel=0&showinfo=0"
+                    title="Klint Studios Brand Video"
+                    frameBorder="0"
+                    allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="rounded-lg"
+                ></iframe>
+            </div>
+            
             <button
                 type="button"
                 onClick={handleGoogleSignIn}
