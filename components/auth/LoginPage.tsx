@@ -25,13 +25,13 @@ export const LoginPage: React.FC = () => {
 
     return (
         <AuthLayout>
-            <div className="text-center mb-8 animate-fade-in delay-100">
-                <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-br from-zinc-100 to-zinc-400">Sign in to Studio</h2>
-                <p className="text-sm text-zinc-400 mt-2">Use your Google account to continue.</p>
+            <div className="text-center mb-10 animate-fade-in delay-100">
+                <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-br from-zinc-100 to-zinc-400">Sign in to Studio</h2>
+                <p className="text-base text-zinc-400 mt-3">Use your Google account to continue.</p>
             </div>
             
             {/* Brand Video */}
-            <div className="mb-6 animate-fade-in delay-150">
+            <div className="mb-8 animate-fade-in delay-150">
                 <div className="relative w-full rounded-lg overflow-hidden" style={{ aspectRatio: '16 / 9' }}>
                     <iframe
                         className="absolute top-0 left-0 w-full h-full"
@@ -48,7 +48,7 @@ export const LoginPage: React.FC = () => {
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="w-full flex justify-center items-center gap-3 bg-white hover:bg-zinc-200 text-zinc-800 font-semibold py-3 px-5 rounded-lg transition-all duration-300 border border-zinc-300 animate-fade-in disabled:opacity-70 delay-200 hover:shadow-lg active:scale-[0.98]"
+                className="w-full flex justify-center items-center gap-3 bg-white hover:bg-zinc-200 text-zinc-800 font-semibold py-4 px-6 rounded-lg transition-all duration-300 border border-zinc-300 animate-fade-in disabled:opacity-70 delay-200 hover:shadow-lg active:scale-[0.98] text-lg"
             >
                 <GoogleIcon />
                 {loading ? 'Signing in...' : 'Continue with Google'}

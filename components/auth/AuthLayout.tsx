@@ -58,13 +58,13 @@ export const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }
 
                 <div 
                     ref={cardRef}
-                    className="w-full max-w-sm animate-float-in interactive-card"
+                    className="w-full max-w-4xl animate-float-in interactive-card"
                     style={{
                         transform: 'perspective(1500px) rotateX(var(--rotate-x, 0)) rotateY(var(--rotate-y, 0))',
                         transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                     }}
                 >
-                     <div className="relative bg-zinc-900/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-glass shadow-black/40 p-8 shadow-glass-inset shimmer-border glass-shine-effect">
+                     <div className="relative bg-zinc-900/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-glass shadow-black/40 p-12 shadow-glass-inset shimmer-border glass-shine-effect">
                         {children}
                     </div>
                 </div>
