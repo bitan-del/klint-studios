@@ -21,7 +21,6 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         login: path.resolve(__dirname, 'login.html'),
         signup: path.resolve(__dirname, 'signup.html'),
-        landing: path.resolve(__dirname, 'landing.html'),
       },
       output: {
         manualChunks: {
