@@ -418,7 +418,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const success = await databaseService.incrementGenerations(count, isVideo);
     if (success) {
       // Reload user profile to get updated counts
-      await loadUserProfile();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        await loadUserProfile(authUser);
+      }
     }
   };
 

@@ -8,7 +8,7 @@ export type Feature =
   | 'imagenGeneration'; // New permission for Imagen-powered features
 
 export const PLAN_DETAILS: Record<UserPlan, { generations: number; name: string; rpmLimit?: number; dailyLimit?: number; }> = {
-    free: { generations: 3000, name: 'Free', rpmLimit: 10, dailyLimit: 10 }, // 10 images/day for free users
+    free: { generations: 3000, name: 'Free', rpmLimit: 10, dailyLimit: 5 }, // 5 images/day for free users
     solo: { generations: 200, name: 'Solo Creator', rpmLimit: 20 },
     studio: { generations: 600, name: 'Studio', rpmLimit: 40, dailyLimit: 150 },
     brand: { generations: 2500, name: 'Brand', rpmLimit: 60, dailyLimit: 200 },

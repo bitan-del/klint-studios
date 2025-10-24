@@ -1,5 +1,6 @@
 import type { AIModel, ApparelItem, Scene, GenerationMode, Animation, AspectRatio, ApparelCreativeControls, ProductCreativeControls, DesignPlacementControls, DesignInput, StagedAsset, ReimagineCreativeControls } from '../types';
 import { FABRIC_STYLE_OPTIONS, MOCKUP_STYLE_OPTIONS, DESIGN_LIGHTING_STYLE_OPTIONS, DESIGN_CAMERA_ANGLE_OPTIONS, PRINT_STYLE_OPTIONS, DESIGN_PLACEMENT_OPTIONS } from '../constants';
+import { geminiService } from './geminiService';
 
 interface BasePromptParams {
     styleDescription?: string;
@@ -85,7 +86,7 @@ const getAspectRatioPrompt = (aspectRatio: AspectRatio['value']): string => {
 };
 
 export const promptService = {
-    generatePrompt: (params: PromptGenerationParams): { parts: any[] } => {
+    generatePrompt: async (params: PromptGenerationParams): Promise<{ parts: any[] }> => {
         const parts: any[] = [];
         
         // ===================================
@@ -141,11 +142,15 @@ ${newModelPhoto ? '- **SECOND IMAGE (NEW MODEL REFERENCE):** This is the source 
 
             parts.push({ text: textPrompt });
             
-            const sourceImageParts = parseDataUrl(reimagineSourcePhoto);
+            // Preprocess source image to match aspect ratio
+            const resizedSourceImage = await geminiService.resizeImageToAspectRatio(reimagineSourcePhoto, params.aspectRatio);
+            const sourceImageParts = parseDataUrl(resizedSourceImage);
             parts.push({ inlineData: { mimeType: sourceImageParts.mimeType, data: sourceImageParts.data } });
 
             if (newModelPhoto) {
-                const newModelImageParts = parseDataUrl(newModelPhoto);
+                // Preprocess model image to match aspect ratio
+                const resizedModelImage = await geminiService.resizeImageToAspectRatio(newModelPhoto, params.aspectRatio);
+                const newModelImageParts = parseDataUrl(resizedModelImage);
                 parts.push({ inlineData: { mimeType: newModelImageParts.mimeType, data: newModelImageParts.data } });
             }
 
@@ -214,10 +219,14 @@ ${newModelPhoto ? '- **SECOND IMAGE (NEW MODEL REFERENCE):** This is the source 
 
             parts.push({ text: textPrompt });
             
-            const mockupImageParts = parseDataUrl(mockupImage.base64);
+            // Preprocess mockup image to match aspect ratio
+            const resizedMockupImage = await geminiService.resizeImageToAspectRatio(mockupImage.base64, params.aspectRatio);
+            const mockupImageParts = parseDataUrl(resizedMockupImage);
             parts.push({ inlineData: { mimeType: mockupImageParts.mimeType, data: mockupImageParts.data } });
 
-            const designImageParts = parseDataUrl(activeDesign.base64);
+            // Preprocess design image to match aspect ratio
+            const resizedDesignImage = await geminiService.resizeImageToAspectRatio(activeDesign.base64, params.aspectRatio);
+            const designImageParts = parseDataUrl(resizedDesignImage);
             parts.push({ inlineData: { mimeType: designImageParts.mimeType, data: designImageParts.data } });
             
             return { parts };
@@ -258,12 +267,16 @@ ${newModelPhoto ? '- **SECOND IMAGE (NEW MODEL REFERENCE):** This is the source 
             if (uploadedModelImage) {
                 // Scenario 1: User uploaded their own model image
                 modelPrompt = 'The person in the **FIRST IMAGE** should be used. Preserve their identity, face, body, and ethnicity with 100% accuracy.';
-                 const modelImageParts = parseDataUrl(uploadedModelImage);
-                 parts.push({ inlineData: { mimeType: modelImageParts.mimeType, data: modelImageParts.data } });
+                // Preprocess model image to match aspect ratio
+                const resizedModelImage = await geminiService.resizeImageToAspectRatio(uploadedModelImage, params.aspectRatio);
+                const modelImageParts = parseDataUrl(resizedModelImage);
+                parts.push({ inlineData: { mimeType: modelImageParts.mimeType, data: modelImageParts.data } });
             } else if (modelReferenceImage) {
                 // Scenario 3: Generating a pack from a reference model image
                 modelPrompt = 'The person in the **FIRST IMAGE** should be used as the reference for the model. Recreate this person with high fidelity in the new pose and setting.';
-                const modelImageParts = parseDataUrl(modelReferenceImage);
+                // Preprocess reference image to match aspect ratio
+                const resizedReferenceImage = await geminiService.resizeImageToAspectRatio(modelReferenceImage, params.aspectRatio);
+                const modelImageParts = parseDataUrl(resizedReferenceImage);
                 parts.push({ inlineData: { mimeType: modelImageParts.mimeType, data: modelImageParts.data } });
             } else if (selectedModels.length > 0) {
                 // Scenario 2: User selected model(s) from the library
@@ -339,14 +352,18 @@ ${isVideo ? `\n**ANIMATION:**\n- ${animation.description}` : ''}
              }
 
              if (baseLookImageB64) {
-                 const lookImageParts = parseDataUrl(baseLookImageB64);
+                 // Preprocess look image to match aspect ratio
+                 const resizedLookImage = await geminiService.resizeImageToAspectRatio(baseLookImageB64, params.aspectRatio);
+                 const lookImageParts = parseDataUrl(resizedLookImage);
                  parts.unshift({ inlineData: { mimeType: lookImageParts.mimeType, data: lookImageParts.data } });
              }
              
-             apparel.forEach(item => {
-                 const itemImageParts = parseDataUrl(item.base64);
+             // Preprocess all apparel item images to match aspect ratio
+             for (const item of apparel) {
+                 const resizedItemImage = await geminiService.resizeImageToAspectRatio(item.base64, params.aspectRatio);
+                 const itemImageParts = parseDataUrl(resizedItemImage);
                  parts.push({ inlineData: { mimeType: itemImageParts.mimeType, data: itemImageParts.data } });
-             });
+             }
              return { parts };
         }
 
@@ -435,17 +452,24 @@ ${isVideo ? `\n**ANIMATION:**\n- ${animation.description}` : ''}
             }
             
             if (modelReferenceImage) {
-                 const modelImageParts = parseDataUrl(modelReferenceImage);
-                 parts.push({ inlineData: { mimeType: modelImageParts.mimeType, data: modelImageParts.data } });
+                // Preprocess reference model image to match aspect ratio
+                const resizedModelImage = await geminiService.resizeImageToAspectRatio(modelReferenceImage, params.aspectRatio);
+                const modelImageParts = parseDataUrl(resizedModelImage);
+                parts.push({ inlineData: { mimeType: modelImageParts.mimeType, data: modelImageParts.data } });
             } else if (uploadedModelImage) {
-                 const modelImageParts = parseDataUrl(uploadedModelImage);
-                 parts.push({ inlineData: { mimeType: modelImageParts.mimeType, data: modelImageParts.data } });
+                // Preprocess uploaded model image to match aspect ratio
+                const resizedModelImage = await geminiService.resizeImageToAspectRatio(uploadedModelImage, params.aspectRatio);
+                const modelImageParts = parseDataUrl(resizedModelImage);
+                parts.push({ inlineData: { mimeType: modelImageParts.mimeType, data: modelImageParts.data } });
             }
 
-            stagedAssets.sort((a,b) => a.id === 'product' ? -1 : b.id === 'product' ? 1 : 0).forEach(asset => {
-                const assetImageParts = parseDataUrl(asset.base64);
+            // Preprocess all staged asset images to match aspect ratio
+            const sortedAssets = stagedAssets.sort((a,b) => a.id === 'product' ? -1 : b.id === 'product' ? 1 : 0);
+            for (const asset of sortedAssets) {
+                const resizedAssetImage = await geminiService.resizeImageToAspectRatio(asset.base64, params.aspectRatio);
+                const assetImageParts = parseDataUrl(resizedAssetImage);
                 parts.push({ inlineData: { mimeType: assetImageParts.mimeType, data: assetImageParts.data } });
-            });
+            }
             
              return { parts };
         }

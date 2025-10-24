@@ -689,7 +689,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     ? { ...state, studioMode: 'product', generationMode: 'image', productControls: overriddenControls, aspectRatio: state.aspectRatio.value }
                     : { ...state, studioMode: 'apparel', generationMode: 'image', apparelControls: overriddenControls, aspectRatio: state.aspectRatio.value };
 
-                const { parts } = promptService.generatePrompt(promptParams as any);
+                const { parts } = await promptService.generatePrompt(promptParams as any);
 
                 await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                     set(currentState => {
@@ -717,7 +717,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         ? { ...state, studioMode: 'product', generationMode: 'image', productControls: overriddenControls, aspectRatio: ar.value }
                         : { ...state, studioMode: 'apparel', generationMode: 'image', apparelControls: overriddenControls, aspectRatio: ar.value };
 
-                    const { parts } = promptService.generatePrompt(promptParams as any);
+                    const { parts } = await promptService.generatePrompt(promptParams as any);
                     
                     await withRetry(() => geminiService.generatePhotoshootImage(parts, ar.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                         set(currentState => {
@@ -759,7 +759,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         const cameraAngle = CAMERA_ANGLES_LIBRARY.find(c => c.id === shot.cameraAngleId) || state.apparelControls.cameraAngle;
 
                         const overriddenControls = { ...state.apparelControls, shotType, expression, cameraAngle };
-                        const { parts } = promptService.generatePrompt({ ...state, studioMode: 'apparel', generationMode: 'image', apparelControls: overriddenControls });
+                        const { parts } = await promptService.generatePrompt({ ...state, studioMode: 'apparel', generationMode: 'image', apparelControls: overriddenControls });
                         
                         await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                             set(currentState => {
@@ -772,7 +772,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     await onGenerationComplete(packShots.length);
                 } else {
                     set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
-                    const { parts } = promptService.generatePrompt({ studioMode: 'apparel', generationMode: 'image', ...get() });
+                    const { parts } = await promptService.generatePrompt({ studioMode: 'apparel', generationMode: 'image', ...get() });
                     await withRetry(() => geminiService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, apparelControls.negativePrompt, (imageB64, index) => {
                       set(state => {
                         const newImages = [...(state.generatedImages || Array(numberOfImages).fill(null))];
@@ -798,7 +798,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         const expression = EXPRESSIONS.find(e => e.id === shot.expressionId) || state.productControls.expression;
                         const cameraAngle = CAMERA_ANGLES_LIBRARY.find(c => c.id === shot.cameraAngleId) || state.productControls.cameraAngle;
                         const overriddenControls = { ...state.productControls, shotType, expression, cameraAngle };
-                        const { parts } = promptService.generatePrompt({ ...state, studioMode: 'product', generationMode: 'image', productControls: overriddenControls });
+                        const { parts } = await promptService.generatePrompt({ ...state, studioMode: 'product', generationMode: 'image', productControls: overriddenControls });
             
                         await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                             set(currentState => {
@@ -820,7 +820,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         const cameraAngle = CAMERA_ANGLES_LIBRARY_PRODUCT.find(c => c.id === shot.cameraAngleId) || state.productControls.cameraAngle;
                         const focalLength = FOCAL_LENGTHS_LIBRARY.find(f => f.id === shot.focalLengthId) || state.productControls.focalLength;
                         const overriddenControls = { ...state.productControls, cameraAngle, focalLength };
-                        const { parts } = promptService.generatePrompt({ ...state, studioMode: 'product', generationMode: 'image', productControls: overriddenControls });
+                        const { parts } = await promptService.generatePrompt({ ...state, studioMode: 'product', generationMode: 'image', productControls: overriddenControls });
             
                         await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                             set(currentState => {
@@ -833,7 +833,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     await onGenerationComplete(packShots.length);
                 } else {
                     set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
-                    const { parts } = promptService.generatePrompt({ studioMode: 'product', generationMode: 'image', ...get() });
+                    const { parts } = await promptService.generatePrompt({ studioMode: 'product', generationMode: 'image', ...get() });
                     await withRetry(() => geminiService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, productControls.negativePrompt, (imageB64, index) => {
                         set(state => {
                             const newImages = [...(state.generatedImages || Array(numberOfImages).fill(null))];
@@ -864,7 +864,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         cameraAngle: shot.angle,
                         lightingStyle: shot.lighting,
                     };
-                     const { parts } = promptService.generatePrompt({
+                     const { parts } = await promptService.generatePrompt({
                         studioMode: 'design',
                         mockupImage: state.mockupImage,
                         designImage: state.designImage,
@@ -887,7 +887,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
               } else {
                 const { numberOfImages } = get();
                 set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
-                const { parts } = promptService.generatePrompt({
+                const { parts } = await promptService.generatePrompt({
                     studioMode: 'design',
                     mockupImage: state.mockupImage,
                     designImage: state.designImage,
@@ -911,7 +911,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
             case 'reimagine': {
                 const { numberOfImages, reimagineControls } = get();
                  set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
-                const { parts } = promptService.generatePrompt({ studioMode: 'reimagine', ...get() });
+                const { parts } = await promptService.generatePrompt({ studioMode: 'reimagine', ...get() });
                 await withRetry(() => geminiService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, reimagineControls.negativePrompt, (imageB64, index) => {
                     set(state => {
                         const newImages = [...(state.generatedImages || Array(numberOfImages).fill(null))];
@@ -1119,7 +1119,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
             throw new Error("Video generation is not supported in this mode.");
         }
 
-        const { parts } = promptService.generatePrompt(promptParams);
+        const { parts } = await promptService.generatePrompt(promptParams);
         const textPrompt = parts.find(p => 'text' in p)?.text || '';
         if (!textPrompt) throw new Error("Could not generate a valid prompt for video generation.");
 
@@ -1221,7 +1221,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
 
             const overriddenControls = { ...state.apparelControls, shotType, expression, cameraAngle };
 
-            const { parts } = promptService.generatePrompt({
+            const { parts } = await promptService.generatePrompt({
                 ...state,
                 studioMode: 'apparel',
                 generationMode: 'image',
@@ -1265,7 +1265,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
             
             const overriddenControls = { ...state.productControls, shotType, expression, cameraAngle };
 
-            const { parts } = promptService.generatePrompt({
+            const { parts } = await promptService.generatePrompt({
                 ...state,
                 studioMode: 'product',
                 generationMode: 'image',
@@ -1311,7 +1311,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
             const currentState = get();
             const overriddenControls = { ...currentState.designPlacementControls, shirtColor: color };
             
-            const { parts } = promptService.generatePrompt({
+            const { parts } = await promptService.generatePrompt({
                 ...currentState,
                 studioMode: 'design',
                 designPlacementControls: overriddenControls,

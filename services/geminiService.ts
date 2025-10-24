@@ -82,6 +82,60 @@ const parseDataUrl = (dataUrl: string) => {
     };
 };
 
+// Helper to resize/crop an image to match target aspect ratio
+const resizeImageToAspectRatio = async (imageDataUrl: string, aspectRatio: AspectRatio['value']): Promise<string> => {
+    const dimensions: Record<string, { width: number; height: number }> = {
+        '1:1': { width: 1024, height: 1024 },
+        '3:4': { width: 1024, height: 1365 },
+        '4:3': { width: 1024, height: 768 },
+        '9:16': { width: 720, height: 1280 },
+        '16:9': { width: 1280, height: 720 },
+    };
+
+    const { width: targetWidth, height: targetHeight } = dimensions[aspectRatio] || dimensions['3:4'];
+    const targetRatio = targetWidth / targetHeight;
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const sourceRatio = img.width / img.height;
+            
+            let sourceX = 0, sourceY = 0, sourceWidth = img.width, sourceHeight = img.height;
+            
+            // Crop to match target aspect ratio (center crop)
+            if (sourceRatio > targetRatio) {
+                // Source is wider - crop width
+                sourceWidth = img.height * targetRatio;
+                sourceX = (img.width - sourceWidth) / 2;
+            } else if (sourceRatio < targetRatio) {
+                // Source is taller - crop height
+                sourceHeight = img.width / targetRatio;
+                sourceY = (img.height - sourceHeight) / 2;
+            }
+
+            // Create canvas with target dimensions
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                // Draw cropped and resized image
+                ctx.drawImage(
+                    img,
+                    sourceX, sourceY, sourceWidth, sourceHeight, // Source rectangle
+                    0, 0, targetWidth, targetHeight              // Destination rectangle
+                );
+                resolve(canvas.toDataURL('image/png'));
+            } else {
+                reject(new Error('Could not get canvas context'));
+            }
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = imageDataUrl;
+    });
+};
+
 
 // --- MOCK FUNCTIONS for development without API KEY ---
 const mockGenerateImage = async (baseParts: any[], aspectRatio: AspectRatio['value'], numberOfImages: number, negativePrompt: string | undefined, onImageGenerated: (imageB64: string, index: number) => void): Promise<void> => {
@@ -385,6 +439,37 @@ QUESTION: ${question}`;
     } catch (error) {
         console.error("Error getting chatbot response from Gemini:", error);
         throw error;
+    }
+  },
+
+  analyzeImage: async (imageB64: string, customPrompt: string): Promise<string> => {
+    const ai = await getAI();
+    if (!ai) {
+      // Fallback for when AI is not available
+      return "This is a detailed image with professional composition and lighting. The subject is well-positioned with attention to visual hierarchy and balance.";
+    }
+
+    try {
+      const { mimeType, data } = parseDataUrl(imageB64);
+      const imagePart = {
+        inlineData: {
+          mimeType,
+          data,
+        },
+      };
+      const textPart = {
+        text: customPrompt
+      };
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, textPart] },
+      });
+      
+      return response.text;
+    } catch (error) {
+      console.error("Error analyzing image with Gemini:", error);
+      throw error;
     }
   },
 
@@ -1029,6 +1114,143 @@ Do NOT change any part of the image outside the masked area.`
         throw e;
     }
   },
+
+  // Simplified method for the new dashboard workflows
+  generateSimplifiedPhotoshoot: async (
+    prompt: string, 
+    aspectRatio: AspectRatio['value'],
+    sourceImageB64?: string | null
+  ): Promise<string> => {
+    const ai = await getAI();
+    
+    // If no AI key, fallback to mock Imagen
+    if (!ai) {
+      return mockGenerateWithImagen(prompt, aspectRatio);
+    }
+
+    // If no source image, use Imagen directly (it has proper aspect ratio support)
+    if (!sourceImageB64) {
+      const imagenPrompt = `${prompt}. Professional photoshoot, high-quality, detailed, magazine-style photography.`;
+      return geminiService.generateWithImagen(imagenPrompt, aspectRatio);
+    }
+
+    try {
+      const parts: any[] = [];
+
+      // CRITICAL: Pre-process the image to match target aspect ratio
+      // Crop and resize the source image to the exact output dimensions we want
+      if (sourceImageB64) {
+        console.log(`🔧 Preprocessing image from source to ${aspectRatio} aspect ratio...`);
+        const resizedImage = await resizeImageToAspectRatio(sourceImageB64, aspectRatio);
+        const imageParts = parseDataUrl(resizedImage);
+        parts.push({ 
+          inlineData: { 
+            mimeType: imageParts.mimeType, 
+            data: imageParts.data 
+          } 
+        });
+        console.log(`✅ Image preprocessed to ${aspectRatio}`);
+      }
+
+      // Build the prompt
+      let fullPrompt = `Generate a high-quality, professional photoshoot image based on the following description:\n\n${prompt}\n\n`;
+      
+      if (sourceImageB64) {
+        fullPrompt += `**Subject Instructions:**
+- Use the person/model from the provided reference image as your subject
+- Maintain their exact appearance, facial features, clothing, and likeness
+- Place them in a NEW scene that matches the prompt description
+- Keep the same aspect ratio and framing as the reference image
+- Create professional photoshoot-quality lighting and composition\n\n`;
+      }
+
+      fullPrompt += `**Technical Requirements:**
+- Aspect Ratio: ${aspectRatio} (maintain exact aspect ratio of input)
+- Style: Professional, high-end, magazine-quality photoshoot
+- Lighting: Natural, flattering, professional lighting
+- Quality: Sharp focus, detailed, photorealistic
+- Seed: ${Math.random()}`;
+
+      parts.push({ text: fullPrompt });
+
+      // Use the photoshoot image generator
+      return new Promise<string>((resolve, reject) => {
+        geminiService.generatePhotoshootImage(
+          parts, 
+          aspectRatio, 
+          1, 
+          undefined, 
+          (imageB64) => {
+            resolve(imageB64);
+          }
+        ).catch(reject);
+      });
+
+    } catch (error) {
+      console.error("Error in simplified photoshoot generation:", error);
+      throw error;
+    }
+  },
   
+  /**
+   * Simple AI upscaling - takes the image and enhances it directly
+   */
+  upscaleImage: async (imageDataUrl: string, enhancementPrompt: string = 'Enhance image quality, sharpen details, improve clarity'): Promise<string> => {
+    try {
+      console.log('🔍 Starting AI upscaling...');
+      
+      const ai = await getAI();
+      if (!ai) {
+        throw new Error('AI service not available');
+      }
+
+      const { mimeType, data } = parseDataUrl(imageDataUrl);
+      
+      const enhancementParts = [
+        {
+          inlineData: { mimeType, data }
+        },
+        {
+          text: `Upscale and enhance this image. ${enhancementPrompt}. Improve resolution, sharpness, and detail quality. Maintain the exact composition, colors, and appearance. Return the enhanced high-quality version.`
+        }
+      ];
+
+      console.log('🎨 Enhancing image with AI...');
+
+      const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: enhancementParts },
+        config: {
+          temperature: 0.1,
+          safetySettings: []
+        }
+      });
+
+      // Extract the enhanced image
+      let enhancedDataUrl = imageDataUrl;
+      
+      if (result.candidates?.[0]?.content?.parts) {
+        for (const part of result.candidates[0].content.parts) {
+          if (part.inlineData?.mimeType?.startsWith('image/')) {
+            enhancedDataUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+            console.log('✅ Image enhanced successfully');
+            break;
+          }
+        }
+      }
+
+      if (enhancedDataUrl === imageDataUrl) {
+        throw new Error('No enhanced image received from AI');
+      }
+
+      return enhancedDataUrl;
+
+    } catch (error) {
+      console.error('❌ Error in upscaling:', error);
+      throw error;
+    }
+  },
+
   parseDataUrl, // Export for use in other services
+  resizeImageToAspectRatio, // Export for use in other services
 };

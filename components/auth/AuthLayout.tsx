@@ -1,8 +1,11 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { KLogo } from '../shared/KLogo';
+import { PricingModal } from '../shared/PricingModal';
+import { Footer } from '../shared/Footer';
 
 export const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const cardRef = useRef<HTMLDivElement>(null);
+    const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
 
     const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
         const card = cardRef.current;
@@ -44,18 +47,59 @@ export const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }
                 <div className="shooting-star"></div>
                 <div className="shooting-star"></div>
             </div>
+            
+            {/* Glassmorphic Navigation Bar */}
+            <nav className="relative z-50 px-6 lg:px-12 py-4">
+                <div className="flex justify-center">
+                    {/* Glassmorphic container with rounded pill shape */}
+                    <div className="relative border border-white/20 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-full px-8 py-2.5 inline-flex">
+                        {/* Subtle glow effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-emerald-500/5 rounded-full"></div>
+                        
+                        <div className="relative flex items-center gap-8">
+                            {/* Logo */}
+                            <a href="/" className="flex items-center gap-2 cursor-pointer group">
+                                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/30 group-hover:shadow-emerald-500/50 transition-all">
+                                    <KLogo className="text-white" size={18} />
+                                </div>
+                                <h1 className="text-base font-bold text-white tracking-tight">Klint Studios</h1>
+                            </a>
+
+                            {/* Center Navigation */}
+                            <div className="hidden lg:flex items-center gap-1">
+                                <button
+                                    onClick={() => setIsPricingModalOpen(true)}
+                                    className="px-4 py-1.5 text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                                >
+                                    Pricing
+                                </button>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="hidden md:flex items-center gap-2">
+                                <a
+                                    href="/login.html"
+                                    className="px-5 py-2 text-sm font-medium text-white/80 hover:text-white hover:bg-white/5 rounded-full transition-all border border-white/20"
+                                >
+                                    Login
+                                </a>
+                                <a
+                                    href="/login.html"
+                                    className="px-5 py-2 text-sm font-semibold bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full hover:shadow-lg hover:shadow-emerald-500/30 transition-all"
+                                >
+                                    Sign up for free
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            
             <div 
-                className="min-h-full flex flex-col items-center justify-center p-4"
+                className="flex-1 flex flex-col items-center justify-center p-4"
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
             >
-                <a href="/" className="mb-8 flex items-center gap-3 group" aria-label="Back to home">
-                    <div className="bg-zinc-800/50 group-hover:bg-emerald-600/20 p-2 rounded-lg border border-zinc-700/50 group-hover:border-emerald-500/30 transition-all duration-300">
-                        <KLogo className="text-zinc-300 group-hover:text-emerald-400 transition-colors duration-300" size={24} />
-                    </div>
-                    <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-zinc-100 to-zinc-400">Klint Studios</h1>
-                </a>
-
                 <div 
                     ref={cardRef}
                     className="w-full max-w-4xl animate-float-in interactive-card"
@@ -69,6 +113,15 @@ export const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }
                     </div>
                 </div>
             </div>
+            
+            {/* Footer */}
+            <Footer />
+            
+            {/* Pricing Modal */}
+            <PricingModal 
+                isOpen={isPricingModalOpen} 
+                onClose={() => setIsPricingModalOpen(false)} 
+            />
         </div>
     );
 };

@@ -12,7 +12,8 @@ import { PricingModal } from './components/shared/PricingModal';
 import { PaymentModal } from './components/payment/PaymentModal';
 import { FeatureLockOverlay } from './components/shared/FeatureLockOverlay';
 import { Chatbot } from './components/chatbot/Chatbot';
-import { User, PanelLeft, PanelRight, ChevronDown, Globe, Key, X, Shield, Search, CreditCard, DollarSign, Eye, EyeOff, Link2, Loader2, Check, RefreshCw, RotateCcw, Zap } from 'lucide-react';
+import { DashboardContainer } from './components/dashboard/DashboardContainer';
+import { User, PanelLeft, PanelRight, ChevronDown, Globe, Key, X, Shield, Search, CreditCard, DollarSign, Eye, EyeOff, Link2, Loader2, Check, RefreshCw, RotateCcw, Zap, LayoutGrid, Layers } from 'lucide-react';
 import { KLogo } from './components/shared/KLogo';
 import type { User as UserType, UserPlan, Currency, PlanPrices, PaymentGatewaySettings, SupabaseSettings, GeminiSettings } from './types';
 import { PLAN_DETAILS } from './services/permissionsService';
@@ -743,7 +744,8 @@ const UserMenu: React.FC = () => {
 const AppHeader: React.FC<{
     onInputsClick: () => void;
     onSettingsClick: () => void;
-}> = ({ onInputsClick, onSettingsClick }) => {
+    onSwitchToSimple?: () => void;
+}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple }) => {
     const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
     const { t } = useStudio();
@@ -762,6 +764,16 @@ const AppHeader: React.FC<{
                     
                     {/* Moved Mobile Icons */}
                     <div className="flex items-center gap-1 sm:gap-2 lg:hidden">
+                        {onSwitchToSimple && (
+                            <button 
+                                onClick={onSwitchToSimple}
+                                className="p-2 rounded-lg hover:bg-zinc-800" 
+                                aria-label="Switch to Simple Mode"
+                                title="Simple Mode"
+                            >
+                                <LayoutGrid size={20} className="text-zinc-400 hover:text-emerald-400" />
+                            </button>
+                        )}
                         <LanguageSwitcher />
                          {user?.role === 'admin' && (
                            <button onClick={() => setIsAdminPanelOpen(true)} className="p-2 rounded-lg hover:bg-zinc-800" aria-label="Open admin panel">
@@ -795,6 +807,16 @@ const AppHeader: React.FC<{
 
                 {/* --- RIGHT GROUP --- */}
                 <div className="flex-1 items-center justify-end gap-2 sm:gap-3 hidden lg:flex">
+                    {onSwitchToSimple && (
+                        <button 
+                            onClick={onSwitchToSimple}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-emerald-400 transition-colors whitespace-nowrap"
+                            title="Switch to Simple Mode"
+                        >
+                            <LayoutGrid size={18} />
+                            <span className="text-sm font-medium">Simple Mode</span>
+                        </button>
+                    )}
                      {user?.role === 'admin' && (
                         <button onClick={() => setIsAdminPanelOpen(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-900/50 hover:bg-emerald-800/70 border border-emerald-500/30 text-emerald-300 transition-colors whitespace-nowrap">
                             <Shield size={18} />
@@ -814,13 +836,15 @@ const AppHeader: React.FC<{
 
 const AppContent: React.FC = () => {
     const { isGuideActive, isBestPracticesModalOpen, setBestPracticesModalOpen, t } = useStudio();
-    const { user, needsPayment, checkSubscriptionStatus } = useAuth();
+    const { user, needsPayment, checkSubscriptionStatus, logout } = useAuth();
     const [activeMobilePanel, setActiveMobilePanel] = useState<'inputs' | 'settings' | null>(null);
     const [isLgSettingsPanelOpen, setLgSettingsPanelOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [hasCheckedSubscription, setHasCheckedSubscription] = useState(false);
     const [isFeatureLocked, setIsFeatureLocked] = useState(false);
     const [hideFeatureLock, setHideFeatureLock] = useState(false);
+    const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+    const [useSimplifiedUI, setUseSimplifiedUI] = useState(true); // Toggle for new simplified UI
 
     // Check subscription status when user logs in
     useEffect(() => {
@@ -831,7 +855,7 @@ const AppContent: React.FC = () => {
         }
     }, [user, hasCheckedSubscription, checkSubscriptionStatus]);
 
-    // Show payment modal reminder every 10 seconds for free users
+    // Show payment modal reminder every 30 minutes for free users
     useEffect(() => {
         if (user && user.plan === 'free' && user.role !== 'admin' && user.role !== 'super_admin') {
             console.log('⏰ Setting up payment reminder for free user');
@@ -839,11 +863,11 @@ const AppContent: React.FC = () => {
             // Show immediately on first login
             setIsPaymentModalOpen(true);
             
-            // Then show every 10 seconds
+            // Then show every 30 minutes
             const interval = setInterval(() => {
                 console.log('💳 Reminder: Payment modal for free user');
                 setIsPaymentModalOpen(true);
-            }, 10000); // 10 seconds
+            }, 1800000); // 30 minutes (30 * 60 * 1000)
             
             return () => clearInterval(interval);
         }
@@ -881,11 +905,37 @@ const AppContent: React.FC = () => {
         }
     }, [activeMobilePanel]);
 
+    // If user is logged in and simplified UI is enabled, show the new dashboard
+    if (user && useSimplifiedUI) {
+        return (
+            <>
+                <DashboardContainer
+                    user={user}
+                    onLogout={logout}
+                    onOpenPayment={() => setIsPaymentModalOpen(true)}
+                    onOpenAdmin={() => setIsAdminPanelOpen(true)}
+                    onSwitchToAdvanced={() => setUseSimplifiedUI(false)}
+                />
+
+                {/* Payment Modal */}
+                <PaymentModal
+                    isOpen={isPaymentModalOpen}
+                    onClose={() => setIsPaymentModalOpen(false)}
+                    canClose={user.plan !== 'free' || user.role === 'admin'}
+                />
+
+                {/* Admin Panel Modal */}
+                <AdminPanelModal isOpen={isAdminPanelOpen} onClose={() => setIsAdminPanelOpen(false)} />
+            </>
+        );
+    }
+
     return (
         <div className="bg-zinc-950 text-zinc-300 font-sans antialiased h-screen flex flex-col overflow-hidden">
             <AppHeader
                 onInputsClick={() => setActiveMobilePanel('inputs')}
                 onSettingsClick={() => setActiveMobilePanel('settings')}
+                onSwitchToSimple={() => setUseSimplifiedUI(true)}
             />
             <main className="flex-grow flex-1 flex overflow-hidden relative">
                 {/* Feature Lock Overlay - shown when:
