@@ -1,31 +1,51 @@
 import React from 'react';
 
-// FIX: Add style prop to allow inline styles.
+// Artsy, hand-drawn abstract K logo
 export const KLogo: React.FC<{ size?: number; className?: string; style?: React.CSSProperties }> = ({ size = 24, className, style }) => {
     return (
         <svg
             width={size}
             height={size}
-            viewBox="0 0 24 24"
+            viewBox="0 0 32 32"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             className={className}
             style={style}
         >
+            {/* Hand-drawn vertical stroke */}
             <path 
-                d="M7 4.5C7.23864 7.63608 6.53856 16.8924 7.5 20" 
+                d="M9 5.5C9.2 6.8 9.1 8.2 8.9 9.6C8.8 11.5 8.7 13.5 8.8 15.5C8.9 18.2 9.2 21 9.6 23.7C9.7 24.5 9.9 25.5 10.2 26.2" 
                 stroke="currentColor" 
-                strokeWidth="2.5" 
+                strokeWidth="2.8" 
                 strokeLinecap="round" 
                 strokeLinejoin="round"
+                opacity="0.95"
             />
+            
+            {/* Abstract upper diagonal - flowing curve */}
             <path 
-                d="M16.5 5C14.1772 9.07065 10.5 12 10.5 12C10.5 12 13.5 15.5 16 19.5" 
+                d="M22 6.5C21.2 7.8 20 9.3 18.5 10.8C17.2 12.1 15.5 13.5 13.8 14.5C13 15 12.5 15.3 12 15.5" 
                 stroke="currentColor" 
-                strokeWidth="2.5" 
+                strokeWidth="2.8" 
                 strokeLinecap="round" 
                 strokeLinejoin="round"
+                opacity="0.92"
             />
+            
+            {/* Abstract lower diagonal - dynamic sweep */}
+            <path 
+                d="M12.5 16C13.5 16.8 15 18.2 16.5 19.8C18 21.5 19.5 23.5 20.8 25.2C21.3 25.9 21.8 26.5 22.2 27" 
+                stroke="currentColor" 
+                strokeWidth="2.8" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+                opacity="0.92"
+            />
+            
+            {/* Artistic accent dots */}
+            <circle cx="23" cy="7" r="1.2" fill="currentColor" opacity="0.7" />
+            <circle cx="11.5" cy="15.5" r="1.5" fill="currentColor" opacity="0.6" />
+            <circle cx="23" cy="26.5" r="1.2" fill="currentColor" opacity="0.7" />
         </svg>
     );
 };
