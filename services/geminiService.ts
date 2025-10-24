@@ -414,6 +414,8 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
       const ai = await getAI();
       if (!ai) return mockGenerateWithImagen(prompt, aspectRatio);
       try {
+          console.log(`🎨 Generating image with Imagen - Aspect Ratio: ${aspectRatio}, Prompt: ${prompt.substring(0, 100)}...`);
+          
           const response = await ai.models.generateImages({
               model: 'imagen-4.0-generate-001',
               prompt: prompt,
@@ -425,13 +427,26 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
               },
           });
 
+          console.log('📥 Imagen API Response:', {
+              hasGeneratedImages: !!response.generatedImages,
+              imagesCount: response.generatedImages?.length || 0,
+              responseKeys: Object.keys(response),
+          });
+
           if (response.generatedImages && response.generatedImages.length > 0) {
               const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+              console.log(`✅ Image generated successfully, size: ${base64ImageBytes.length} chars`);
               return `data:image/png;base64,${base64ImageBytes}`;
           }
-          throw new Error("Imagen generation failed to return an image.");
+          
+          console.error('❌ Imagen response structure:', JSON.stringify(response, null, 2));
+          throw new Error("Imagen generation failed to return an image. Check console for response details.");
       } catch (error) {
-          console.error("Error generating with Imagen:", error);
+          console.error("❌ Error generating with Imagen:", error);
+          console.error("Error details:", {
+              message: error instanceof Error ? error.message : 'Unknown error',
+              stack: error instanceof Error ? error.stack : undefined,
+          });
           throw error;
       }
   },
