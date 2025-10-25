@@ -40,16 +40,16 @@ export const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }
     };
 
     return (
-        <div className="fixed inset-0 text-zinc-200 flex flex-col font-sans auth-noise-overlay">
-            <div className="auth-aurora"></div>
-            <div className="shooting-stars">
+        <div className="min-h-screen text-zinc-200 flex flex-col font-sans auth-noise-overlay overflow-y-auto">
+            <div className="fixed inset-0 pointer-events-none auth-aurora"></div>
+            <div className="fixed inset-0 pointer-events-none shooting-stars">
                 <div className="shooting-star"></div>
                 <div className="shooting-star"></div>
                 <div className="shooting-star"></div>
             </div>
             
             {/* Glassmorphic Navigation Bar */}
-            <nav className="relative z-50 px-6 lg:px-12 py-4">
+            <nav className="sticky top-0 z-50 px-6 lg:px-12 py-4">
                 <div className="flex justify-center">
                     {/* Glassmorphic container with rounded pill shape */}
                     <div className="relative border border-white/20 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-full px-8 py-2.5 inline-flex">
@@ -96,7 +96,7 @@ export const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }
             </nav>
             
             <div 
-                className="flex-1 flex flex-col items-center justify-center p-4"
+                className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 py-12"
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
             >
