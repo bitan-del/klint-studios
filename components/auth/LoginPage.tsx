@@ -29,7 +29,7 @@ export const LoginPage: React.FC = () => {
                 <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-br from-zinc-100 to-zinc-400">Sign in to Studio</h2>
                 <p className="text-base text-zinc-400 mt-3">Use your Google account to continue.</p>
                 <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                    <span className="text-emerald-400 font-semibold text-sm">✨ 5 images free per day</span>
+                    <span className="text-emerald-400 font-semibold text-sm">5 image creation free in a day</span>
                 </div>
             </div>
             
