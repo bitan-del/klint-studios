@@ -7,10 +7,53 @@ import { BACKGROUNDS_LIBRARY, LIGHTING_PRESETS, SHOT_TYPES_LIBRARY, EXPRESSIONS,
 // Global variable to cache the API key
 let cachedApiKey: string | null = null;
 let apiKeyFetchPromise: Promise<string | null> | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
+// Function to refresh the cached API key (call this when admin updates the key)
+export const refreshGeminiApiKey = () => {
+    console.log('🔄 Refreshing Gemini API key cache...');
+    cachedApiKey = null;
+    apiKeyFetchPromise = null;
+    cacheTimestamp = 0;
+    
+    // Broadcast to other tabs via localStorage
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem('gemini_api_key_updated', Date.now().toString());
+            // Remove immediately to trigger the event
+            setTimeout(() => {
+                localStorage.removeItem('gemini_api_key_updated');
+            }, 100);
+        } catch (e) {
+            console.warn('Could not broadcast cache invalidation:', e);
+        }
+    }
+}
+
+// Listen for cache invalidation events from other tabs
+if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'gemini_api_key_updated') {
+            console.log('🔄 API key updated in another tab, clearing cache...');
+            refreshGeminiApiKey();
+        }
+    });
+}
 
 const getAI = async () => {
-    // If we already have a cached key, use it
-    if (cachedApiKey) {
+    // Check if cache is expired or invalidated
+    const now = Date.now();
+    const isCacheExpired = !cachedApiKey || (now - cacheTimestamp) > CACHE_TTL;
+    
+    // If cache is expired, clear it
+    if (isCacheExpired && cachedApiKey) {
+        console.log('⏰ API key cache expired, fetching fresh key...');
+        cachedApiKey = null;
+    }
+    
+    // If we have a valid cached key, use it
+    if (cachedApiKey && !isCacheExpired) {
         return new GoogleGenAI({ apiKey: cachedApiKey });
     }
     
@@ -19,6 +62,7 @@ const getAI = async () => {
         const key = await apiKeyFetchPromise;
         if (key) {
             cachedApiKey = key;
+            cacheTimestamp = Date.now();
             return new GoogleGenAI({ apiKey: key });
         }
         return null;
@@ -35,24 +79,25 @@ const getAI = async () => {
     }
     
     cachedApiKey = apiKey;
+    cacheTimestamp = Date.now();
     return new GoogleGenAI({ apiKey });
 }
 
-const fetchGeminiApiKey = async (): Promise<string | null> => {
+const fetchGeminiApiKey = async (forceFresh: boolean = false): Promise<string | null> => {
     try {
         // Try to fetch from database first (for deployed apps)
         const { databaseService } = await import('./databaseService');
         const dbKey = await databaseService.getAdminSetting('gemini_api_key');
         
         if (dbKey) {
-            console.log('✅ Using Gemini API key from database');
+            console.log('✅ Using Gemini API key from database', forceFresh ? '(forced fresh fetch)' : '');
             return dbKey;
         }
         
         // Fallback to environment variable (for local development)
         const envKey = import.meta.env.VITE_GEMINI_API_KEY;
         if (envKey) {
-            console.log('✅ Using Gemini API key from environment variables');
+            console.log('✅ Using Gemini API key from environment variables', forceFresh ? '(forced fresh fetch)' : '');
             return envKey;
         }
         
@@ -62,12 +107,6 @@ const fetchGeminiApiKey = async (): Promise<string | null> => {
         // Fallback to environment variable on error
         return import.meta.env.VITE_GEMINI_API_KEY || null;
     }
-}
-
-// Function to refresh the cached API key (call this when admin updates the key)
-export const refreshGeminiApiKey = () => {
-    cachedApiKey = null;
-    apiKeyFetchPromise = null;
 }
 
 // Helper to parse Data URL

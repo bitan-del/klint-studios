@@ -17,3 +17,6 @@ DO UPDATE SET
   setting_value = '"hY52uGpMRKe229DLV4Y640Yj"'::jsonb,
   updated_at = NOW();
 
+
+
+

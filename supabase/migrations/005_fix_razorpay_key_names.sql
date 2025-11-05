@@ -27,3 +27,6 @@ FROM public.admin_settings
 WHERE setting_key IN ('razorpay_key_id', 'razorpay_key_secret')
 ORDER BY setting_key;
 
+
+
+

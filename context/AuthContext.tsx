@@ -535,6 +535,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { refreshGeminiApiKey } = await import('../services/geminiService');
         refreshGeminiApiKey();
         setApiSettings(current => ({ ...current, gemini: geminiSettings }));
+        
+        // Show a message to user that changes take effect immediately
+        console.log('✅ API key updated! All new requests will use the new key.');
+        console.log('ℹ️  If you have other browser tabs open, they will automatically refresh within 5 minutes or on next API call.');
       } else {
         console.error('❌ Failed to save Gemini API key to database');
       }

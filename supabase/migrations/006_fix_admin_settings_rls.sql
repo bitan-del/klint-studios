@@ -48,3 +48,6 @@ FROM pg_policies
 WHERE tablename = 'admin_settings'
 ORDER BY policyname;
 
+
+
+

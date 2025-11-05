@@ -33,3 +33,6 @@ DO UPDATE SET
   setting_value = '0'::jsonb,
   updated_at = NOW();
 
+
+
+

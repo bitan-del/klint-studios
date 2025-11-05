@@ -481,7 +481,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                 <strong>Info:</strong> Supabase credentials are configured via environment variables for security. Update them in your .env file or hosting platform settings.
                             </div>
                             <div className="bg-yellow-900/50 border border-yellow-500/30 text-yellow-300 text-sm rounded-lg p-3">
-                                <strong>Note:</strong> Changes to Gemini API key will be applied after refreshing the application.
+                                <strong>Note:</strong> Changes to Gemini API key take effect immediately. The cache refreshes automatically within 5 minutes or on the next API call.
                             </div>
                              <section>
                                 <h3 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2"><Link2 size={20} /> API Keys & Integrations</h3>
