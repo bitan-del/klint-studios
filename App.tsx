@@ -745,7 +745,8 @@ const AppHeader: React.FC<{
     onInputsClick: () => void;
     onSettingsClick: () => void;
     onSwitchToSimple?: () => void;
-}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple }) => {
+    studioMode?: string;
+}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple, studioMode }) => {
     const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
     const { t } = useStudio();
@@ -757,10 +758,12 @@ const AppHeader: React.FC<{
                 {/* --- LEFT GROUP --- */}
                 <div className="flex items-center justify-start gap-2 lg:flex-1">
                     {/* Mobile Inputs Button */}
-                    <button onClick={onInputsClick} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 lg:hidden" aria-label="Open inputs panel">
-                        <PanelLeft size={20} />
-                        <span className="font-medium text-sm hidden sm:inline">{t('inputs')}</span>
-                    </button>
+                    {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                        <button onClick={onInputsClick} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 lg:hidden" aria-label="Open inputs panel">
+                            <PanelLeft size={20} />
+                            <span className="font-medium text-sm hidden sm:inline">{t('inputs')}</span>
+                        </button>
+                    )}
                     
                     {/* Moved Mobile Icons */}
                     <div className="flex items-center gap-1 sm:gap-2 lg:hidden">
@@ -781,14 +784,16 @@ const AppHeader: React.FC<{
                            </button>
                         )}
                         <UserMenu />
-                        <button onClick={onSettingsClick} className="p-2 rounded-lg hover:bg-zinc-800 flex items-center gap-2" aria-label="Open settings panel">
-                            <span className="font-medium text-sm hidden sm:inline">{t('settings')}</span>
-                            <PanelRight size={20} />
-                        </button>
+                        {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                            <button onClick={onSettingsClick} className="p-2 rounded-lg hover:bg-zinc-800 flex items-center gap-2" aria-label="Open settings panel">
+                                <span className="font-medium text-sm hidden sm:inline">{t('settings')}</span>
+                                <PanelRight size={20} />
+                            </button>
+                        )}
                     </div>
 
                     {/* Desktop Logo */}
-                    <a href="/landing.html" className="hidden lg:flex items-center gap-2" aria-label="Go to home page">
+                    <a href="https://klintstudios.com" target="_blank" rel="noopener noreferrer" className="hidden lg:flex items-center gap-2 hover:opacity-80 transition-opacity" aria-label="Go to Klint Studios website">
                         <KLogo size={24} className="text-emerald-400" />
                         <h1 className="hidden md:block text-lg font-bold text-zinc-100">Klint Studios</h1>
                     </a>
@@ -835,7 +840,7 @@ const AppHeader: React.FC<{
 
 
 const AppContent: React.FC = () => {
-    const { isGuideActive, isBestPracticesModalOpen, setBestPracticesModalOpen, t } = useStudio();
+    const { isGuideActive, isBestPracticesModalOpen, setBestPracticesModalOpen, t, studioMode } = useStudio();
     const { user, needsPayment, checkSubscriptionStatus, logout } = useAuth();
     const [activeMobilePanel, setActiveMobilePanel] = useState<'inputs' | 'settings' | null>(null);
     const [isLgSettingsPanelOpen, setLgSettingsPanelOpen] = useState(false);
@@ -936,6 +941,7 @@ const AppContent: React.FC = () => {
                 onInputsClick={() => setActiveMobilePanel('inputs')}
                 onSettingsClick={() => setActiveMobilePanel('settings')}
                 onSwitchToSimple={() => setUseSimplifiedUI(true)}
+                studioMode={studioMode}
             />
             <main className="flex-grow flex-1 flex overflow-hidden relative">
                 {/* Feature Lock Overlay - shown when:
@@ -954,63 +960,75 @@ const AppContent: React.FC = () => {
                     />
                 )}
                 {/* --- DESKTOP INPUTS PANEL --- */}
-                <aside className="w-[380px] flex-shrink-0 hidden lg:flex flex-col border-r border-white/10">
-                    <InputPanel onClose={() => {}} />
-                </aside>
+                {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                    <aside className="w-[380px] flex-shrink-0 hidden lg:flex flex-col border-r border-white/10">
+                        <InputPanel onClose={() => {}} />
+                    </aside>
+                )}
                 
-                <section className="min-w-0 flex-1 flex flex-col p-3">
+                <section className={`min-w-0 flex-1 flex flex-col ${(studioMode === 'design' || studioMode === 'reimagine') ? 'p-0' : 'p-3'}`}>
                     <StudioView />
                 </section>
                 
                 {/* --- XL+ DESKTOP SETTINGS PANEL (PERMANENT) --- */}
-                <aside className="w-[420px] flex-shrink-0 hidden xl:flex flex-col border-l border-white/10">
-                    <SettingsPanel onClose={() => {}} />
-                </aside>
+                {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                    <aside className="w-[420px] flex-shrink-0 hidden xl:flex flex-col border-l border-white/10">
+                        <SettingsPanel onClose={() => {}} />
+                    </aside>
+                )}
 
                 {/* --- NEW: LG-ONLY SLIDEOUT PANEL --- */}
-                {/* Handle to open panel */}
-                <div className="hidden lg:block xl:hidden absolute top-1/2 right-0 -translate-y-1/2 z-30 animate-peek-in">
-                    <button
-                        onClick={() => setLgSettingsPanelOpen(true)}
-                        className="group w-8 h-28 flex flex-col items-center justify-center gap-1.5 py-2
-                                   bg-zinc-850 hover:bg-zinc-700
-                                   border-y border-l border-white/10
-                                   rounded-l-lg shadow-lg
-                                   transition-colors duration-200
-                                   focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                        aria-label="Open settings panel"
-                    >
-                        <PanelLeft size={16} className="text-zinc-400 group-hover:text-emerald-300 transition-colors duration-200"/>
-                        <span
-                            className="text-xs font-bold uppercase text-zinc-400 group-hover:text-emerald-300 transition-colors duration-200"
-                            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                        >
-                            {t('settings')}
-                        </span>
-                    </button>
-                </div>
+                {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                    <>
+                        {/* Handle to open panel */}
+                        <div className="hidden lg:block xl:hidden absolute top-1/2 right-0 -translate-y-1/2 z-30 animate-peek-in">
+                            <button
+                                onClick={() => setLgSettingsPanelOpen(true)}
+                                className="group w-8 h-28 flex flex-col items-center justify-center gap-1.5 py-2
+                                           bg-zinc-850 hover:bg-zinc-700
+                                           border-y border-l border-white/10
+                                           rounded-l-lg shadow-lg
+                                           transition-colors duration-200
+                                           focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                                aria-label="Open settings panel"
+                            >
+                                <PanelLeft size={16} className="text-zinc-400 group-hover:text-emerald-300 transition-colors duration-200"/>
+                                <span
+                                    className="text-xs font-bold uppercase text-zinc-400 group-hover:text-emerald-300 transition-colors duration-200"
+                                    style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                                >
+                                    {t('settings')}
+                                </span>
+                            </button>
+                        </div>
 
-                {/* The Panel */}
-                <div 
-                    className={`
-                        absolute top-0 right-0 h-full w-[420px] bg-zinc-925/90 backdrop-blur-xl border-l border-white/10 z-20 
-                        transform transition-transform duration-300 ease-in-out 
-                        lg:flex xl:hidden flex-col
-                        ${isLgSettingsPanelOpen ? 'translate-x-0' : 'translate-x-full'}
-                    `}
-                >
-                    <SettingsPanel onClose={() => setLgSettingsPanelOpen(false)} isMobileView={true} />
-                </div>
+                        {/* The Panel */}
+                        <div 
+                            className={`
+                                absolute top-0 right-0 h-full w-[420px] bg-zinc-925/90 backdrop-blur-xl border-l border-white/10 z-20 
+                                transform transition-transform duration-300 ease-in-out 
+                                lg:flex xl:hidden flex-col
+                                ${isLgSettingsPanelOpen ? 'translate-x-0' : 'translate-x-full'}
+                            `}
+                        >
+                            <SettingsPanel onClose={() => setLgSettingsPanelOpen(false)} isMobileView={true} />
+                        </div>
+                    </>
+                )}
             </main>
 
             {/* --- MOBILE FULL-SCREEN PANELS --- */}
-            <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'inputs' ? 'translate-x-0' : '-translate-x-full'}`}>
-                <InputPanel onClose={() => setActiveMobilePanel(null)} isMobileView={true} />
-            </div>
+            {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                <>
+                    <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'inputs' ? 'translate-x-0' : '-translate-x-full'}`}>
+                        <InputPanel onClose={() => setActiveMobilePanel(null)} isMobileView={true} />
+                    </div>
 
-            <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'}`}>
-                 <SettingsPanel onClose={() => setActiveMobilePanel(null)} isMobileView={true} />
-            </div>
+                    <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'}`}>
+                        <SettingsPanel onClose={() => setActiveMobilePanel(null)} isMobileView={true} />
+                    </div>
+                </>
+            )}
 
             {isGuideActive && <InteractiveGuide />}
             <BestPracticesModal isOpen={isBestPracticesModalOpen} onClose={() => setBestPracticesModalOpen(false)} />

@@ -9,6 +9,8 @@ import { ImageToolbar } from './ImageToolbar';
 import { GenerationPlaceholder } from './GenerationPlaceholder';
 import { ECOMMERCE_PACKS } from '../../constants';
 import { DesignPreview } from '../design/DesignPreview';
+import OneToManyProductSceneGenerator from '../design/OneToManyProductSceneGenerator';
+import Photoshoot from '../reimagine/Photoshoot';
 import { BookOpen } from 'lucide-react';
 
 const GroundingSources: React.FC<{ sources: { web: { uri: string; title: string; } }[] }> = ({ sources }) => {
@@ -56,8 +58,31 @@ export const StudioView: React.FC = () => {
     mockupImage,
     designImage,
     selectedModels,
-    activeImageSources
+    activeImageSources,
+    setStudioMode
   } = useStudio();
+
+  // If in design mode, show the One to Many component
+  if (studioMode === 'design') {
+    return (
+      <div className="relative w-full h-full">
+        <OneToManyProductSceneGenerator 
+          onBack={() => setStudioMode('apparel')} 
+        />
+      </div>
+    );
+  }
+
+  // If in reimagine mode, show the Photoshoot component
+  if (studioMode === 'reimagine') {
+    return (
+      <div className="relative w-full h-full overflow-y-auto">
+        <Photoshoot 
+          onBack={() => setStudioMode('apparel')} 
+        />
+      </div>
+    );
+  }
 
   const previewImage = studioMode === 'apparel' ? uploadedModelImage : productImage;
   const showDesignPreview = studioMode === 'design' && mockupImage && designImage && (!generatedImages || generatedImages.length === 0);

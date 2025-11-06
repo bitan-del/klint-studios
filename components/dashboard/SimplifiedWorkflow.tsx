@@ -36,6 +36,20 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
 
+    // Check for gallery image from localStorage on mount
+    useEffect(() => {
+        const galleryImage = localStorage.getItem('gallery_image_for_feature');
+        const galleryFeature = localStorage.getItem('gallery_feature');
+        
+        // Only load if it's for this workflow
+        if (galleryImage && galleryFeature === workflowId) {
+            setUploadedImage(galleryImage);
+            // Clear localStorage after loading
+            localStorage.removeItem('gallery_image_for_feature');
+            localStorage.removeItem('gallery_feature');
+        }
+    }, [workflowId]);
+
     const getWorkflowConfig = () => {
         switch (workflowId) {
             case 'ai-photoshoot':

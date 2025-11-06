@@ -1290,6 +1290,118 @@ Do NOT change any part of the image outside the masked area.`
     }
   },
 
+  /**
+   * Generate styled image with prompt and reference images
+   */
+  generateStyledImage: async (prompt: string, referenceImages: string[]): Promise<string> => {
+    const ai = await getAI();
+    if (!ai) {
+      throw new Error('AI service not available');
+    }
+
+    try {
+      const parts: any[] = [];
+
+      // Add reference images
+      for (const imageDataUrl of referenceImages) {
+        const { mimeType, data } = parseDataUrl(imageDataUrl);
+        parts.push({
+          inlineData: { mimeType, data }
+        });
+      }
+
+      // Add text prompt
+      parts.push({ text: prompt });
+
+      console.log('🎨 Generating styled image with prompt and reference images...');
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts },
+        config: {
+          responseModalities: [Modality.IMAGE],
+        },
+      });
+
+      // Extract the generated image
+      if (response.candidates && response.candidates.length > 0) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            const base64ImageBytes: string = part.inlineData.data;
+            const mimeType = part.inlineData.mimeType;
+            const imageB64 = `data:${mimeType};base64,${base64ImageBytes}`;
+            console.log('✅ Styled image generated successfully');
+            return imageB64;
+          }
+        }
+      }
+
+      throw new Error('No image generated from AI response');
+    } catch (error) {
+      console.error('❌ Error generating styled image:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate concept suggestions based on outfit/object image
+   */
+  generateConceptSuggestions: async (imageB64: string): Promise<Array<{ id: string; name: string; description: string; prompt: string }>> => {
+    const ai = await getAI();
+    if (!ai) {
+      // Mock response
+      return [
+        { id: 'concept-1', name: 'E-commerce Clean', description: 'Bright studio background', prompt: 'Professional e-commerce style' },
+        { id: 'concept-2', name: 'Lifestyle', description: 'Natural outdoor setting', prompt: 'Casual lifestyle photography' }
+      ];
+    }
+
+    try {
+      const { mimeType, data } = parseDataUrl(imageB64);
+      const imagePart = { inlineData: { mimeType, data } };
+      const textPart = { 
+        text: `Analyze this image and suggest 2 creative photoshoot concepts. For each concept, provide:
+- id: a unique identifier
+- name: a short catchy name
+- description: a detailed scene description
+- prompt: a prompt for generating the image
+
+Return ONLY a JSON array with these 4 properties for each concept.`
+      };
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: { parts: [imagePart, textPart] },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                name: { type: Type.STRING },
+                description: { type: Type.STRING },
+                prompt: { type: Type.STRING }
+              },
+              required: ["id", "name", "description", "prompt"]
+            }
+          }
+        }
+      });
+
+      const jsonString = response.text.trim();
+      return JSON.parse(jsonString);
+    } catch (error) {
+      console.error("Error generating concept suggestions:", error);
+      // Return mock on error
+      return [
+        { id: 'concept-1', name: 'E-commerce Clean', description: 'Bright studio background', prompt: 'Professional e-commerce style' },
+        { id: 'concept-2', name: 'Lifestyle', description: 'Natural outdoor setting', prompt: 'Casual lifestyle photography' }
+      ];
+    }
+  },
+
   parseDataUrl, // Export for use in other services
   resizeImageToAspectRatio, // Export for use in other services
 };

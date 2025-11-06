@@ -14,6 +14,7 @@ import {
     Instagram
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { ImageGallery } from './ImageGallery';
 
 interface WorkflowCard {
     id: string;
@@ -31,6 +32,9 @@ interface DashboardHomeProps {
 }
 
 export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, userPlan }) => {
+    const handleNavigateToWorkflow = (workflowId: string) => {
+        onSelectWorkflow(workflowId);
+    };
     const { checkSubscriptionStatus } = useAuth();
     const isFreePlan = userPlan === 'free';
     const [hoveredCard, setHoveredCard] = useState<string | null>(null);
@@ -239,6 +243,9 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
                         </button>
                     ))}
                 </div>
+
+                {/* Image Gallery */}
+                <ImageGallery onNavigateToWorkflow={handleNavigateToWorkflow} />
             </div>
         </div>
     );

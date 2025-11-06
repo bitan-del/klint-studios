@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, X, Package, Layers, ImageIcon, Sparkles, ImageUp } from 'lucide-react';
+import { User, X, Package, Layers, ImageIcon, Sparkles, ImageUp, Type } from 'lucide-react';
 import { ModelSelectionPanel } from '../model/ModelSelectionPanel';
 import { ApparelUploader } from '../apparel/ApparelUploader';
 import { TabButton } from './TabButton';
@@ -12,6 +12,7 @@ import { DesignUploader } from '../design/DesignUploader';
 import { ReimagineUploader } from '../reimagine/ReimagineUploader';
 import { StudioModeSwitcher } from './StudioModeSwitcher';
 import { InfoTooltip } from './InfoTooltip';
+import { CustomPromptModal } from './CustomPromptModal';
 
 type Tab = 'model' | 'apparel' | 'product' | 'props' | 'mockup' | 'design' | 'reimagine';
 
@@ -23,6 +24,7 @@ interface InputPanelProps {
 export const InputPanel: React.FC<InputPanelProps> = ({ onClose, isMobileView }) => {
     const { studioMode, t } = useStudio();
     const [activeTab, setActiveTab] = useState<Tab>('model');
+    const [isCustomPromptModalOpen, setIsCustomPromptModalOpen] = useState(false);
 
     useEffect(() => {
         if (studioMode === 'apparel') {
@@ -125,7 +127,25 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onClose, isMobileView })
                 <div className="flex-grow min-h-0">
                     {renderContent()}
                 </div>
+                {(studioMode === 'apparel' || studioMode === 'product') && (
+                    <div className="flex-shrink-0 pt-4 border-t border-white/10 mt-4">
+                        <button
+                            onClick={() => setIsCustomPromptModalOpen(true)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-colors"
+                        >
+                            <Type size={18} />
+                            {t('custom_prompt_override')}
+                        </button>
+                    </div>
+                )}
             </div>
+            {(studioMode === 'apparel' || studioMode === 'product') && (
+                <CustomPromptModal
+                    isOpen={isCustomPromptModalOpen}
+                    onClose={() => setIsCustomPromptModalOpen(false)}
+                    studioMode={studioMode === 'apparel' ? 'apparel' : 'product'}
+                />
+            )}
         </div>
     );
 };

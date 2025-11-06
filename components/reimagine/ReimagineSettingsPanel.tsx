@@ -38,7 +38,7 @@ export const ReimagineSettingsPanel: React.FC<ReimagineSettingsPanelProps> = ({ 
                     <div className="absolute inset-0 bg-zinc-900/80 backdrop-blur-sm rounded-lg flex items-center justify-center text-center p-4 z-50">
                         <div className="bg-zinc-800 border border-emerald-500/30 rounded-lg p-6 max-w-xs">
                             <Lock size={40} className="text-emerald-400 mx-auto mb-3" />
-                            <p className="text-zinc-100 font-bold text-lg mb-2">Photo Editor Locked</p>
+                            <p className="text-zinc-100 font-bold text-lg mb-2">Variation Lab Locked</p>
                             <p className="text-zinc-400 text-sm">Upgrade to unlock AI-powered photo editing</p>
                         </div>
                     </div>
