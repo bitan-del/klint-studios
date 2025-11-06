@@ -115,39 +115,87 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({ onNavigateToWorkflow
             let attempts = 0;
             const maxAttempts = 3;
 
-            const keywords = getKeywordsForFilter(activeFilter);
-            const category = activeFilter === 'all' ? undefined : activeFilter;
-
-            // Keep fetching until we get unique images
-            while (allImages.length < totalToLoad && attempts < maxAttempts) {
-                attempts++;
-
-                // Fetch images based on active filter with multiple keywords
-                const keyword1 = keywords[Math.floor(Math.random() * keywords.length)];
-                const keyword2 = keywords[Math.floor(Math.random() * keywords.length)];
+            // For "all" filter, prioritize abstract art (70%)
+            if (activeFilter === 'all') {
+                const aiCount = Math.ceil(totalToLoad * 0.7); // 70% abstract art
+                const otherCount = totalToLoad - aiCount; // 30% other categories
                 
-                // Fetch with first keyword
-                const fetchedImages1 = await fetchImages(keyword1, Math.ceil(totalToLoad * 1.5), category);
-                
-                // Fetch with second keyword if we need more
-                let fetchedImages2: PixabayImage[] = [];
-                if (fetchedImages1.length < totalToLoad) {
-                    fetchedImages2 = await fetchImages(keyword2, Math.ceil(totalToLoad * 1.5), category);
+                // Fetch 70% from AI/abstract art keywords
+                let aiImages: PixabayImage[] = [];
+                let aiAttempts = 0;
+                while (aiImages.length < aiCount && aiAttempts < maxAttempts) {
+                    aiAttempts++;
+                    const aiKeyword1 = aiKeywords[Math.floor(Math.random() * aiKeywords.length)];
+                    const aiKeyword2 = aiKeywords[Math.floor(Math.random() * aiKeywords.length)];
+                    
+                    const fetchedAi1 = await fetchImages(aiKeyword1, Math.ceil(aiCount * 1.5), 'ai');
+                    const fetchedAi2 = await fetchImages(aiKeyword2, Math.ceil(aiCount * 1.5), 'ai');
+                    
+                    const allAiFetched = [...fetchedAi1, ...fetchedAi2];
+                    for (let img of allAiFetched) {
+                        if (!loadedImageIdsRef.current.has(img.id) && aiImages.length < aiCount) {
+                            loadedImageIdsRef.current.add(img.id);
+                            aiImages.push(img);
+                        }
+                    }
                 }
                 
-                const allFetchedImages = [...fetchedImages1, ...fetchedImages2];
+                // Fetch 30% from other categories
+                const otherKeywords = [...natureKeywords, ...peopleKeywords, ...productKeywords, ...posterKeywords, ...logoKeywords, ...tshirtKeywords];
+                let otherImages: PixabayImage[] = [];
+                let otherAttempts = 0;
+                while (otherImages.length < otherCount && otherAttempts < maxAttempts) {
+                    otherAttempts++;
+                    const otherKeyword1 = otherKeywords[Math.floor(Math.random() * otherKeywords.length)];
+                    const otherKeyword2 = otherKeywords[Math.floor(Math.random() * otherKeywords.length)];
+                    
+                    const fetchedOther1 = await fetchImages(otherKeyword1, Math.ceil(otherCount * 1.5));
+                    const fetchedOther2 = await fetchImages(otherKeyword2, Math.ceil(otherCount * 1.5));
+                    
+                    const allOtherFetched = [...fetchedOther1, ...fetchedOther2];
+                    for (let img of allOtherFetched) {
+                        if (!loadedImageIdsRef.current.has(img.id) && otherImages.length < otherCount) {
+                            loadedImageIdsRef.current.add(img.id);
+                            otherImages.push(img);
+                        }
+                    }
+                }
+                
+                // Combine: 70% AI, 30% other, then shuffle
+                allImages = [...aiImages, ...otherImages].sort(() => Math.random() - 0.5);
+            } else {
+                // For specific filters, use original logic
+                const keywords = getKeywordsForFilter(activeFilter);
+                const category = activeFilter;
 
-                // Add non-duplicate images
-                for (let img of allFetchedImages) {
-                    if (!loadedImageIdsRef.current.has(img.id) && allImages.length < totalToLoad) {
-                        loadedImageIdsRef.current.add(img.id);
-                        allImages.push(img);
+                // Keep fetching until we get unique images
+                while (allImages.length < totalToLoad && attempts < maxAttempts) {
+                    attempts++;
+
+                    // Fetch images based on active filter with multiple keywords
+                    const keyword1 = keywords[Math.floor(Math.random() * keywords.length)];
+                    const keyword2 = keywords[Math.floor(Math.random() * keywords.length)];
+                    
+                    // Fetch with first keyword
+                    const fetchedImages1 = await fetchImages(keyword1, Math.ceil(totalToLoad * 1.5), category);
+                    
+                    // Fetch with second keyword if we need more
+                    let fetchedImages2: PixabayImage[] = [];
+                    if (fetchedImages1.length < totalToLoad) {
+                        fetchedImages2 = await fetchImages(keyword2, Math.ceil(totalToLoad * 1.5), category);
+                    }
+                    
+                    const allFetchedImages = [...fetchedImages1, ...fetchedImages2];
+
+                    // Add non-duplicate images
+                    for (let img of allFetchedImages) {
+                        if (!loadedImageIdsRef.current.has(img.id) && allImages.length < totalToLoad) {
+                            loadedImageIdsRef.current.add(img.id);
+                            allImages.push(img);
+                        }
                     }
                 }
             }
-
-            // Shuffle array
-            allImages = allImages.sort(() => Math.random() - 0.5);
 
             setImages(prev => [...prev, ...allImages]);
         } catch (error) {
@@ -237,6 +285,18 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({ onNavigateToWorkflow
                                 e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.3)';
                             }}
                         >
+                            {/* White background layer for transparent images */}
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    backgroundColor: '#ffffff',
+                                    background: '#ffffff',
+                                    zIndex: 0,
+                                    width: '100%',
+                                    height: '100%'
+                                }}
+                            />
                             {/* Loading Placeholder */}
                             {!isImageLoaded && (
                                 <div
@@ -247,6 +307,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({ onNavigateToWorkflow
                                         background: 'linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%)',
                                         backgroundSize: '200% 100%',
                                         animation: 'shimmer 1.5s infinite',
+                                        zIndex: 20,
                                         borderRadius: '12px',
                                     }}
                                 />
@@ -268,7 +329,9 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({ onNavigateToWorkflow
                                     pointerEvents: 'none',
                                     opacity: isImageLoaded ? 1 : 0,
                                     position: 'relative',
-                                    zIndex: 1,
+                                    zIndex: 10,
+                                    backgroundColor: '#ffffff',
+                                    background: '#ffffff',
                                 }}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.transform = 'scale(1.05)';

@@ -24,7 +24,23 @@ interface WorkflowCard {
     gradient: string;
     badge?: 'NEW' | 'POPULAR' | 'PRO';
     isLocked?: boolean;
+    image?: string;
 }
+
+// Mapping workflow IDs to image filenames
+const getWorkflowImage = (workflowId: string): string => {
+    const imageMap: Record<string, string> = {
+        'ai-photoshoot': '/workflow-images/AI PHOTOSHOOT.png',
+        'product-photography': '/workflow-images/Product Photography.png',
+        'virtual-tryon': '/workflow-images/Virtual Try On.png',
+        'photo-editor': '/workflow-images/Photo Editor.png',
+        'storyboard': '/workflow-images/Photo To prompt.png',
+        'social-media-posts': '/workflow-images/Social Media post.png',
+        'style-transfer': '/workflow-images/Style Transfer.png',
+        'upscale': '/workflow-images/Image Upscale.png',
+    };
+    return imageMap[workflowId] || '';
+};
 
 interface DashboardHomeProps {
     onSelectWorkflow: (workflowId: string) => void;
@@ -38,6 +54,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
     const { checkSubscriptionStatus } = useAuth();
     const isFreePlan = userPlan === 'free';
     const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+    const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
 
     const handleWorkflowClick = (workflow: WorkflowCard) => {
         if (workflow.isLocked) {
@@ -56,6 +73,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             icon: <Camera className="w-5 h-5" />,
             gradient: 'from-emerald-500 via-teal-500 to-cyan-500',
             badge: 'POPULAR',
+            image: getWorkflowImage('ai-photoshoot'),
         },
         {
             id: 'product-photography',
@@ -64,6 +82,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             icon: <Package className="w-5 h-5" />,
             gradient: 'from-emerald-600 via-green-500 to-teal-500',
             isLocked: isFreePlan,
+            image: getWorkflowImage('product-photography'),
         },
         {
             id: 'virtual-tryon',
@@ -73,6 +92,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             gradient: 'from-teal-500 via-cyan-500 to-emerald-500',
             badge: 'NEW',
             isLocked: isFreePlan,
+            image: getWorkflowImage('virtual-tryon'),
         },
         {
             id: 'photo-editor',
@@ -81,6 +101,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             icon: <Wand2 className="w-5 h-5" />,
             gradient: 'from-green-500 via-emerald-500 to-teal-500',
             isLocked: isFreePlan,
+            image: getWorkflowImage('photo-editor'),
         },
         {
             id: 'storyboard',
@@ -90,6 +111,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             gradient: 'from-emerald-400 via-teal-400 to-cyan-400',
             badge: 'NEW',
             isLocked: isFreePlan,
+            image: getWorkflowImage('storyboard'),
         },
         {
             id: 'social-media-posts',
@@ -99,6 +121,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             gradient: 'from-teal-600 via-emerald-600 to-green-600',
             badge: 'PRO',
             isLocked: isFreePlan,
+            image: getWorkflowImage('social-media-posts'),
         },
         {
             id: 'style-transfer',
@@ -107,6 +130,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             icon: <Palette className="w-5 h-5" />,
             gradient: 'from-cyan-500 via-teal-500 to-emerald-500',
             isLocked: isFreePlan,
+            image: getWorkflowImage('style-transfer'),
         },
         {
             id: 'upscale',
@@ -115,6 +139,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             icon: <Sparkles className="w-5 h-5" />,
             gradient: 'from-emerald-500 via-green-500 to-teal-600',
             isLocked: isFreePlan,
+            image: getWorkflowImage('upscale'),
         },
     ];
 
@@ -177,13 +202,39 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
                             `} />
                             
                             {/* Card content */}
-                            <div className="relative h-full bg-zinc-900/80 rounded-2xl p-6 backdrop-blur-xl border border-zinc-800">
+                            <div className="relative h-full bg-zinc-900/80 rounded-2xl p-6 backdrop-blur-xl border border-zinc-800 overflow-hidden">
                                 {/* Badge */}
                                 {workflow.badge && (
-                                    <div className="absolute top-4 right-4">
+                                    <div className="absolute top-4 right-4 z-10">
                                         <span className="px-2.5 py-1 text-[10px] font-semibold tracking-wider bg-zinc-800 rounded-full border border-zinc-700 text-zinc-300">
                                             {workflow.badge}
                                         </span>
+                                    </div>
+                                )}
+
+                                {/* Image */}
+                                {workflow.image && (
+                                    <div className="w-full h-32 mb-4 rounded-xl overflow-hidden bg-zinc-800/50 relative">
+                                        {/* Loading placeholder */}
+                                        {!loadedImages.has(workflow.id) && (
+                                            <div className="absolute inset-0 bg-gradient-to-r from-zinc-200 via-zinc-100 to-zinc-200 animate-pulse" />
+                                        )}
+                                        <img 
+                                            src={workflow.image} 
+                                            alt={workflow.title}
+                                            className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-105 ${
+                                                loadedImages.has(workflow.id) 
+                                                    ? 'opacity-100 scale-100' 
+                                                    : 'opacity-0 scale-105'
+                                            }`}
+                                            onLoad={() => {
+                                                setLoadedImages(prev => new Set(prev).add(workflow.id));
+                                            }}
+                                            onError={() => {
+                                                // If image fails to load, still mark as loaded to hide placeholder
+                                                setLoadedImages(prev => new Set(prev).add(workflow.id));
+                                            }}
+                                        />
                                     </div>
                                 )}
 

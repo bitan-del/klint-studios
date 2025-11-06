@@ -1,4 +1,10 @@
 full contents of styles.css
+/* Workflow card images - ensure white background for transparent images */
+[class*="workflow"] img,
+[class*="card"] img {
+    background-color: #ffffff !important;
+}
+
 /* Shooting Stars Animation */
 .shooting-stars {
     position: absolute;

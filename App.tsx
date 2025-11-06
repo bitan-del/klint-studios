@@ -793,7 +793,7 @@ const AppHeader: React.FC<{
                     </div>
 
                     {/* Desktop Logo */}
-                    <a href="https://klintstudios.com" target="_blank" rel="noopener noreferrer" className="hidden lg:flex items-center gap-2 hover:opacity-80 transition-opacity" aria-label="Go to Klint Studios website">
+                    <a href="https://klintstudios.com" className="hidden lg:flex items-center gap-2 hover:opacity-80 transition-opacity" aria-label="Go to Klint Studios website">
                         <KLogo size={24} className="text-emerald-400" />
                         <h1 className="hidden md:block text-lg font-bold text-zinc-100">Klint Studios</h1>
                     </a>
