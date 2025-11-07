@@ -5,6 +5,7 @@ import { geminiService } from '../../services/geminiService';
 
 interface SocialMediaPostsWorkflowProps {
     onBack: () => void;
+    onOpenDailyLimitModal?: () => void;
 }
 
 interface StyleInsights {
@@ -14,7 +15,7 @@ interface StyleInsights {
     contentTypes: string[];
 }
 
-export const SocialMediaPostsWorkflow: React.FC<SocialMediaPostsWorkflowProps> = ({ onBack }) => {
+export const SocialMediaPostsWorkflow: React.FC<SocialMediaPostsWorkflowProps> = ({ onBack, onOpenDailyLimitModal }) => {
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [productImage, setProductImage] = useState<string | null>(null);
     const [brandLogo, setBrandLogo] = useState<string | null>(null);
@@ -194,7 +195,11 @@ Make it Instagram-ready, visually appealing, and on-brand.`;
             
             setGeneratedPosts(posts);
             if (user && posts.length > 0) {
-                incrementGenerationsUsed(posts.length);
+                const result = await incrementGenerationsUsed(posts.length);
+                if (result.dailyLimitHit && onOpenDailyLimitModal) {
+                    onOpenDailyLimitModal();
+                    return;
+                }
             }
         } catch (error) {
             console.error('Failed to generate posts:', error);

@@ -1,7 +1,7 @@
 
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import type { User, UserPlan, UserRole, PaymentSettings, PlanPrices, Currency, PaymentGatewaySettings, ApiSettings, SupabaseSettings, GeminiSettings } from '../types';
-import { hasPermission as checkPermission, Feature } from '../services/permissionsService';
+import { hasPermission as checkPermission, Feature, PLAN_DETAILS } from '../services/permissionsService';
 import { supabase } from '../services/supabaseClient';
 import { databaseService } from '../services/databaseService';
 import type { Session } from '@supabase/supabase-js';
@@ -15,7 +15,7 @@ interface AuthState {
   resetUserUsage: (userId: string) => Promise<void>; // Reset usage to 0 (admin only)
   doubleUserCredits: (userId: string) => Promise<void>; // Double monthly limit (admin only)
   hasPermission: (feature: Feature) => boolean;
-  incrementGenerationsUsed: (count: number, isVideo?: boolean) => Promise<void>;
+  incrementGenerationsUsed: (count: number, isVideo?: boolean) => Promise<{ success: boolean; dailyLimitHit?: boolean }>;
   logout: () => Promise<void>;
   // Admin Payment & Plan Settings
   paymentSettings: PaymentSettings;
@@ -412,8 +412,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Increment generations used
-  const incrementGenerationsUsed = async (count: number, isVideo: boolean = false) => {
-    if (!user) return;
+  const incrementGenerationsUsed = async (count: number, isVideo: boolean = false): Promise<{ success: boolean; dailyLimitHit?: boolean }> => {
+    if (!user) return { success: false };
+
+    // Check daily limit before incrementing
+    const planDetails = PLAN_DETAILS[user.plan];
+    const dailyLimit = planDetails.dailyLimit;
+    
+    if (dailyLimit && !isVideo) {
+      // Check if adding count would exceed daily limit
+      if (user.dailyGenerationsUsed + count > dailyLimit) {
+        return { success: false, dailyLimitHit: true };
+      }
+    }
 
     const success = await databaseService.incrementGenerations(count, isVideo);
     if (success) {
@@ -422,7 +433,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (authUser) {
         await loadUserProfile(authUser);
       }
+      return { success: true };
     }
+    
+    return { success: false };
   };
 
   // Logout

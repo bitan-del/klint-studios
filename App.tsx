@@ -11,12 +11,13 @@ import { BestPracticesModal } from './components/shared/BestPracticesModal';
 import { PricingModal } from './components/shared/PricingModal';
 import { PaymentModal } from './components/payment/PaymentModal';
 import { FeatureLockOverlay } from './components/shared/FeatureLockOverlay';
+import { DailyLimitModal } from './components/shared/DailyLimitModal';
 import { Chatbot } from './components/chatbot/Chatbot';
 import { DashboardContainer } from './components/dashboard/DashboardContainer';
 import { User, PanelLeft, PanelRight, ChevronDown, Globe, Key, X, Shield, Search, CreditCard, DollarSign, Eye, EyeOff, Link2, Loader2, Check, RefreshCw, RotateCcw, Zap, LayoutGrid, Layers } from 'lucide-react';
 import { KLogo } from './components/shared/KLogo';
 import type { User as UserType, UserPlan, Currency, PlanPrices, PaymentGatewaySettings, SupabaseSettings, GeminiSettings } from './types';
-import { PLAN_DETAILS } from './services/permissionsService';
+import { PLAN_DETAILS, getPlanDisplayName } from './services/permissionsService';
 
 
 // A helper component for API key inputs with a visibility toggle
@@ -63,7 +64,6 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
     const [stripeKeys, setStripeKeys] = useState(paymentSettings.stripe);
     const [razorpayKeys, setRazorpayKeys] = useState(paymentSettings.razorpay);
     const [prices, setPrices] = useState<PlanPrices>({
-        free: planPrices.free ?? 0,
         solo: planPrices.solo ?? 999,
         studio: planPrices.studio ?? 2999,
         brand: planPrices.brand ?? 4999,
@@ -97,7 +97,6 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
             setStripeKeys(paymentSettings.stripe);
             setRazorpayKeys(paymentSettings.razorpay);
             setPrices({
-                free: planPrices.free ?? 0,
                 solo: planPrices.solo ?? 999,
                 studio: planPrices.studio ?? 2999,
                 brand: planPrices.brand ?? 4999,
@@ -298,7 +297,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                         {user.role}
                                                     </span>
                                                 </td>
-                                                <td className="p-3 capitalize">{user.plan}</td>
+                                                <td className="p-3">{getPlanDisplayName(user.plan)}</td>
                                                 <td className="p-3">
                                                     <div className="flex items-center gap-2">
                                                         <span>{user.generationsUsed} / {monthlyLimit}</span>
@@ -341,11 +340,11 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                         <select 
                                                             value={userPlanChanges[user.id] || user.plan} 
                                                             onChange={(e) => handlePlanChange(user.id, e.target.value as UserPlan)}
-                                                            className="bg-zinc-800 border border-zinc-700 rounded-md p-1.5 capitalize focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 flex-1"
+                                                            className="bg-zinc-800 border border-zinc-700 rounded-md p-1.5 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 flex-1"
                                                             aria-label={`Change plan for ${user.email}`}
                                                         >
                                                             {planOptions.map(planKey => (
-                                                                <option key={planKey} value={planKey} className="capitalize">{planKey}</option>
+                                                                <option key={planKey} value={planKey}>{getPlanDisplayName(planKey)}</option>
                                                             ))}
                                                         </select>
                                                         {userPlanChanges[user.id] && userPlanChanges[user.id] !== user.plan && (
@@ -441,21 +440,21 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="text-sm font-medium text-zinc-300 mb-2 block">Solo Plan Price</label>
+                                            <label className="text-sm font-medium text-zinc-300 mb-2 block">BASIC Plan Price</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">₹</span>
                                                 <input type="number" value={prices.solo} onChange={(e) => setPrices({...prices, solo: parseFloat(e.target.value) || 0})} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="text-sm font-medium text-zinc-300 mb-2 block">Studio Plan Price</label>
+                                            <label className="text-sm font-medium text-zinc-300 mb-2 block">PRO Plan Price</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">₹</span>
                                                 <input type="number" value={prices.studio} onChange={(e) => setPrices({...prices, studio: parseFloat(e.target.value) || 0})} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="text-sm font-medium text-zinc-300 mb-2 block">Brand Plan Price</label>
+                                            <label className="text-sm font-medium text-zinc-300 mb-2 block">ADVANCE Plan Price</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">₹</span>
                                                 <input type="number" value={prices.brand} onChange={(e) => setPrices({...prices, brand: parseFloat(e.target.value) || 0})} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
@@ -712,7 +711,7 @@ const UserMenu: React.FC = () => {
                         </div>
                         <div>
                             <p className="font-semibold text-sm text-zinc-200 truncate">{user.email}</p>
-                            <p className="text-xs text-zinc-400 capitalize">{user.plan} Plan</p>
+                            <p className="text-xs text-zinc-400">{getPlanDisplayName(user.plan)} Plan</p>
                         </div>
                     </div>
                     <div className="space-y-4 text-xs text-zinc-400">
@@ -845,6 +844,7 @@ const AppContent: React.FC = () => {
     const [activeMobilePanel, setActiveMobilePanel] = useState<'inputs' | 'settings' | null>(null);
     const [isLgSettingsPanelOpen, setLgSettingsPanelOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isDailyLimitModalOpen, setIsDailyLimitModalOpen] = useState(false);
     const [hasCheckedSubscription, setHasCheckedSubscription] = useState(false);
     const [isFeatureLocked, setIsFeatureLocked] = useState(false);
     const [hideFeatureLock, setHideFeatureLock] = useState(false);
@@ -862,7 +862,7 @@ const AppContent: React.FC = () => {
 
     // Show payment modal reminder every 30 minutes for free users
     useEffect(() => {
-        if (user && user.plan === 'free' && user.role !== 'admin' && user.role !== 'super_admin') {
+        if (user && user.plan === 'free' && user.role !== 'admin') {
             console.log('⏰ Setting up payment reminder for free user');
             
             // Show immediately on first login
@@ -918,6 +918,7 @@ const AppContent: React.FC = () => {
                     user={user}
                     onLogout={logout}
                     onOpenPayment={() => setIsPaymentModalOpen(true)}
+                    onOpenDailyLimitModal={() => setIsDailyLimitModalOpen(true)}
                     onOpenAdmin={() => setIsAdminPanelOpen(true)}
                     onSwitchToAdvanced={() => setUseSimplifiedUI(false)}
                 />
@@ -1043,6 +1044,15 @@ const AppContent: React.FC = () => {
                 isFirstLogin={isFeatureLocked}
                 canClose={!isFeatureLocked}
             />
+            {user && (
+                <DailyLimitModal
+                    isOpen={isDailyLimitModalOpen}
+                    onClose={() => setIsDailyLimitModalOpen(false)}
+                    onUpgrade={() => setIsPaymentModalOpen(true)}
+                    userPlan={user.plan}
+                    dailyGenerationsUsed={user.dailyGenerationsUsed || 0}
+                />
+            )}
             <ApiKeySelectorModal />
             <Chatbot />
         </div>

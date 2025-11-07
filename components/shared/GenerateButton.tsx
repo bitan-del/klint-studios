@@ -60,7 +60,13 @@ export const GenerateButton: React.FC = () => {
   };
 
   const handleGenerate = () => {
-    generateAsset(user, incrementGenerationsUsed);
+    // Wrapper to match expected signature: (count: number) => Promise<void>
+    const onGenerationComplete = async (count: number): Promise<void> => {
+      await incrementGenerationsUsed(count);
+      // Note: Daily limit check is handled in simplified workflows
+      // Advanced mode users (ADVANCE plan) don't have daily limits
+    };
+    generateAsset(user, onGenerationComplete);
   };
 
   const Icon = Sparkles;

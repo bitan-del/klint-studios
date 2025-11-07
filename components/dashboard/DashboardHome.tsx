@@ -65,6 +65,15 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
         }
     };
 
+    // Determine feature access based on new pricing structure:
+    // BASIC (solo): AI Photoshoot, Product Photography, Photo to Prompt, Social Media Posts
+    // PRO (studio): Everything in BASIC + Virtual Try-On, Photo Editor, Style Transfer, Image Upscale
+    // ADVANCE (brand): Everything in PRO + Advance Mode
+    // Free: Only AI Photoshoot
+    const isBasicPlan = userPlan === 'solo';
+    const isProPlan = userPlan === 'studio';
+    const isAdvancePlan = userPlan === 'brand';
+
     const workflows: WorkflowCard[] = [
         {
             id: 'ai-photoshoot',
@@ -74,6 +83,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             gradient: 'from-emerald-500 via-teal-500 to-cyan-500',
             badge: 'POPULAR',
             image: getWorkflowImage('ai-photoshoot'),
+            // Available to all plans (including free)
         },
         {
             id: 'product-photography',
@@ -81,7 +91,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             description: 'Studio-grade product visuals',
             icon: <Package className="w-5 h-5" />,
             gradient: 'from-emerald-600 via-green-500 to-teal-500',
-            isLocked: isFreePlan,
+            isLocked: isFreePlan, // Available in BASIC+
             image: getWorkflowImage('product-photography'),
         },
         {
@@ -91,7 +101,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             icon: <User className="w-5 h-5" />,
             gradient: 'from-teal-500 via-cyan-500 to-emerald-500',
             badge: 'NEW',
-            isLocked: isFreePlan,
+            isLocked: !(isProPlan || isAdvancePlan), // Available in PRO+ (includes ADVANCE)
             image: getWorkflowImage('virtual-tryon'),
         },
         {
@@ -100,7 +110,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             description: 'Advanced image manipulation',
             icon: <Wand2 className="w-5 h-5" />,
             gradient: 'from-green-500 via-emerald-500 to-teal-500',
-            isLocked: isFreePlan,
+            isLocked: !(isProPlan || isAdvancePlan), // Available in PRO+ (includes ADVANCE)
             image: getWorkflowImage('photo-editor'),
         },
         {
@@ -110,7 +120,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             icon: <Film className="w-5 h-5" />,
             gradient: 'from-emerald-400 via-teal-400 to-cyan-400',
             badge: 'NEW',
-            isLocked: isFreePlan,
+            isLocked: isFreePlan, // Available in BASIC+
             image: getWorkflowImage('storyboard'),
         },
         {
@@ -120,7 +130,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             icon: <Instagram className="w-5 h-5" />,
             gradient: 'from-teal-600 via-emerald-600 to-green-600',
             badge: 'PRO',
-            isLocked: isFreePlan,
+            isLocked: isFreePlan, // Available in BASIC+
             image: getWorkflowImage('social-media-posts'),
         },
         {
@@ -129,7 +139,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             description: 'Cinematic color grading',
             icon: <Palette className="w-5 h-5" />,
             gradient: 'from-cyan-500 via-teal-500 to-emerald-500',
-            isLocked: isFreePlan,
+            isLocked: !(isProPlan || isAdvancePlan), // Available in PRO+ (includes ADVANCE)
             image: getWorkflowImage('style-transfer'),
         },
         {
@@ -138,7 +148,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
             description: 'AI-powered resolution enhancement',
             icon: <Sparkles className="w-5 h-5" />,
             gradient: 'from-emerald-500 via-green-500 to-teal-600',
-            isLocked: isFreePlan,
+            isLocked: !(isProPlan || isAdvancePlan), // Available in PRO+ (includes ADVANCE)
             image: getWorkflowImage('upscale'),
         },
     ];

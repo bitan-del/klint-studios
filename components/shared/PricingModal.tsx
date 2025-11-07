@@ -34,7 +34,6 @@ export const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose }) =
             solo: 999,
             studio: 2999,
             brand: 4999,
-            free: 0
         };
     }
     
@@ -78,16 +77,23 @@ export const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose }) =
 
                 {/* Body */}
                 <div className="p-6 sm:p-8 max-h-[85vh] overflow-y-auto">
+                    {/* Sale Banner */}
+                    <div className="mb-6 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl p-4 text-center">
+                        <p className="text-sm text-emerald-300 font-semibold">
+                            🎉 Special Offer: 1 Year Plans Available During Black Friday, Cyber Monday & Boxing Day Sales!
+                        </p>
+                    </div>
+
                     {/* Plans Grid */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Solo Plan */}
+                        {/* BASIC Plan */}
                         <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 flex flex-col">
-                            <h3 className="text-2xl font-bold text-white mb-6">Solo</h3>
+                            <h3 className="text-2xl font-bold text-white mb-6">BASIC</h3>
                             
                             <div className="mb-4">
                                 <div className="text-5xl font-bold text-white mb-2">
                                     {currencySymbol}{soloPricing.base.toLocaleString('en-IN')}
-                                    <span className="text-lg font-normal text-zinc-400"> /year</span>
+                                    <span className="text-lg font-normal text-zinc-400"> /3 months</span>
                                 </div>
                                 <div className="text-sm text-zinc-400 space-y-1">
                                     <div>Base: {currencySymbol}{soloPricing.base.toLocaleString('en-IN')}</div>
@@ -99,29 +105,26 @@ export const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose }) =
                             </div>
 
                             <ul className="space-y-3 mb-6 flex-grow text-sm">
-                                <PlanFeature>Create unlimited AI photoshoots</PlanFeature>
-                                <PlanFeature>Generate 20 images per minute</PlanFeature>
-                                <PlanFeature>Virtual try-on & product staging</PlanFeature>
-                                <PlanFeature>AI-powered prompt enhancement</PlanFeature>
-                                <PlanFeature>50+ professional scene styles</PlanFeature>
-                                <PlanFeature>HD exports ready for social media</PlanFeature>
-                                <PlanFeature>Priority email support</PlanFeature>
-                                <PlanFeature>Cancel anytime</PlanFeature>
+                                <PlanFeature>AI Photoshoot</PlanFeature>
+                                <PlanFeature>Product Photography</PlanFeature>
+                                <PlanFeature>Photo to Prompt</PlanFeature>
+                                <PlanFeature>Social Media Posts</PlanFeature>
+                                <PlanFeature>100 images daily</PlanFeature>
                             </ul>
 
                             <button 
                                 onClick={() => { if (!isLoggedIn) window.location.href = '/login.html' }}
                                 className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-3 rounded-xl transition-colors"
                             >
-                                {isLoggedIn ? 'Get Solo' : 'Login to Purchase'}
+                                {isLoggedIn ? 'Get BASIC' : 'Login to Purchase'}
                             </button>
                             
                             <div className="text-center text-xs text-zinc-500 mt-3">
-                                {currencySymbol}{soloPricing.total.toLocaleString('en-IN')}/year • Billed annually
+                                {currencySymbol}{soloPricing.total.toLocaleString('en-IN')}/3 months • Billed quarterly
                             </div>
                         </div>
 
-                        {/* Studio Plan (Recommended) */}
+                        {/* PRO Plan (Recommended) */}
                         <div className="relative bg-zinc-900/50 border-2 border-emerald-500 rounded-2xl p-6 flex flex-col">
                             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                                 <span className="bg-emerald-500 text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1">
@@ -129,12 +132,12 @@ export const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose }) =
                                 </span>
                             </div>
                             
-                            <h3 className="text-2xl font-bold text-white mb-6">Studio</h3>
+                            <h3 className="text-2xl font-bold text-white mb-6">PRO</h3>
                             
                             <div className="mb-4">
                                 <div className="text-5xl font-bold text-white mb-2">
                                     {currencySymbol}{studioPricing.base.toLocaleString('en-IN')}
-                                    <span className="text-lg font-normal text-zinc-400"> /year</span>
+                                    <span className="text-lg font-normal text-zinc-400"> /3 months</span>
                                 </div>
                                 <div className="text-sm text-zinc-400 space-y-1">
                                     <div>Base: {currencySymbol}{studioPricing.base.toLocaleString('en-IN')}</div>
@@ -146,36 +149,37 @@ export const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose }) =
                             </div>
 
                             <ul className="space-y-3 mb-6 flex-grow text-sm">
-                                <PlanFeature>Everything in Solo</PlanFeature>
-                                <PlanFeature>50 images/minute lightning speed</PlanFeature>
-                                <PlanFeature>Auto-generate product catalogs</PlanFeature>
-                                <PlanFeature>4 lifestyle shots in 1:1 & 9:16 ratios</PlanFeature>
-                                <PlanFeature>Hollywood-grade color grading</PlanFeature>
-                                <PlanFeature>AI realism boost & film grain</PlanFeature>
-                                <PlanFeature>Generative image editor</PlanFeature>
-                                <PlanFeature>Advanced editing tools</PlanFeature>
+                                <PlanFeature>AI Photoshoot</PlanFeature>
+                                <PlanFeature>Product Photography</PlanFeature>
+                                <PlanFeature>Virtual Try-On</PlanFeature>
+                                <PlanFeature>Photo Editor</PlanFeature>
+                                <PlanFeature>Photo to Prompt</PlanFeature>
+                                <PlanFeature>Social Media Posts</PlanFeature>
+                                <PlanFeature>Style Transfer</PlanFeature>
+                                <PlanFeature>Image Upscale</PlanFeature>
+                                <PlanFeature>Unlimited daily use</PlanFeature>
                             </ul>
 
                             <button 
                                 onClick={() => { if (!isLoggedIn) window.location.href = '/login.html' }}
                                 className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl transition-colors"
                             >
-                                {isLoggedIn ? 'Get Studio' : 'Login to Purchase'}
+                                {isLoggedIn ? 'Get PRO' : 'Login to Purchase'}
                             </button>
                             
                             <div className="text-center text-xs text-zinc-500 mt-3">
-                                {currencySymbol}{studioPricing.total.toLocaleString('en-IN')}/year • Billed annually
+                                {currencySymbol}{studioPricing.total.toLocaleString('en-IN')}/3 months • Billed quarterly
                             </div>
                         </div>
 
-                        {/* Brand Plan */}
+                        {/* ADVANCE Plan */}
                         <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 flex flex-col">
-                            <h3 className="text-2xl font-bold text-white mb-6">Brand</h3>
+                            <h3 className="text-2xl font-bold text-white mb-6">ADVANCE</h3>
                             
                             <div className="mb-4">
                                 <div className="text-5xl font-bold text-white mb-2">
                                     {currencySymbol}{brandPricing.base.toLocaleString('en-IN')}
-                                    <span className="text-lg font-normal text-zinc-400"> /year</span>
+                                    <span className="text-lg font-normal text-zinc-400"> /3 months</span>
                                 </div>
                                 <div className="text-sm text-zinc-400 space-y-1">
                                     <div>Base: {currencySymbol}{brandPricing.base.toLocaleString('en-IN')}</div>
@@ -187,25 +191,21 @@ export const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose }) =
                             </div>
 
                             <ul className="space-y-3 mb-6 flex-grow text-sm">
-                                <PlanFeature>Everything in Studio</PlanFeature>
-                                <PlanFeature>100 images/minute ultra-fast</PlanFeature>
-                                <PlanFeature>Bulk process entire collections</PlanFeature>
-                                <PlanFeature>Full e-commerce + social media assets</PlanFeature>
-                                <PlanFeature>Save & apply brand looks instantly</PlanFeature>
-                                <PlanFeature>Dedicated account manager</PlanFeature>
-                                <PlanFeature>Phone & priority chat support</PlanFeature>
-                                <PlanFeature>SLA guarantee</PlanFeature>
+                                <PlanFeature>Everything in PRO</PlanFeature>
+                                <PlanFeature>Advance Mode</PlanFeature>
+                                <PlanFeature>All features unlocked</PlanFeature>
+                                <PlanFeature>Unlimited daily use</PlanFeature>
                             </ul>
 
                             <button 
                                 onClick={() => { if (!isLoggedIn) window.location.href = '/login.html' }}
                                 className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-3 rounded-xl transition-colors"
                             >
-                                {isLoggedIn ? 'Get Brand' : 'Login to Purchase'}
+                                {isLoggedIn ? 'Get ADVANCE' : 'Login to Purchase'}
                             </button>
                             
                             <div className="text-center text-xs text-zinc-500 mt-3">
-                                {currencySymbol}{brandPricing.total.toLocaleString('en-IN')}/year • Billed annually
+                                {currencySymbol}{brandPricing.total.toLocaleString('en-IN')}/3 months • Billed quarterly
                             </div>
                         </div>
                     </div>
@@ -214,7 +214,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose }) =
                     <div className="mt-8 pt-8 text-center border-t border-zinc-800">
                         <h4 className="font-semibold text-lg text-white mb-3">Cost & Value Analysis</h4>
                         <p className="text-sm text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-                            Our pricing provides exceptional value powered by our own proprietary image model, specifically trained to create content that wins on social media. Each generation is optimized for engagement, virality, and brand storytelling. These are annual subscriptions offering much better value than monthly plans. Our plans include premium features and a streamlined workflow to maximize your creative impact and return on investment.
+                            Our pricing provides exceptional value powered by our own proprietary image model, specifically trained to create content that wins on social media. Each generation is optimized for engagement, virality, and brand storytelling. These are 3-month subscriptions with unlimited daily use. Our plans include premium features and a streamlined workflow to maximize your creative impact and return on investment. Special 1-year plans available during Black Friday, Cyber Monday, and Boxing Day sales!
                         </p>
                     </div>
                 </div>

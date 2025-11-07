@@ -9,9 +9,14 @@ export type Feature =
 
 export const PLAN_DETAILS: Record<UserPlan, { generations: number; name: string; rpmLimit?: number; dailyLimit?: number; }> = {
     free: { generations: 3000, name: 'Free', rpmLimit: 10, dailyLimit: 5 }, // 5 images/day for free users
-    solo: { generations: 200, name: 'Solo Creator', rpmLimit: 20 },
-    studio: { generations: 600, name: 'Studio', rpmLimit: 40, dailyLimit: 150 },
-    brand: { generations: 2500, name: 'Brand', rpmLimit: 60, dailyLimit: 200 },
+    solo: { generations: 200, name: 'BASIC', rpmLimit: 20, dailyLimit: 100 }, // 100 images/day for BASIC users
+    studio: { generations: 600, name: 'PRO', rpmLimit: 40, dailyLimit: 150 },
+    brand: { generations: 2500, name: 'ADVANCE', rpmLimit: 60, dailyLimit: 200 },
+};
+
+// Helper function to get plan display name
+export const getPlanDisplayName = (plan: UserPlan): string => {
+    return PLAN_DETAILS[plan].name;
 };
 
 const PLAN_PERMISSIONS: Record<UserPlan, Feature[]> = {

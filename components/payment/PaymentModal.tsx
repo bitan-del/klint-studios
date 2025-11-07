@@ -237,6 +237,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
         )}
 
+        {/* Sale Banner */}
+        <div className="mx-6 mb-6 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl p-4 text-center">
+          <p className="text-sm text-emerald-300 font-semibold">
+            🎉 Special Offer: 1 Year Plans Available During Black Friday, Cyber Monday & Boxing Day Sales!
+          </p>
+        </div>
+
         {/* Plans Grid */}
         <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
           {plans.map((plan) => (
@@ -246,7 +253,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               isPopular={plan.plan === 'studio'}
               isSelected={selectedPlan === plan.plan}
               isLoading={(isProcessing && selectedPlan === plan.plan) || isLoadingKeys}
-              onSelect={() => handlePlanSelect(plan.plan)}
+              onSelect={() => {
+                if (plan.plan !== 'free') {
+                  handlePlanSelect(plan.plan as 'solo' | 'studio' | 'brand');
+                }
+              }}
             />
           ))}
         </div>
@@ -269,7 +280,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           </div>
           <p className="text-xs text-zinc-500 text-center mt-4">
-            All plans are billed annually with 18% GST.
+            All plans are billed quarterly (3 months) with 18% GST. Special 1-year plans available during Black Friday, Cyber Monday, and Boxing Day sales!
           </p>
         </div>
       </div>

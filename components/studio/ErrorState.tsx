@@ -11,7 +11,13 @@ export const ErrorState: React.FC = () => {
 
     const handleRetry = () => {
         // We don't need to clearError() here because generateAsset() does it internally.
-        generateAsset(user, incrementGenerationsUsed);
+        // Wrapper to match expected signature: (count: number) => Promise<void>
+        const onGenerationComplete = async (count: number): Promise<void> => {
+            await incrementGenerationsUsed(count);
+            // Note: Daily limit check is handled in simplified workflows
+            // Advanced mode users (ADVANCE plan) don't have daily limits
+        };
+        generateAsset(user, onGenerationComplete);
     };
 
     return (

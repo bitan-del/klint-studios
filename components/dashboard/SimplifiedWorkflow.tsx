@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 interface SimplifiedWorkflowProps {
     workflowId: string;
     onBack: () => void;
+    onOpenDailyLimitModal?: () => void;
 }
 
 type AspectRatioType = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
@@ -18,7 +19,7 @@ const ASPECT_RATIOS: { value: AspectRatioType; label: string; css: string }[] = 
     { value: '16:9', label: 'Wide (16:9)', css: 'aspect-[16/9]' },
 ];
 
-export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflowId, onBack }) => {
+export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflowId, onBack, onOpenDailyLimitModal }) => {
     const [prompt, setPrompt] = useState('');
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
     const [uploadedImage2, setUploadedImage2] = useState<string | null>(null); // For dual-upload workflows
@@ -228,7 +229,11 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 
                 // Increment user's generation count (1 image)
                 if (user) {
-                    await incrementGenerationsUsed(1);
+                    const result = await incrementGenerationsUsed(1);
+                    if (result.dailyLimitHit && onOpenDailyLimitModal) {
+                        onOpenDailyLimitModal();
+                        return;
+                    }
                 }
             } else {
                 // Standard generation for all other workflows
@@ -253,7 +258,11 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 
                 // Increment user's generation count
                 if (user) {
-                    await incrementGenerationsUsed(validImages.length);
+                    const result = await incrementGenerationsUsed(validImages.length);
+                    if (result.dailyLimitHit && onOpenDailyLimitModal) {
+                        onOpenDailyLimitModal();
+                        return;
+                    }
                 }
             }
         } catch (error) {

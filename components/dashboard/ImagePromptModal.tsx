@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Download, Sparkles, Wand2, Image as ImageIcon, Layers, Zap, Copy, Plus, Info, Lightbulb, TrendingUp, Star } from 'lucide-react';
+import { X, Loader2, Download, Sparkles, Wand2, Image as ImageIcon, Layers, Zap, Copy, Plus, Info, Lightbulb, TrendingUp, Star, Lock } from 'lucide-react';
 import { geminiService } from '../../services/geminiService';
+import { useAuth } from '../../context/AuthContext';
 
 interface ImagePromptModalProps {
     isOpen: boolean;
@@ -15,6 +16,7 @@ interface ImagePromptModalProps {
 const promptCache = new Map<number, string>();
 
 export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ isOpen, onClose, imageUrl, imageId, onNavigateToWorkflow }) => {
+    const { user, checkSubscriptionStatus } = useAuth();
     const [prompt, setPrompt] = useState<string>('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,31 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ isOpen, onCl
         'BlakeFocus', 'CameronView', 'DakotaFrame', 'EmeryLens', 'FinleyShots'
     ];
     const randomUsername = randomUsernames[imageId % randomUsernames.length];
+
+    // Determine feature access based on plan
+    const userPlan = user?.plan || 'free';
+    const isFreePlan = userPlan === 'free';
+    const isBasicPlan = userPlan === 'solo';
+    const isProPlan = userPlan === 'studio';
+    const isAdvancePlan = userPlan === 'brand';
+
+    // Check if a feature is locked based on plan
+    const isFeatureLocked = (feature: string): boolean => {
+        // AI Photoshoot: Available to all (including free)
+        if (feature === 'ai-photoshoot') return false;
+        
+        // Product Photo, MultiSnap: Available in BASIC+ (locked for free)
+        if (feature === 'product-photography' || feature === 'multisnap') {
+            return isFreePlan;
+        }
+        
+        // Variation Lab (Photo Editor), Upscale, Style Transfer: Available in PRO+ (locked for free/BASIC)
+        if (feature === 'variation-lab' || feature === 'upscale' || feature === 'style-transfer') {
+            return !(isProPlan || isAdvancePlan);
+        }
+        
+        return false;
+    };
 
     useEffect(() => {
         if (isOpen && imageUrl) {
@@ -131,6 +158,13 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ isOpen, onCl
     };
 
     const handleFeatureClick = (feature: string) => {
+        // Check if feature is locked
+        if (isFeatureLocked(feature)) {
+            // Show payment modal for locked feature
+            checkSubscriptionStatus();
+            return;
+        }
+
         // Map feature names to workflow IDs
         const featureToWorkflowMap: Record<string, string> = {
             'ai-photoshoot': 'ai-photoshoot',
@@ -297,65 +331,44 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ isOpen, onCl
                                 <h3 className="text-sm font-semibold text-zinc-300 px-2">Use with Klint Studios</h3>
                                 
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        onClick={() => handleFeatureClick('ai-photoshoot')}
-                                        className="flex flex-col items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-zinc-700 transition-colors group"
-                                    >
-                                        <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30 transition-colors">
-                                            <ImageIcon size={18} className="text-emerald-400" />
-                                        </div>
-                                        <span className="text-xs font-medium text-zinc-300">AI Photoshoot</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleFeatureClick('product-photography')}
-                                        className="flex flex-col items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-zinc-700 transition-colors group"
-                                    >
-                                        <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30 transition-colors">
-                                            <Layers size={18} className="text-emerald-400" />
-                                        </div>
-                                        <span className="text-xs font-medium text-zinc-300">Product Photo</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleFeatureClick('variation-lab')}
-                                        className="flex flex-col items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-zinc-700 transition-colors group"
-                                    >
-                                        <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30 transition-colors">
-                                            <Sparkles size={18} className="text-emerald-400" />
-                                        </div>
-                                        <span className="text-xs font-medium text-zinc-300">Variation Lab</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleFeatureClick('upscale')}
-                                        className="flex flex-col items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-zinc-700 transition-colors group"
-                                    >
-                                        <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30 transition-colors">
-                                            <Zap size={18} className="text-emerald-400" />
-                                        </div>
-                                        <span className="text-xs font-medium text-zinc-300">Upscale</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleFeatureClick('style-transfer')}
-                                        className="flex flex-col items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-zinc-700 transition-colors group"
-                                    >
-                                        <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30 transition-colors">
-                                            <Wand2 size={18} className="text-emerald-400" />
-                                        </div>
-                                        <span className="text-xs font-medium text-zinc-300">Style Transfer</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleFeatureClick('multisnap')}
-                                        className="flex flex-col items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-zinc-700 transition-colors group"
-                                    >
-                                        <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30 transition-colors">
-                                            <ImageIcon size={18} className="text-emerald-400" />
-                                        </div>
-                                        <span className="text-xs font-medium text-zinc-300">MultiSnap</span>
-                                    </button>
+                                    {[
+                                        { id: 'ai-photoshoot', label: 'AI Photoshoot', icon: ImageIcon },
+                                        { id: 'product-photography', label: 'Product Photo', icon: Layers },
+                                        { id: 'variation-lab', label: 'Variation Lab', icon: Sparkles },
+                                        { id: 'upscale', label: 'Upscale', icon: Zap },
+                                        { id: 'style-transfer', label: 'Style Transfer', icon: Wand2 },
+                                        { id: 'multisnap', label: 'MultiSnap', icon: ImageIcon },
+                                    ].map(({ id, label, icon: Icon }) => {
+                                        const isLocked = isFeatureLocked(id);
+                                        return (
+                                            <button
+                                                key={id}
+                                                onClick={() => handleFeatureClick(id)}
+                                                className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors group relative ${
+                                                    isLocked
+                                                        ? 'bg-zinc-800/30 hover:bg-zinc-800/40 border-amber-500/30 opacity-50 cursor-pointer'
+                                                        : 'bg-zinc-800/50 hover:bg-zinc-800 border-zinc-700'
+                                                }`}
+                                                title={isLocked ? 'Upgrade your plan to unlock this feature' : label}
+                                            >
+                                                {isLocked && (
+                                                    <Lock className="absolute top-1.5 right-1.5 w-3 h-3 text-amber-500" />
+                                                )}
+                                                <div className={`p-2 rounded-lg transition-colors ${
+                                                    isLocked
+                                                        ? 'bg-amber-500/10 group-hover:bg-amber-500/20'
+                                                        : 'bg-emerald-500/20 group-hover:bg-emerald-500/30'
+                                                }`}>
+                                                    <Icon size={18} className={isLocked ? 'text-amber-400 opacity-60' : 'text-emerald-400'} />
+                                                </div>
+                                                <span className={`text-xs font-medium ${
+                                                    isLocked ? 'text-zinc-500 line-through' : 'text-zinc-300'
+                                                }`}>
+                                                    {label}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 

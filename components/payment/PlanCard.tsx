@@ -45,8 +45,8 @@ export const PlanCard: React.FC<PlanCardProps> = ({
       )}
 
       {/* Plan Name */}
-      <h3 className="text-2xl font-bold text-white capitalize mb-2">
-        {plan.plan}
+      <h3 className="text-2xl font-bold text-white mb-2">
+        {plan.plan === 'solo' ? 'BASIC' : plan.plan === 'studio' ? 'PRO' : plan.plan === 'brand' ? 'ADVANCE' : plan.plan.toUpperCase()}
       </h3>
 
       {/* Price */}
@@ -56,7 +56,7 @@ export const PlanCard: React.FC<PlanCardProps> = ({
             <p className="text-4xl font-bold text-white">
               {formatPrice(plan.baseAmount)}
             </p>
-            <p className="text-zinc-400">/year</p>
+            <p className="text-zinc-400">/{plan.billingPeriod}</p>
           </div>
           <div className="mt-2 text-sm space-y-1">
             <p className="text-zinc-400">
@@ -103,13 +103,13 @@ export const PlanCard: React.FC<PlanCardProps> = ({
             Processing...
           </>
         ) : (
-          `Get ${plan.plan.charAt(0).toUpperCase() + plan.plan.slice(1)}`
+          `Get ${plan.plan === 'solo' ? 'BASIC' : plan.plan === 'studio' ? 'PRO' : plan.plan === 'brand' ? 'ADVANCE' : plan.plan.toUpperCase()}`
         )}
       </button>
 
-      {/* Annual Note */}
+      {/* Billing Note */}
       <p className="text-xs text-center text-zinc-500 mt-3">
-        ₹{plan.totalAmount.toLocaleString('en-IN')}/year • Billed annually
+        ₹{plan.totalAmount.toLocaleString('en-IN')}/{plan.billingPeriod} • Billed {plan.billingPeriod === '3 months' ? 'quarterly' : 'annually'}
       </p>
     </div>
   );
