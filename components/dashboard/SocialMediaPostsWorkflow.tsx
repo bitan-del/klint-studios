@@ -21,6 +21,7 @@ export const SocialMediaPostsWorkflow: React.FC<SocialMediaPostsWorkflowProps> =
     const [brandFont, setBrandFont] = useState('');
     const [brandColor, setBrandColor] = useState('#10B981');
     const [batchCount, setBatchCount] = useState<2 | 4 | 8>(2);
+    const [aspectRatio, setAspectRatio] = useState<'1:1' | '3:4' | '4:3' | '9:16' | '16:9'>('1:1');
     const [styleInsights, setStyleInsights] = useState<StyleInsights | null>(null);
     const [generatedPosts, setGeneratedPosts] = useState<string[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -167,7 +168,7 @@ Make it Instagram-ready, visually appealing, and on-brand.`;
                 try {
                     const result = await geminiService.generateSimplifiedPhotoshoot(
                         prompt,
-                        '1:1',
+                        aspectRatio,
                         productImage
                     );
                     
@@ -405,6 +406,26 @@ Make it Instagram-ready, visually appealing, and on-brand.`;
                     {/* Right Column - Generate & Results */}
                     <div className="space-y-6">
                         
+                        {/* Dimension Selector */}
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                            <h3 className="text-sm font-semibold text-white mb-4">Dimensions</h3>
+                            <div className="grid grid-cols-2 gap-2 mb-6">
+                                {(['1:1', '3:4', '4:3', '9:16', '16:9'] as const).map((ratio) => (
+                                    <button
+                                        key={ratio}
+                                        onClick={() => setAspectRatio(ratio)}
+                                        className={`py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+                                            aspectRatio === ratio
+                                                ? 'bg-emerald-500 text-black'
+                                                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                        }`}
+                                    >
+                                        {ratio}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         {/* Batch Size & Generate */}
                         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <h3 className="text-sm font-semibold text-white mb-4">Batch Size</h3>
