@@ -545,68 +545,59 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                     </div>
                                     
                                     {/* Cloudinary */}
-                                    {(() => {
-                                        // Create safe references to prevent ReferenceError
-                                        const isSavingCloudinary = typeof savingCloudinary !== 'undefined' ? savingCloudinary : false;
-                                        const isSavedCloudinary = typeof savedCloudinary !== 'undefined' ? savedCloudinary : false;
-                                        const cloudinaryData = cloudinary || {};
-                                        
-                                        return (
-                                            <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
-                                                <h4 className="font-bold text-zinc-100">Cloudinary (Image Storage)</h4>
-                                                <div className="space-y-2">
-                                                    <div className="space-y-1">
-                                                        <label className="text-xs text-zinc-400">Cloud Name</label>
-                                                        <input 
-                                                            type="text" 
-                                                            value={cloudinaryData.cloudName || ''} 
-                                                            onChange={(e) => setCloudinary({...cloudinaryData, cloudName: e.target.value})} 
-                                                            placeholder="your-cloud-name" 
-                                                            className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <label className="text-xs text-zinc-400">Upload Preset</label>
-                                                        <input 
-                                                            type="text" 
-                                                            value={cloudinaryData.uploadPreset || ''} 
-                                                            onChange={(e) => setCloudinary({...cloudinaryData, uploadPreset: e.target.value})} 
-                                                            placeholder="klint-studios-upload" 
-                                                            className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <label className="text-xs text-zinc-400">API Key (Optional)</label>
-                                                        <PasswordInput 
-                                                            value={cloudinaryData.apiKey || ''} 
-                                                            onChange={(e) => setCloudinary({...cloudinaryData, apiKey: e.target.value})} 
-                                                            placeholder="Optional - for signed uploads" 
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <label className="text-xs text-zinc-400">API Secret (Optional)</label>
-                                                        <PasswordInput 
-                                                            value={cloudinaryData.apiSecret || ''} 
-                                                            onChange={(e) => setCloudinary({...cloudinaryData, apiSecret: e.target.value})} 
-                                                            placeholder="Optional - for signed uploads" 
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <button 
-                                                    onClick={handleSaveCloudinary} 
-                                                    disabled={isSavingCloudinary || !cloudinaryData.cloudName || !cloudinaryData.uploadPreset}
-                                                    className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
-                                                >
-                                                    {isSavingCloudinary && <Loader2 size={16} className="animate-spin" />}
-                                                    {isSavedCloudinary && <Check size={16} className="animate-bounce" />}
-                                                    {isSavingCloudinary ? 'Saving...' : isSavedCloudinary ? 'Saved!' : 'Save Cloudinary Settings'}
-                                                </button>
-                                                <p className="text-xs text-zinc-500 mt-2">
-                                                    Get your credentials from <a href="https://cloudinary.com/console" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Cloudinary Dashboard</a>
-                                                </p>
+                                    <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
+                                        <h4 className="font-bold text-zinc-100">Cloudinary (Image Storage)</h4>
+                                        <div className="space-y-2">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Cloud Name</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={(cloudinary && cloudinary.cloudName) || ''} 
+                                                    onChange={(e) => setCloudinary({...(cloudinary || {}), cloudName: e.target.value})} 
+                                                    placeholder="your-cloud-name" 
+                                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
                                             </div>
-                                        );
-                                    })()}
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Upload Preset</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={(cloudinary && cloudinary.uploadPreset) || ''} 
+                                                    onChange={(e) => setCloudinary({...(cloudinary || {}), uploadPreset: e.target.value})} 
+                                                    placeholder="klint-studios-upload" 
+                                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">API Key (Optional)</label>
+                                                <PasswordInput 
+                                                    value={(cloudinary && cloudinary.apiKey) || ''} 
+                                                    onChange={(e) => setCloudinary({...(cloudinary || {}), apiKey: e.target.value})} 
+                                                    placeholder="Optional - for signed uploads" 
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">API Secret (Optional)</label>
+                                                <PasswordInput 
+                                                    value={(cloudinary && cloudinary.apiSecret) || ''} 
+                                                    onChange={(e) => setCloudinary({...(cloudinary || {}), apiSecret: e.target.value})} 
+                                                    placeholder="Optional - for signed uploads" 
+                                                />
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={handleSaveCloudinary} 
+                                            disabled={(savingCloudinary === true) || !(cloudinary && cloudinary.cloudName) || !(cloudinary && cloudinary.uploadPreset)}
+                                            className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
+                                        >
+                                            {(savingCloudinary === true) && <Loader2 size={16} className="animate-spin" />}
+                                            {(savedCloudinary === true) && <Check size={16} className="animate-bounce" />}
+                                            {(savingCloudinary === true) ? 'Saving...' : (savedCloudinary === true) ? 'Saved!' : 'Save Cloudinary Settings'}
+                                        </button>
+                                        <p className="text-xs text-zinc-500 mt-2">
+                                            Get your credentials from <a href="https://cloudinary.com/console" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Cloudinary Dashboard</a>
+                                        </p>
+                                    </div>
                                     
                                     {/* Canva */}
                                     <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
