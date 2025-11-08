@@ -88,17 +88,33 @@ export async function initializeCanva(): Promise<void> {
  * Get OAuth authorization URL with PKCE
  */
 export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
+  // Ensure Canva is initialized
+  if (!canvaConfig.clientId || !canvaConfig.clientSecret) {
+    await initializeCanva();
+  }
+  
+  if (!canvaConfig.clientId) {
+    throw new Error('Canva Client ID not configured. Please set it in the Admin Panel.');
+  }
+  
   // Generate PKCE parameters
   codeVerifier = await generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   
+  // Validate code challenge was generated
+  if (!codeChallenge || codeChallenge.length < 10) {
+    throw new Error('Failed to generate code challenge for PKCE');
+  }
+  
   // Store verifier in sessionStorage for later use
   if (typeof window !== 'undefined') {
     sessionStorage.setItem('canva_code_verifier', codeVerifier);
+    console.log('🔐 PKCE Code Verifier generated and stored');
+    console.log('🔐 Code Challenge:', codeChallenge.substring(0, 20) + '...');
   }
   
   const params = new URLSearchParams({
-    client_id: canvaConfig.clientId || '',
+    client_id: canvaConfig.clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'design:read design:write asset:read asset:write design:content:read design:content:write design:meta:read design:permission:read design:permission:write asset:read asset:write folder:read folder:write folder:permission:read folder:permission:write',
@@ -107,7 +123,16 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     code_challenge_method: 'S256',
   });
 
-  return `${CANVA_AUTH_BASE}/authorize?${params.toString()}`;
+  const authUrl = `${CANVA_AUTH_BASE}/authorize?${params.toString()}`;
+  
+  // Log the URL for debugging (without sensitive data)
+  console.log('🔗 Canva Auth URL generated');
+  console.log('📍 Redirect URI:', redirectUri);
+  console.log('🔑 Client ID:', canvaConfig.clientId);
+  console.log('✅ Code Challenge Method: S256');
+  console.log('🔗 Full Auth URL:', authUrl);
+  
+  return authUrl;
 }
 
 /**
