@@ -45,6 +45,8 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [storageInfo, setStorageInfo] = useState({ images_stored: 0, storage_limit: 10, usage_percentage: 0 });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showCanvaInstructions, setShowCanvaInstructions] = useState(false);
+  const [canvaImageUrl, setCanvaImageUrl] = useState<string>('');
 
   useEffect(() => {
     if (user) {
@@ -310,7 +312,116 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
                     loading="lazy"
                   />
                   {/* Overlay on hover */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 flex-wrap">
+                    {/* Canva Button */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          // Copy image URL to clipboard
+                          await navigator.clipboard.writeText(image.cloudinary_url);
+                          
+                          // Try to use Canva API to import image
+                          const { importImageToCanva, isCanvaAuthenticated } = await import('../../services/canvaService');
+                          
+                          if (isCanvaAuthenticated()) {
+                            const result = await importImageToCanva(image.cloudinary_url);
+                            if (result.method === 'api' && result.designId) {
+                              // API method: Open the design directly in editor
+                              window.open(result.editUrl, '_blank');
+                              return;
+                            }
+                          }
+                          
+                          // Fallback: Open Canva and show instructions modal
+                          setCanvaImageUrl(image.cloudinary_url);
+                          window.open('https://www.canva.com/create', '_blank');
+                          setShowCanvaInstructions(true);
+                        } catch (err) {
+                          console.error('Error opening Canva:', err);
+                          // Final fallback
+                          try {
+                            await navigator.clipboard.writeText(image.cloudinary_url);
+                            setCanvaImageUrl(image.cloudinary_url);
+                            window.open('https://www.canva.com/create', '_blank');
+                            setShowCanvaInstructions(true);
+                          } catch (e) {
+                            console.error('Failed to copy URL:', e);
+                            alert('Failed to copy URL. Please manually copy the image URL and upload it to Canva.');
+                          }
+                        }
+                      }}
+                      className="px-4 py-2.5 bg-gray-900/80 hover:bg-gray-800/90 border border-gray-600/50 rounded-lg transition-all flex items-center gap-3 text-white text-sm font-medium backdrop-blur-sm shadow-lg"
+                      title="Edit image in Canva"
+                    >
+                      {/* Canva Logo - Official from web */}
+                      <img 
+                        src="https://static.canva.com/web/images/12487a1e0770d29351bd4ce9622e97db.ico" 
+                        alt="Canva" 
+                        className="w-6 h-6 rounded-full flex-shrink-0"
+                        onError={(e) => {
+                          // Fallback to SVG if image fails to load
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                            svg.setAttribute('width', '24');
+                            svg.setAttribute('height', '24');
+                            svg.setAttribute('viewBox', '0 0 24 24');
+                            svg.setAttribute('fill', 'none');
+                            svg.className.baseVal = 'w-6 h-6 rounded-full flex-shrink-0';
+                            
+                            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                            const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                            gradient.setAttribute('id', `canva-grad-${image.id}`);
+                            gradient.setAttribute('x1', '0%');
+                            gradient.setAttribute('y1', '0%');
+                            gradient.setAttribute('x2', '100%');
+                            gradient.setAttribute('y2', '100%');
+                            
+                            const stops = [
+                              { offset: '0%', color: '#00C4CC' },
+                              { offset: '25%', color: '#3B82F6' },
+                              { offset: '50%', color: '#8B5CF6' },
+                              { offset: '75%', color: '#EC4899' },
+                              { offset: '100%', color: '#F43F5E' }
+                            ];
+                            
+                            stops.forEach(stop => {
+                              const stopEl = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                              stopEl.setAttribute('offset', stop.offset);
+                              stopEl.setAttribute('stop-color', stop.color);
+                              gradient.appendChild(stopEl);
+                            });
+                            
+                            defs.appendChild(gradient);
+                            svg.appendChild(defs);
+                            
+                            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            circle.setAttribute('cx', '12');
+                            circle.setAttribute('cy', '12');
+                            circle.setAttribute('r', '12');
+                            circle.setAttribute('fill', `url(#canva-grad-${image.id})`);
+                            svg.appendChild(circle);
+                            
+                            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            text.setAttribute('x', '12');
+                            text.setAttribute('y', '17.5');
+                            text.setAttribute('font-size', '14');
+                            text.setAttribute('fill', 'white');
+                            text.setAttribute('text-anchor', 'middle');
+                            text.setAttribute('font-weight', '800');
+                            text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif');
+                            text.textContent = 'C';
+                            svg.appendChild(text);
+                            
+                            parent.appendChild(svg);
+                          }
+                        }}
+                      />
+                      <span>Edit image</span>
+                    </button>
+                    
                     <button
                       onClick={() => handleDownload(image.cloudinary_url, image.id)}
                       className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors"
@@ -394,6 +505,68 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
           </div>
         )}
       </div>
+
+      {/* Canva Instructions Modal */}
+      {showCanvaInstructions && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <img 
+                  src="https://static.canva.com/web/images/12487a1e0770d29351bd4ce9622e97db.ico" 
+                  alt="Canva" 
+                  className="w-6 h-6 rounded-full"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+                How to Add Image to Canva
+              </h3>
+              <button
+                onClick={() => setShowCanvaInstructions(false)}
+                className="text-zinc-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+                <p className="text-emerald-400 text-sm font-medium flex items-center gap-2">
+                  <ImageIcon size={16} />
+                  Image URL copied to clipboard! 📋
+                </p>
+              </div>
+              <div className="space-y-3 text-zinc-300">
+                <p className="text-sm">Follow these steps in Canva:</p>
+                <ol className="list-decimal list-inside space-y-2 text-sm">
+                  <li>Click <strong className="text-white">"Uploads"</strong> in the left sidebar</li>
+                  <li>Click <strong className="text-white">"Upload an image or video"</strong></li>
+                  <li>Click <strong className="text-white">"Paste image URL"</strong> or paste the URL (Ctrl+V / Cmd+V)</li>
+                  <li>Click <strong className="text-white">"Add to design"</strong></li>
+                </ol>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={async () => {
+                    if (canvaImageUrl) {
+                      await navigator.clipboard.writeText(canvaImageUrl);
+                    }
+                  }}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                >
+                  Copy URL Again
+                </button>
+                <button
+                  onClick={() => setShowCanvaInstructions(false)}
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                >
+                  Got It
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

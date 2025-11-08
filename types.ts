@@ -428,8 +428,16 @@ export interface CloudinarySettings {
   apiSecret?: string;
 }
 
+export interface CanvaSettings {
+  clientId: string;
+  clientSecret: string;
+  accessToken?: string;
+  refreshToken?: string;
+}
+
 export interface ApiSettings {
   supabase: SupabaseSettings;
   gemini: GeminiSettings;
   cloudinary: CloudinarySettings;
+  canva?: CanvaSettings;
 }

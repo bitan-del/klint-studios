@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import type { User, UserPlan, UserRole, PaymentSettings, PlanPrices, Currency, PaymentGatewaySettings, ApiSettings, SupabaseSettings, GeminiSettings, CloudinarySettings } from '../types';
+import type { User, UserPlan, UserRole, PaymentSettings, PlanPrices, Currency, PaymentGatewaySettings, ApiSettings, SupabaseSettings, GeminiSettings, CloudinarySettings, CanvaSettings } from '../types';
 import { hasPermission as checkPermission, Feature, PLAN_DETAILS } from '../services/permissionsService';
 import { supabase } from '../services/supabaseClient';
 import { databaseService } from '../services/databaseService';
@@ -26,7 +26,7 @@ interface AuthState {
   setCurrency: (currency: Currency) => void;
   // Admin API Settings
   apiSettings: ApiSettings;
-  updateApiSettings: (service: 'supabase' | 'gemini' | 'cloudinary', settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings>) => void;
+  updateApiSettings: (service: 'supabase' | 'gemini' | 'cloudinary' | 'canva', settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings> | Partial<CanvaSettings>) => void;
   // Subscription Management
   needsPayment: boolean;
   checkSubscriptionStatus: () => Promise<void>;
@@ -146,6 +146,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('   Upload Preset:', cloudinaryUploadPreset);
           console.error('   Please run the SQL script: scripts/setup-cloudinary.sql');
           console.error('   Or configure in Admin Panel → Integrations → Cloudinary');
+        }
+
+        // Load Canva settings
+        console.log('🔄 Loading Canva settings from database...');
+        const canvaClientId = await databaseService.getAdminSetting('canva_client_id');
+        const canvaClientSecret = await databaseService.getAdminSetting('canva_client_secret');
+        const canvaAccessToken = await databaseService.getAdminSetting('canva_access_token');
+        const canvaRefreshToken = await databaseService.getAdminSetting('canva_refresh_token');
+        
+        if (canvaClientId && canvaClientSecret) {
+          console.log('✅ Canva settings loaded from database');
+          setApiSettings(current => ({
+            ...current,
+            canva: {
+              clientId: canvaClientId,
+              clientSecret: canvaClientSecret,
+              accessToken: canvaAccessToken || undefined,
+              refreshToken: canvaRefreshToken || undefined
+            }
+          }));
+          
+          // Initialize Canva service
+          try {
+            const { initializeCanva } = await import('../services/canvaService');
+            await initializeCanva();
+            console.log('✅ Canva service initialized successfully');
+          } catch (error) {
+            console.error('❌ Failed to initialize Canva service:', error);
+          }
         }
 
         // Load Stripe settings
@@ -590,8 +619,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Update API settings (stores in localStorage for Gemini)
   const updateApiSettings = async (
-    service: 'supabase' | 'gemini' | 'cloudinary', 
-    settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings>
+    service: 'supabase' | 'gemini' | 'cloudinary' | 'canva', 
+    settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings> | Partial<CanvaSettings>
   ) => {
     if (user?.role !== 'admin') return;
     
@@ -637,6 +666,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log('✅ Cloudinary configured! Image uploads will now use Cloudinary storage.');
       } else {
         console.error('❌ Failed to save Cloudinary settings to database');
+      }
+    } else if (service === 'canva') {
+      const canvaSettings = settings as CanvaSettings;
+      
+      // Save to database
+      const clientIdSuccess = await databaseService.setAdminSetting('canva_client_id', canvaSettings.clientId);
+      const clientSecretSuccess = await databaseService.setAdminSetting('canva_client_secret', canvaSettings.clientSecret);
+      const accessTokenSuccess = canvaSettings.accessToken ? await databaseService.setAdminSetting('canva_access_token', canvaSettings.accessToken) : true;
+      const refreshTokenSuccess = canvaSettings.refreshToken ? await databaseService.setAdminSetting('canva_refresh_token', canvaSettings.refreshToken) : true;
+      
+      if (clientIdSuccess && clientSecretSuccess && accessTokenSuccess && refreshTokenSuccess) {
+        console.log('✅ Canva settings saved to database');
+        // Initialize Canva service
+        const { initializeCanva } = await import('../services/canvaService');
+        await initializeCanva();
+        setApiSettings(current => ({ ...current, canva: canvaSettings }));
+        console.log('✅ Canva configured! Users can now edit images directly in Canva.');
+      } else {
+        console.error('❌ Failed to save Canva settings to database');
       }
     }
     // Supabase settings are in environment variables, not changeable at runtime
