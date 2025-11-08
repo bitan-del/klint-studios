@@ -4,6 +4,7 @@ import { Layers, Sparkles, Loader2 } from 'lucide-react';
 import { useStudio } from '../../context/StudioContext';
 import { ApparelItemCard } from './ApparelItemCard';
 import { AIEnhancements } from '../enhancements/AIEnhancements';
+import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 
 export const ApparelUploader: React.FC = () => {
     const { 
@@ -36,6 +37,21 @@ export const ApparelUploader: React.FC = () => {
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
         accept: { 'image/*': ['.jpeg', '.png', '.jpg'] },
+    });
+
+    // Enable clipboard paste (Ctrl+V / Cmd+V)
+    useClipboardPaste({
+        onPaste: (file) => {
+            const reader = new FileReader();
+            reader.onload = (event: ProgressEvent<FileReader>) => {
+                if (event.target?.result) {
+                    addApparelItem(event.target.result as string);
+                }
+            };
+            reader.readAsDataURL(file);
+        },
+        enabled: true,
+        accept: 'image/*'
     });
 
     const handleDragStart = (index: number) => {

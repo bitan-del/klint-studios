@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Package, X, Loader2 } from 'lucide-react';
 import { useStudio } from '../../context/StudioContext';
 import { ToggleSwitch } from '../shared/ToggleSwitch';
+import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 
 export const ProductUploader: React.FC = () => {
     const { 
@@ -31,6 +32,21 @@ export const ProductUploader: React.FC = () => {
         onDrop,
         accept: { 'image/*': ['.jpeg', '.png', '.jpg'] },
         multiple: false
+    });
+
+    // Enable clipboard paste (Ctrl+V / Cmd+V)
+    useClipboardPaste({
+        onPaste: (file) => {
+            const reader = new FileReader();
+            reader.onload = (event: ProgressEvent<FileReader>) => {
+                if (event.target?.result) {
+                    setProductImage(event.target.result as string);
+                }
+            };
+            reader.readAsDataURL(file);
+        },
+        enabled: true,
+        accept: 'image/*'
     });
 
     const activeImage = isCutout ? productImageCutout : productImage;

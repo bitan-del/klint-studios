@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Upload, Wand2, Download, Image as ImageIcon, Sparkles, X, Check, Zap, Loader2, ChevronDown } from 'lucide-react';
 import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../context/AuthContext';
+import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 
 interface SimplifiedWorkflowProps {
     workflowId: string;
@@ -186,6 +187,15 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
             reader.readAsDataURL(file);
         }
     };
+
+    // Enable clipboard paste (Ctrl+V / Cmd+V)
+    useClipboardPaste({
+        onPaste: (file) => {
+            handleFileSelect(file);
+        },
+        enabled: true,
+        accept: 'image/*'
+    });
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();

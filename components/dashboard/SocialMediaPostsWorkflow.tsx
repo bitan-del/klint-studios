@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { ArrowLeft, Upload, Sparkles, Image as ImageIcon, X, Loader2, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { geminiService } from '../../services/geminiService';
+import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 
 interface SocialMediaPostsWorkflowProps {
     onBack: () => void;
@@ -52,6 +53,34 @@ export const SocialMediaPostsWorkflow: React.FC<SocialMediaPostsWorkflowProps> =
             reader.readAsDataURL(file);
         }
     };
+
+    const handleFileFromClipboard = (file: File) => {
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const result = event.target?.result as string;
+                // Paste to reference image by default, or product if reference is already set
+                if (!referenceImage) {
+                    setReferenceImage(result);
+                    setStyleInsights(null);
+                } else if (!productImage) {
+                    setProductImage(result);
+                } else {
+                    // If both are set, replace reference
+                    setReferenceImage(result);
+                    setStyleInsights(null);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Enable clipboard paste (Ctrl+V / Cmd+V)
+    useClipboardPaste({
+        onPaste: handleFileFromClipboard,
+        enabled: true,
+        accept: 'image/*'
+    });
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();

@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { ImageIcon, X } from 'lucide-react';
 import { useStudio } from '../../context/StudioContext';
+import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 
 export const MockupUploader: React.FC = () => {
     const { mockupImage, setMockupImage } = useStudio();
@@ -27,6 +28,25 @@ export const MockupUploader: React.FC = () => {
         onDrop,
         accept: { 'image/*': ['.jpeg', '.png', '.jpg'] },
         multiple: false
+    });
+
+    // Enable clipboard paste (Ctrl+V / Cmd+V)
+    useClipboardPaste({
+        onPaste: (file) => {
+            const reader = new FileReader();
+            reader.onload = (event: ProgressEvent<FileReader>) => {
+                if (event.target?.result) {
+                    setMockupImage({
+                        id: file.name,
+                        name: file.name,
+                        base64: event.target.result as string
+                    });
+                }
+            };
+            reader.readAsDataURL(file);
+        },
+        enabled: true,
+        accept: 'image/*'
     });
 
     if (mockupImage) {

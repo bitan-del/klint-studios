@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { ImageUp, X, User } from 'lucide-react';
 import { useStudio } from '../../context/StudioContext';
+import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 
 const Uploader: React.FC<{
     onDrop: (acceptedFiles: File[]) => void;
@@ -60,6 +61,29 @@ export const ReimagineUploader: React.FC = () => {
             reader.readAsDataURL(file);
         }
     }, [setNewModelPhoto]);
+
+    // Enable clipboard paste (Ctrl+V / Cmd+V)
+    useClipboardPaste({
+        onPaste: (file) => {
+            const reader = new FileReader();
+            reader.onload = (event: ProgressEvent<FileReader>) => {
+                if (event.target?.result) {
+                    // Paste to source photo if empty, otherwise to new model photo
+                    if (!reimagineSourcePhoto) {
+                        setReimagineSourcePhoto(event.target.result as string);
+                    } else if (!newModelPhoto) {
+                        setNewModelPhoto(event.target.result as string);
+                    } else {
+                        // If both are set, replace source photo
+                        setReimagineSourcePhoto(event.target.result as string);
+                    }
+                }
+            };
+            reader.readAsDataURL(file);
+        },
+        enabled: true,
+        accept: 'image/*'
+    });
 
     if (reimagineSourcePhoto) {
         return (

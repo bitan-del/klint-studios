@@ -4,6 +4,7 @@ import { Sparkles, X, Loader2, Wand2, Lock } from 'lucide-react';
 import { useStudio } from '../../context/StudioContext';
 import { useAuth } from '../../context/AuthContext';
 import { PromptOptimizer } from '../shared/PromptOptimizer';
+import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 
 const AIGraphicDesigner: React.FC = () => {
     const { generateAIDesign, isGeneratingDesign } = useStudio();
@@ -147,6 +148,40 @@ export const DesignUploader: React.FC = () => {
         }
     }, [setBackDesignImage]);
 
+    // Enable clipboard paste (Ctrl+V / Cmd+V)
+    useClipboardPaste({
+        onPaste: (file) => {
+            const reader = new FileReader();
+            reader.onload = (event: ProgressEvent<FileReader>) => {
+                if (event.target?.result) {
+                    // Paste to front design if empty, otherwise to back design
+                    if (!designImage) {
+                        setDesignImage({
+                            id: file.name,
+                            name: file.name,
+                            base64: event.target.result as string
+                        });
+                    } else if (!backDesignImage) {
+                        setBackDesignImage({
+                            id: file.name,
+                            name: file.name,
+                            base64: event.target.result as string
+                        });
+                    } else {
+                        // If both are set, replace front design
+                        setDesignImage({
+                            id: file.name,
+                            name: file.name,
+                            base64: event.target.result as string
+                        });
+                    }
+                }
+            };
+            reader.readAsDataURL(file);
+        },
+        enabled: true,
+        accept: 'image/*'
+    });
 
     return (
         <div className="h-full flex flex-col space-y-4 overflow-y-auto pr-1">
