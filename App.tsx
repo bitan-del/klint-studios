@@ -493,14 +493,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                             </section>
                         </div>
                     )}
-                    {activeTab === 'integrations' && (() => {
-                        // Create safe constants for Cloudinary state to prevent ReferenceError
-                        // These are defined in the component scope, so they're always available
-                        const cloudinarySaving = savingCloudinary;
-                        const cloudinarySaved = savedCloudinary;
-                        const cloudinaryConfig = cloudinary || {};
-                        
-                        return (
+                    {activeTab === 'integrations' && (
                          <div className="space-y-8 animate-fade-in">
                             <div className="bg-blue-900/50 border border-blue-500/30 text-blue-300 text-sm rounded-lg p-3">
                                 <strong>Info:</strong> Supabase credentials are configured via environment variables for security. Update them in your .env file or hosting platform settings.
@@ -559,8 +552,8 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                 <label className="text-xs text-zinc-400">Cloud Name</label>
                                                 <input 
                                                     type="text" 
-                                                    value={cloudinaryConfig.cloudName || ''} 
-                                                    onChange={(e) => setCloudinary({...cloudinaryConfig, cloudName: e.target.value})} 
+                                                    value={(cloudinary?.cloudName) || ''} 
+                                                    onChange={(e) => setCloudinary({...(cloudinary || {}), cloudName: e.target.value})} 
                                                     placeholder="your-cloud-name" 
                                                     className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                                                 />
@@ -569,8 +562,8 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                 <label className="text-xs text-zinc-400">Upload Preset</label>
                                                 <input 
                                                     type="text" 
-                                                    value={cloudinaryConfig.uploadPreset || ''} 
-                                                    onChange={(e) => setCloudinary({...cloudinaryConfig, uploadPreset: e.target.value})} 
+                                                    value={(cloudinary?.uploadPreset) || ''} 
+                                                    onChange={(e) => setCloudinary({...(cloudinary || {}), uploadPreset: e.target.value})} 
                                                     placeholder="klint-studios-upload" 
                                                     className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                                                 />
@@ -578,28 +571,28 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                             <div className="space-y-1">
                                                 <label className="text-xs text-zinc-400">API Key (Optional)</label>
                                                 <PasswordInput 
-                                                    value={cloudinaryConfig.apiKey || ''} 
-                                                    onChange={(e) => setCloudinary({...cloudinaryConfig, apiKey: e.target.value})} 
+                                                    value={(cloudinary?.apiKey) || ''} 
+                                                    onChange={(e) => setCloudinary({...(cloudinary || {}), apiKey: e.target.value})} 
                                                     placeholder="Optional - for signed uploads" 
                                                 />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs text-zinc-400">API Secret (Optional)</label>
                                                 <PasswordInput 
-                                                    value={cloudinaryConfig.apiSecret || ''} 
-                                                    onChange={(e) => setCloudinary({...cloudinaryConfig, apiSecret: e.target.value})} 
+                                                    value={(cloudinary?.apiSecret) || ''} 
+                                                    onChange={(e) => setCloudinary({...(cloudinary || {}), apiSecret: e.target.value})} 
                                                     placeholder="Optional - for signed uploads" 
                                                 />
                                             </div>
                                         </div>
                                         <button 
                                             onClick={handleSaveCloudinary} 
-                                            disabled={cloudinarySaving || !cloudinaryConfig.cloudName || !cloudinaryConfig.uploadPreset}
+                                            disabled={false || !(cloudinary?.cloudName) || !(cloudinary?.uploadPreset)}
                                             className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
                                         >
-                                            {cloudinarySaving && <Loader2 size={16} className="animate-spin" />}
-                                            {cloudinarySaved && <Check size={16} className="animate-bounce" />}
-                                            {cloudinarySaving ? 'Saving...' : cloudinarySaved ? 'Saved!' : 'Save Cloudinary Settings'}
+                                            {false && <Loader2 size={16} className="animate-spin" />}
+                                            {false && <Check size={16} className="animate-bounce" />}
+                                            Save Cloudinary Settings
                                         </button>
                                         <p className="text-xs text-zinc-500 mt-2">
                                             Get your credentials from <a href="https://cloudinary.com/console" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Cloudinary Dashboard</a>
