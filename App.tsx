@@ -193,12 +193,29 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
     };
     
     const handleSaveCloudinary = async () => {
-        setSavingCloudinary(true);
-        setSavedCloudinary(false);
-        await updateApiSettings('cloudinary', cloudinary);
-        setSavingCloudinary(false);
-        setSavedCloudinary(true);
-        setTimeout(() => setSavedCloudinary(false), 3000);
+        try {
+            // Safely check and use state setters - they should always exist but be defensive
+            if (typeof setSavingCloudinary === 'function') {
+                setSavingCloudinary(true);
+            }
+            if (typeof setSavedCloudinary === 'function') {
+                setSavedCloudinary(false);
+            }
+            await updateApiSettings('cloudinary', cloudinary || {});
+            if (typeof setSavingCloudinary === 'function') {
+                setSavingCloudinary(false);
+            }
+            if (typeof setSavedCloudinary === 'function') {
+                setSavedCloudinary(true);
+                setTimeout(() => {
+                    if (typeof setSavedCloudinary === 'function') {
+                        setSavedCloudinary(false);
+                    }
+                }, 3000);
+            }
+        } catch (err) {
+            console.error('Error saving Cloudinary settings:', err);
+        }
     };
     
     const handlePlanChange = (userId: string, newPlan: UserPlan) => {
