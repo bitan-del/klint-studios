@@ -1,0 +1,24 @@
+-- Set Gemini API Key for Production
+-- Run this in Supabase SQL Editor
+-- 
+-- IMPORTANT: Replace YOUR_GEMINI_API_KEY_HERE with your actual API key
+-- Get this from: https://aistudio.google.com/app/apikey
+
+INSERT INTO public.admin_settings (setting_key, setting_value, updated_at)
+VALUES ('gemini_api_key', '"YOUR_GEMINI_API_KEY_HERE"'::jsonb, NOW())
+ON CONFLICT (setting_key) 
+DO UPDATE SET 
+  setting_value = '"YOUR_GEMINI_API_KEY_HERE"'::jsonb,
+  updated_at = NOW();
+
+-- Verify the key was set
+SELECT 
+  setting_key, 
+  CASE 
+    WHEN setting_key = 'gemini_api_key' THEN SUBSTRING(setting_value::text, 1, 10) || '...'
+    ELSE setting_value::text
+  END as masked_value,
+  updated_at
+FROM public.admin_settings
+WHERE setting_key = 'gemini_api_key';
+

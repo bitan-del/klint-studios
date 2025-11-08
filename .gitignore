@@ -13,6 +13,17 @@ build/
 .env.production
 .env.*.local
 
+# SQL scripts with actual credentials (use .example files instead)
+scripts/setup-cloudinary.sql
+scripts/set-gemini-key-production.sql
+scripts/*-production.sql
+scripts/*-secrets.sql
+scripts/*credentials*.sql
+
+# Documentation with exposed secrets
+*-BACKUP.md
+*-WORKING*.md
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
