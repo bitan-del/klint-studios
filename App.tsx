@@ -218,6 +218,15 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         }
     };
     
+    const handleSaveCanva = async () => {
+        setSavingCanva(true);
+        setSavedCanva(false);
+        await updateApiSettings('canva', canva);
+        setSavingCanva(false);
+        setSavedCanva(true);
+        setTimeout(() => setSavedCanva(false), 3000);
+    };
+    
     const handlePlanChange = (userId: string, newPlan: UserPlan) => {
         setUserPlanChanges(prev => ({ ...prev, [userId]: newPlan }));
     };
