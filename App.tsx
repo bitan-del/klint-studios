@@ -15,8 +15,9 @@ import { FeatureLockOverlay } from './components/shared/FeatureLockOverlay';
 import { DailyLimitModal } from './components/shared/DailyLimitModal';
 import { Chatbot } from './components/chatbot/Chatbot';
 import { DashboardContainer } from './components/dashboard/DashboardContainer';
-import { User, PanelLeft, PanelRight, ChevronDown, Globe, Key, X, Shield, Search, CreditCard, DollarSign, Eye, EyeOff, Link2, Loader2, Check, RefreshCw, RotateCcw, Zap, LayoutGrid, Layers } from 'lucide-react';
+import { User, PanelLeft, PanelRight, ChevronDown, Globe, Key, X, Shield, Search, CreditCard, DollarSign, Eye, EyeOff, Link2, Loader2, Check, RefreshCw, RotateCcw, Zap, LayoutGrid, Layers, CheckCircle2 } from 'lucide-react';
 import { KLogo } from './components/shared/KLogo';
+import { CanvaFeaturesDisplay } from './components/shared/CanvaFeaturesDisplay';
 import type { User as UserType, UserPlan, Currency, PlanPrices, PaymentGatewaySettings, SupabaseSettings, GeminiSettings } from './types';
 import { PLAN_DETAILS, getPlanDisplayName } from './services/permissionsService';
 
@@ -70,19 +71,24 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         brand: planPrices.brand ?? 4999,
     });
     const [selectedCurrency, setSelectedCurrency] = useState<Currency>('INR'); // Fixed to INR
-    const [gemini, setGemini] = useState(apiSettings.gemini);
-    const [cloudinary, setCloudinary] = useState(apiSettings.cloudinary);
+    const [gemini, setGemini] = useState(apiSettings.gemini || {});
+    const [cloudinary, setCloudinary] = useState(apiSettings.cloudinary || {});
+    const [canva, setCanva] = useState(apiSettings.canva || { clientId: '', clientSecret: '', accessToken: '', refreshToken: '' });
     
-    // Loading and success states
+    // Loading and success states - Ensure all state variables are always defined
     const [savingStripe, setSavingStripe] = useState(false);
     const [savingRazorpay, setSavingRazorpay] = useState(false);
     const [savingPrices, setSavingPrices] = useState(false);
     const [savingGemini, setSavingGemini] = useState(false);
+    const [savingCloudinary, setSavingCloudinary] = useState(false);
+    const [savingCanva, setSavingCanva] = useState(false);
     
     const [savedStripe, setSavedStripe] = useState(false);
     const [savedRazorpay, setSavedRazorpay] = useState(false);
     const [savedPrices, setSavedPrices] = useState(false);
     const [savedGemini, setSavedGemini] = useState(false);
+    const [savedCloudinary, setSavedCloudinary] = useState(false);
+    const [savedCanva, setSavedCanva] = useState(false);
     
     // Track plan changes for each user
     const [userPlanChanges, setUserPlanChanges] = useState<Record<string, UserPlan>>({});
@@ -104,8 +110,9 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                 brand: planPrices.brand ?? 4999,
             });
             setSelectedCurrency('INR'); // Always use INR
-            setGemini(apiSettings.gemini);
-            setCloudinary(apiSettings.cloudinary);
+            setGemini(apiSettings.gemini || {});
+            setCloudinary(apiSettings.cloudinary || {});
+            setCanva(apiSettings.canva || { clientId: '', clientSecret: '', accessToken: '', refreshToken: '' });
         }
     }, [isOpen, paymentSettings, planPrices, apiSettings]); // Sync when modal opens OR settings change
 
@@ -545,7 +552,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                 <label className="text-xs text-zinc-400">Cloud Name</label>
                                                 <input 
                                                     type="text" 
-                                                    value={cloudinary.cloudName} 
+                                                    value={cloudinary?.cloudName || ''} 
                                                     onChange={(e) => setCloudinary({...cloudinary, cloudName: e.target.value})} 
                                                     placeholder="your-cloud-name" 
                                                     className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -555,7 +562,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                 <label className="text-xs text-zinc-400">Upload Preset</label>
                                                 <input 
                                                     type="text" 
-                                                    value={cloudinary.uploadPreset} 
+                                                    value={cloudinary?.uploadPreset || ''} 
                                                     onChange={(e) => setCloudinary({...cloudinary, uploadPreset: e.target.value})} 
                                                     placeholder="klint-studios-upload" 
                                                     className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -580,18 +587,124 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                         </div>
                                         <button 
                                             onClick={handleSaveCloudinary} 
-                                            disabled={savingCloudinary || !cloudinary.cloudName || !cloudinary.uploadPreset}
+                                            disabled={Boolean(savingCloudinary) || !cloudinary?.cloudName || !cloudinary?.uploadPreset}
                                             className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
                                         >
-                                            {savingCloudinary && <Loader2 size={16} className="animate-spin" />}
-                                            {savedCloudinary && <Check size={16} className="animate-bounce" />}
-                                            {savingCloudinary ? 'Saving...' : savedCloudinary ? 'Saved!' : 'Save Cloudinary Settings'}
+                                            {Boolean(savingCloudinary) && <Loader2 size={16} className="animate-spin" />}
+                                            {Boolean(savedCloudinary) && <Check size={16} className="animate-bounce" />}
+                                            {Boolean(savingCloudinary) ? 'Saving...' : Boolean(savedCloudinary) ? 'Saved!' : 'Save Cloudinary Settings'}
                                         </button>
                                         <p className="text-xs text-zinc-500 mt-2">
                                             Get your credentials from <a href="https://cloudinary.com/console" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Cloudinary Dashboard</a>
                                         </p>
                                     </div>
+                                    
+                                    {/* Canva */}
+                                    <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
+                                        <h4 className="font-bold text-zinc-100 flex items-center gap-2">
+                                            <img 
+                                                src="https://static.canva.com/web/images/12487a1e0770d29351bd4ce9622e97db.ico" 
+                                                alt="Canva" 
+                                                className="w-5 h-5 rounded-full"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                }}
+                                            />
+                                            Canva (Design Editor)
+                                        </h4>
+                                        <div className="space-y-2">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Client ID</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={canva.clientId} 
+                                                    onChange={(e) => setCanva({...canva, clientId: e.target.value})} 
+                                                    placeholder="Your Canva Client ID" 
+                                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Client Secret</label>
+                                                <PasswordInput 
+                                                    value={canva.clientSecret} 
+                                                    onChange={(e) => setCanva({...canva, clientSecret: e.target.value})} 
+                                                    placeholder="Your Canva Client Secret" 
+                                                />
+                                            </div>
+                                            {canva.accessToken && (
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-zinc-400">Access Token (Auto-generated)</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={canva.accessToken.substring(0, 20) + '...'} 
+                                                        disabled
+                                                        className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-zinc-500 cursor-not-allowed"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button 
+                                            onClick={handleSaveCanva} 
+                                            disabled={savingCanva || !canva.clientId || !canva.clientSecret}
+                                            className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
+                                        >
+                                            {savingCanva && <Loader2 size={16} className="animate-spin" />}
+                                            {savedCanva && <Check size={16} className="animate-bounce" />}
+                                            {savingCanva ? 'Saving...' : savedCanva ? 'Saved!' : 'Save Canva Settings'}
+                                        </button>
+                                        
+                                        {/* Connect Canva Account Button */}
+                                        {!canva.accessToken && canva.clientId && canva.clientSecret && (
+                                            <div className="space-y-2">
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const { getCanvaAuthUrl } = await import('./services/canvaService');
+                                                            // Use production URL for redirect (Canva requires production URLs)
+                                                            const redirectUri = window.location.hostname === 'localhost' 
+                                                                ? 'https://www.klintstudios.com/canva-callback.html'
+                                                                : `${window.location.origin}/canva-callback.html`;
+                                                            const authUrl = await getCanvaAuthUrl(redirectUri);
+                                                            window.location.href = authUrl;
+                                                        } catch (error) {
+                                                            console.error('Error initiating Canva OAuth:', error);
+                                                            alert('Failed to start Canva authentication. Please check the console for details.');
+                                                        }
+                                                    }}
+                                                    className="w-full sm:w-auto text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md transition-all flex items-center justify-center gap-2 mt-2"
+                                                >
+                                                    <Link2 size={16} />
+                                                    Connect Canva Account
+                                                </button>
+                                                {window.location.hostname === 'localhost' && (
+                                                    <p className="text-xs text-amber-400">
+                                                        ⚠️ Note: Canva OAuth requires production URL. This will redirect to klintstudios.com
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {canva.accessToken && (
+                                            <div className="flex items-center gap-2 text-emerald-400 text-sm mt-2">
+                                                <CheckCircle2 size={16} />
+                                                <span>Canva Connected</span>
+                                            </div>
+                                        )}
+
+                                        <p className="text-xs text-zinc-500 mt-2">
+                                            Get your credentials from <a href="https://www.canva.dev/" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Canva Developer Platform</a>
+                                        </p>
+                                    </div>
                                 </div>
+                            </section>
+                            
+                            {/* Canva Features Section */}
+                            <section>
+                                <h3 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2">
+                                    <Zap size={20} />
+                                    Canva API Features
+                                </h3>
+                                <CanvaFeaturesDisplay />
                             </section>
                         </div>
                     )}
