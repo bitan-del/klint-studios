@@ -72,13 +72,26 @@ export const databaseService = {
 
   /**
    * Update user plan (admin only)
+   * Also updates storage_limit based on the new plan
    */
   updateUserPlan: async (userId: string, plan: UserPlan): Promise<boolean> => {
     console.log(`💾 Updating user plan: ${userId} → ${plan}`);
     
+    // Calculate storage limit based on plan (matching database function)
+    const storageLimits: Record<UserPlan, number> = {
+      free: 10,
+      solo: 100,
+      studio: 500,
+      brand: 2000, // ADVANCE plan gets 2000 images
+    };
+    const storageLimit = storageLimits[plan] || 10;
+    
+    console.log(`📦 Setting storage_limit to ${storageLimit} for plan: ${plan}`);
+    
+    // Update both plan and storage_limit
     const { data, error } = await supabase
       .from('user_profiles')
-      .update({ plan })
+      .update({ plan, storage_limit: storageLimit })
       .eq('id', userId)
       .select();
 
@@ -88,7 +101,8 @@ export const databaseService = {
       return false;
     }
 
-    console.log('✅ User plan updated successfully:', data);
+    console.log('✅ User plan and storage limit updated successfully:', data);
+    console.log(`📦 Storage limit set to ${storageLimit} for plan: ${plan}`);
     return true;
   },
 
