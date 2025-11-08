@@ -9,12 +9,5 @@
         }
       ]
     }
-  ],
-  "rewrites": [
-    {
-      "source": "/((?!canva-callback\\.html|login\\.html|signup\\.html|index\\.html|assets/).*)",
-      "destination": "/index.html"
-    }
   ]
 }
-
