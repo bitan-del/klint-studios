@@ -21,7 +21,7 @@ interface MyCreationsProps {
   onRefresh?: () => void;
 }
 
-type FilterType = 'all' | 'ai-photoshoot' | 'product-photography' | 'virtual-tryon' | 'photo-editor' | 'storyboard' | 'social-media-posts' | 'style-transfer' | 'upscale';
+type FilterType = 'all' | 'ai-photoshoot' | 'product-photography' | 'virtual-tryon' | 'photo-editor' | 'storyboard' | 'social-media-posts' | 'style-transfer' | 'upscale' | 'video';
 
 const WORKFLOW_NAMES: Record<string, string> = {
   'ai-photoshoot': 'AI Photoshoot',
@@ -32,6 +32,7 @@ const WORKFLOW_NAMES: Record<string, string> = {
   'social-media-posts': 'Social Media Posts',
   'style-transfer': 'Style Transfer',
   'upscale': 'Image Upscale',
+  'video': 'Video',
 };
 
 export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {

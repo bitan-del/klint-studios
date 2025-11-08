@@ -21,7 +21,7 @@ export const ImageToolbar: React.FC = () => {
         selectedModels,
         uploadedModelImage,
     } = useStudio();
-    const { hasPermission, incrementGenerationsUsed } = useAuth();
+    const { user, hasPermission, incrementGenerationsUsed } = useAuth();
     const activeImage = activeImageIndex !== null && generatedImages ? generatedImages[activeImageIndex] : null;
 
     const canUseGenerativeEdit = hasPermission('generativeEdit');
@@ -51,7 +51,7 @@ export const ImageToolbar: React.FC = () => {
             // Note: Daily limit check is handled in simplified workflows
             // Advanced mode users (ADVANCE plan) don't have daily limits
         };
-        generatePackFromReference(onGenerationComplete);
+        generatePackFromReference(onGenerationComplete, user);
     };
 
     const handleDownload = () => {

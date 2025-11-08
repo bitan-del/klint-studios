@@ -39,9 +39,17 @@ class StorageService {
     prompt?: string,
     metadata?: Record<string, any>
   ): Promise<UserImage> {
+    console.log(`🗄️ [STORAGE] uploadImage called!`, {
+      fileName: file.name,
+      fileSize: file.size,
+      userId,
+      workflowId,
+      hasPrompt: !!prompt
+    });
+    
     try {
       // 1. Compress image before upload
-      console.log('📦 Compressing image...');
+      console.log('📦 [STORAGE] Compressing image...');
       const compressedFile = await compressImage(file, {
         maxWidth: 1920,
         maxHeight: 1920,
@@ -68,7 +76,10 @@ class StorageService {
       }
       
       // 4. Upload to Cloudinary
-      console.log('☁️ Uploading to Cloudinary...');
+      console.log('☁️ [STORAGE] Uploading to Cloudinary...', {
+        compressedSize: compressedFile.size,
+        fileName: compressedFile.name
+      });
       
       // Upload to Cloudinary without metadata (metadata stored in our database)
       const cloudinaryResponse = await cloudinaryService.uploadImage(
@@ -77,6 +88,11 @@ class StorageService {
         'klint-studios'
         // No metadata - we store it in our database instead
       );
+      
+      console.log('✅ [STORAGE] Cloudinary upload successful!', {
+        url: cloudinaryResponse.secure_url,
+        publicId: cloudinaryResponse.public_id
+      });
 
       // 5. Get user plan for expiration date
       const { data: userProfile } = await supabase
@@ -113,13 +129,30 @@ class StorageService {
         .single();
 
       if (error) {
+        console.error('❌ [STORAGE] Database insert error:', error);
         throw error;
       }
 
-      console.log('✅ Image uploaded and saved:', imageData.id);
+      // 8. Update user's storage count (trigger handles this, but can manually call for immediate UI update)
+      console.log('🔄 [STORAGE] Updating user storage count...');
+      await supabase.rpc('update_user_storage_count', { p_user_id: userId });
+
+      console.log('✅ [STORAGE] Image uploaded and saved successfully!', {
+        imageId: imageData.id,
+        cloudinaryUrl: imageData.cloudinary_url,
+        workflowId: imageData.workflow_id,
+        userId: imageData.user_id
+      });
       return imageData as UserImage;
     } catch (error) {
-      console.error('❌ Storage service error:', error);
+      console.error('❌ [STORAGE] Storage service error:', error);
+      console.error('❌ [STORAGE] Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        fileName: file.name,
+        userId,
+        workflowId
+      });
       throw error;
     }
   }

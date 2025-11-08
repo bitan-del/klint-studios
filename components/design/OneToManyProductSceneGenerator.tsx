@@ -6,6 +6,8 @@ import React, { useState, DragEvent, ChangeEvent } from 'react';
 import { geminiService } from '../../services/geminiService';
 import { cn } from '../../lib/utils';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { storageService } from '../../services/storageService';
 
 type View = 'config' | 'result';
 
@@ -119,11 +121,25 @@ const ResultCard: React.FC<ResultCardProps> = ({ title, imageUrl, status, error,
 };
 
 export default function OneToManyProductSceneGenerator({ onBack }: { onBack: () => void }) {
+    const { user, incrementGenerationsUsed } = useAuth();
     const [view, setView] = useState<View>('config');
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
     const [selectedAngles, setSelectedAngles] = useState<string[]>([]);
     const [generatedImages, setGeneratedImages] = useState<Record<string, GeneratedImageState>>({});
     const [isGenerating, setIsGenerating] = useState(false);
+    
+    // Helper function to convert base64 to File
+    const base64ToFile = (base64: string, filename: string): File => {
+        const arr = base64.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    };
 
     const handleImageUpload = (file: File) => {
         const reader = new FileReader();
@@ -156,6 +172,18 @@ export default function OneToManyProductSceneGenerator({ onBack }: { onBack: () 
             const resultUrl = await geminiService.generateStyledImage(finalPrompt, [uploadedImage]);
 
             setGeneratedImages(prev => ({ ...prev, [angleId]: { status: 'done', url: resultUrl } }));
+            
+            // Save to Cloudinary storage (same pattern as simple mode)
+            if (user && resultUrl) {
+                try {
+                    const imageFile = base64ToFile(resultUrl, `product-photography_${angleId}_${Date.now()}.png`);
+                    await storageService.uploadImage(imageFile, user.id, 'product-photography', finalPrompt);
+                    console.log(`✅ Image saved to Cloudinary: ${angleId}`);
+                } catch (error) {
+                    console.warn(`⚠️ Failed to save image to Cloudinary: ${angleId}`, error);
+                    // Continue even if Cloudinary save fails
+                }
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : "An unknown error occurred.";
             setGeneratedImages(prev => ({ ...prev, [angleId]: { status: 'error', error: message } }));
@@ -188,6 +216,15 @@ export default function OneToManyProductSceneGenerator({ onBack }: { onBack: () 
 
         await Promise.all(workers);
         setIsGenerating(false);
+        
+        // Increment generation count after all images are generated (same pattern as simple mode)
+        if (user && selectedAngles.length > 0) {
+            try {
+                await incrementGenerationsUsed(selectedAngles.length);
+            } catch (error) {
+                console.warn('⚠️ Failed to increment generation count:', error);
+            }
+        }
     };
 
     const handleStartOver = () => {

@@ -11,6 +11,8 @@ import { cn } from '../../lib/utils';
 import { resizeImageToAspectRatio } from '../../utils/imageResizer';
 import { useStudio } from '../../context/StudioContext';
 import { Camera, Loader2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { storageService } from '../../services/storageService';
 
 const PHOTO_STYLE_CATEGORIES = {
     'Portraits & Close-ups': [
@@ -253,7 +255,16 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({ title, description,
 };
 
 export default function Photoshoot({ onBack }: { onBack: () => void }) {
+    console.log('🎬 [PHOTOSHOOT] Component mounted/rendered');
     const { t } = useStudio();
+    const { user, incrementGenerationsUsed } = useAuth();
+    
+    console.log('👤 [PHOTOSHOOT] User from useAuth:', {
+        hasUser: !!user,
+        userId: user?.id,
+        userPlan: user?.plan
+    });
+    
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
     const [outfitImage, setOutfitImage] = useState<string | null>(null);
     const [objectImage, setObjectImage] = useState<string | null>(null);
@@ -298,6 +309,19 @@ export default function Photoshoot({ onBack }: { onBack: () => void }) {
             console.error("Failed to save model library to localStorage", error);
         }
     }, [localLibrary]);
+    
+    // Helper function to convert base64 to File
+    const base64ToFile = (base64: string, filename: string): File => {
+        const arr = base64.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    };
 
     const handleImageUpload = (fileOrDataUrl: File | string, setImage: (dataUrl: string) => void) => {
         if (typeof fileOrDataUrl === 'string') {
@@ -516,7 +540,24 @@ Your single most important, critical, and unbreakable task is to perfectly prese
     };
 
     const handleGenerateClick = async () => {
-        if (!uploadedImage || selectedStyles.length === 0) return;
+        console.log('🚀 [PHOTOSHOOT] handleGenerateClick called!', {
+            hasUploadedImage: !!uploadedImage,
+            selectedStylesCount: selectedStyles.length,
+            hasUser: !!user,
+            userId: user?.id
+        });
+        
+        if (!uploadedImage || selectedStyles.length === 0) {
+            console.warn('❌ [PHOTOSHOOT] Missing requirements:', { uploadedImage: !!uploadedImage, selectedStyles: selectedStyles.length });
+            return;
+        }
+        
+        if (!user) {
+            console.error('❌ [PHOTOSHOOT] No user found! Cannot save images.');
+            alert('⚠️ You must be logged in to save images. Please refresh the page and log in.');
+            return;
+        }
+        
         setIsLoading(true);
         setAppState('generating');
 
@@ -531,32 +572,177 @@ Your single most important, critical, and unbreakable task is to perfectly prese
 
         const processStyle = async (style: { id: string, prompt: string }) => {
             try {
+                console.log(`🔄 [PHOTOSHOOT] Processing style: ${style.id}`);
                 const { finalPrompt, imageUrls } = await constructApiPayload(style.prompt);
                 const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls);
+                console.log(`✅ [PHOTOSHOOT] Generated image for ${style.id}:`, {
+                    urlType: typeof resultUrl,
+                    urlLength: resultUrl?.length || 0,
+                    startsWithData: resultUrl?.startsWith('data:') || false
+                });
                 setGeneratedImages(prev => ({
                     ...prev,
                     [style.id]: { status: 'done', url: resultUrl },
                 }));
+                return { styleId: style.id, url: resultUrl, prompt: finalPrompt };
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
                 setGeneratedImages(prev => ({
                     ...prev,
                     [style.id]: { status: 'error', error: errorMessage },
                 }));
-                console.error(`Failed to generate image for ${style.id}:`, err);
+                console.error(`❌ Failed to generate image for ${style.id}:`, err);
+                return null;
             }
         };
 
         const workers = Array(concurrencyLimit).fill(null).map(async () => {
+            const results: Array<{ styleId: string; url: string; prompt: string } | null> = [];
             while (stylesQueue.length > 0) {
                 const style = stylesQueue.shift();
                 if (style) {
-                    await processStyle(style);
+                    const result = await processStyle(style);
+                    if (result) {
+                        results.push(result);
+                    }
                 }
             }
+            return results;
         });
 
-        await Promise.all(workers);
+        const allResults = await Promise.all(workers);
+        const generatedResults = allResults.flat().filter((r): r is { styleId: string; url: string; prompt: string } => r !== null);
+        
+        console.log('🎯 [PHOTOSHOOT] ========================================');
+        console.log('🎯 [PHOTOSHOOT] Generation complete!', {
+            totalResults: generatedResults.length,
+            results: generatedResults.map(r => r.styleId),
+            hasUser: !!user,
+            userId: user?.id
+        });
+        console.log('🎯 [PHOTOSHOOT] ========================================');
+        
+        // ALWAYS log what we're about to check
+        console.log('🔍 [PHOTOSHOOT] Checking save conditions:', {
+            userExists: !!user,
+            userId: user?.id,
+            resultsCount: generatedResults.length,
+            resultsNotEmpty: generatedResults.length > 0,
+            willSave: !!(user && generatedResults.length > 0)
+        });
+        
+        // Save all generated images to Cloudinary (same pattern as simple mode)
+        // DO THIS BEFORE updating state to ensure it runs
+        if (user && generatedResults.length > 0) {
+            console.log('✅ [PHOTOSHOOT] Conditions met! Starting save process...');
+            console.log('💾 [PHOTOSHOOT] ========================================');
+            console.log('💾 [PHOTOSHOOT] Starting save process...', {
+                hasUser: !!user,
+                userId: user?.id,
+                generatedResultsCount: generatedResults.length
+            });
+            console.log('💾 [PHOTOSHOOT] ========================================');
+            
+            let savedCount = 0;
+            let failedCount = 0;
+            
+            try {
+                // Save all generated images
+                for (const result of generatedResults) {
+                    try {
+                        console.log(`💾 [PHOTOSHOOT] ========================================`);
+                        console.log(`💾 [PHOTOSHOOT] Saving image for ${result.styleId}...`);
+                        console.log(`💾 [PHOTOSHOOT] URL info:`, {
+                            urlType: typeof result.url,
+                            urlLength: result.url?.length || 0,
+                            urlStart: result.url?.substring(0, 50) || 'NO URL',
+                            hasDataPrefix: result.url?.startsWith('data:') || false
+                        });
+                        
+                        // Convert base64 data URL to File
+                        let imageFile: File;
+                        try {
+                            imageFile = base64ToFile(result.url, `photo-editor_${result.styleId}_${Date.now()}.png`);
+                            console.log(`💾 [PHOTOSHOOT] File created successfully:`, { 
+                                name: imageFile.name, 
+                                size: imageFile.size, 
+                                type: imageFile.type 
+                            });
+                        } catch (fileError) {
+                            console.error(`❌ [PHOTOSHOOT] Failed to create file:`, fileError);
+                            throw new Error(`Failed to create file: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
+                        }
+                        
+                        console.log(`💾 [PHOTOSHOOT] Calling storageService.uploadImage...`, {
+                            userId: user.id,
+                            workflowId: 'photo-editor',
+                            hasPrompt: !!result.prompt
+                        });
+                        
+                        const savedImage = await storageService.uploadImage(imageFile, user.id, 'photo-editor', result.prompt);
+                        
+                        console.log(`✅ [PHOTOSHOOT] Image saved successfully!`, {
+                            imageId: savedImage.id,
+                            cloudinaryUrl: savedImage.cloudinary_url,
+                            workflowId: savedImage.workflow_id,
+                            userId: savedImage.user_id
+                        });
+                        console.log(`💾 [PHOTOSHOOT] ========================================`);
+                        savedCount++;
+                    } catch (imageError) {
+                        console.error(`❌ [PHOTOSHOOT] ========================================`);
+                        console.error(`❌ [PHOTOSHOOT] Failed to save image for ${result.styleId}:`, imageError);
+                        console.error(`❌ [PHOTOSHOOT] Error details:`, {
+                            message: imageError instanceof Error ? imageError.message : String(imageError),
+                            stack: imageError instanceof Error ? imageError.stack : undefined,
+                            name: imageError instanceof Error ? imageError.name : undefined
+                        });
+                        console.error(`❌ [PHOTOSHOOT] ========================================`);
+                        failedCount++;
+                        // Continue with next image
+                    }
+                }
+                
+                console.log(`✅ [PHOTOSHOOT] Save complete: ${savedCount} saved, ${failedCount} failed`);
+                
+                // Show alert if any were saved
+                if (savedCount > 0) {
+                    alert(`✅ ${savedCount} image(s) saved to My Creations!`);
+                } else if (failedCount > 0) {
+                    alert(`⚠️ Failed to save ${failedCount} image(s). Check console for details.`);
+                }
+            } catch (error) {
+                console.error('❌ [PHOTOSHOOT] Failed to save images to Cloudinary:', error);
+                console.error('❌ [PHOTOSHOOT] Error details:', {
+                    message: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined
+                });
+                alert(`❌ Failed to save images: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+            
+            // Increment user's generation count (same as simple mode)
+            try {
+                const result = await incrementGenerationsUsed(generatedResults.length);
+                if (result.dailyLimitHit) {
+                    console.warn('⚠️ Daily limit reached');
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to increment generation count:', error);
+            }
+        } else {
+            console.error('❌ [PHOTOSHOOT] Cannot save images:', {
+                hasUser: !!user,
+                userId: user?.id,
+                generatedResultsCount: generatedResults.length
+            });
+            if (!user) {
+                alert('⚠️ Cannot save images: User not logged in. Please refresh the page.');
+            } else if (generatedResults.length === 0) {
+                alert('⚠️ Cannot save images: No images were generated successfully.');
+            }
+        }
+        
+        // Update UI state AFTER saving
         setIsLoading(false);
         setAppState('results-shown');
     };
@@ -581,6 +767,25 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                 ...prev,
                 [photoId]: { status: 'done', url: resultUrl },
             }));
+            
+            // Save to Cloudinary storage (same pattern as simple mode)
+            if (user && resultUrl) {
+                try {
+                    const imageFile = base64ToFile(resultUrl, `photo-editor_${photoId}_${Date.now()}.png`);
+                    await storageService.uploadImage(imageFile, user.id, 'photo-editor', finalPrompt);
+                    console.log(`✅ Regenerated image saved to Cloudinary: ${photoId}`);
+                } catch (error) {
+                    console.warn(`⚠️ Failed to save regenerated image to Cloudinary: ${photoId}`, error);
+                    // Continue even if Cloudinary save fails
+                }
+                
+                // Increment generation count
+                try {
+                    await incrementGenerationsUsed(1);
+                } catch (error) {
+                    console.warn('⚠️ Failed to increment generation count:', error);
+                }
+            }
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
             setGeneratedImages(prev => ({
@@ -1016,16 +1221,54 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                         Start Over
                                     </button>
                                 ) : <div/>}
-                                <button
-                                    onClick={handleGenerateClick}
-                                    className={`${primaryButtonClasses} disabled:opacity-50 disabled:cursor-not-allowed`}
-                                    disabled={isLoading || !uploadedImage || selectedStyles.length === 0}
-                                >
-                                    {isLoading 
-                                        ? 'Generating...' 
-                                        : `Generate (${selectedStyles.length})`
-                                    }
-                                </button>
+                                {(() => {
+                                    const isButtonDisabled = isLoading || !uploadedImage || selectedStyles.length === 0;
+                                    console.log('🔘 [PHOTOSHOOT] Generate button rendering:', {
+                                        isLoading,
+                                        hasUploadedImage: !!uploadedImage,
+                                        selectedStylesCount: selectedStyles.length,
+                                        isButtonDisabled,
+                                        buttonText: isLoading ? 'Generating...' : `Generate (${selectedStyles.length})`
+                                    });
+                                    return (
+                                        <button
+                                            onClick={(e) => {
+                                                console.log('🔘 [PHOTOSHOOT] BUTTON CLICKED!', {
+                                                    isLoading,
+                                                    hasUploadedImage: !!uploadedImage,
+                                                    selectedStylesCount: selectedStyles.length,
+                                                    isDisabled: isButtonDisabled,
+                                                    eventType: e.type,
+                                                    target: e.target
+                                                });
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                if (!isLoading && uploadedImage && selectedStyles.length > 0) {
+                                                    console.log('🔘 [PHOTOSHOOT] Calling handleGenerateClick...');
+                                                    try {
+                                                        handleGenerateClick();
+                                                    } catch (error) {
+                                                        console.error('❌ [PHOTOSHOOT] Error calling handleGenerateClick:', error);
+                                                    }
+                                                } else {
+                                                    console.warn('🔘 [PHOTOSHOOT] Button click ignored - conditions not met:', {
+                                                        isLoading,
+                                                        hasUploadedImage: !!uploadedImage,
+                                                        selectedStylesCount: selectedStyles.length
+                                                    });
+                                                }
+                                            }}
+                                            className={`${primaryButtonClasses} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                            disabled={isButtonDisabled}
+                                            type="button"
+                                        >
+                                            {isLoading 
+                                                ? 'Generating...' 
+                                                : `Generate (${selectedStyles.length})`
+                                            }
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </motion.div>

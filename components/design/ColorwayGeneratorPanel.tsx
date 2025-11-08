@@ -7,7 +7,7 @@ export const ColorwayGeneratorPanel: React.FC = () => {
     const [colors, setColors] = useState<string[]>(['#FFFFFF', '#18181b', '#ef4444']);
     const [newColor, setNewColor] = useState<string>('#');
     const { generateColorways, isGenerating, mockupImage, designImage } = useStudio();
-    const { incrementGenerationsUsed } = useAuth();
+    const { user, incrementGenerationsUsed } = useAuth();
 
     const handleAddColor = () => {
         const hexColorRegex = /^#([0-9A-F]{3}){1,2}$/i;
@@ -29,7 +29,7 @@ export const ColorwayGeneratorPanel: React.FC = () => {
                 // Note: Daily limit check is handled in simplified workflows
                 // Advanced mode users (ADVANCE plan) don't have daily limits
             };
-            generateColorways(colors, onGenerationComplete);
+            generateColorways(colors, onGenerationComplete, user);
         }
     };
     

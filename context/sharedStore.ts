@@ -28,6 +28,7 @@ import {
   CAMERA_ANGLES_LIBRARY_PRODUCT,
 } from '../constants';
 import { promptService } from '../services/promptService';
+import { storageService } from '../services/storageService';
 import { geminiService } from '../services/geminiService';
 import type { StudioStoreSlice } from './StudioContext';
 import { withRetry } from '../utils/colorUtils';
@@ -484,8 +485,8 @@ export interface SharedActions {
   applyFilmGrain: (strength: 'Subtle' | 'Medium') => Promise<void>;
   applyHologramEffect: () => Promise<void>;
   generateVideoFromImage: (animation: Animation, onGenerationComplete: (count: number) => Promise<void>) => Promise<void>;
-  generatePackFromReference: (onGenerationComplete: (count: number) => Promise<void>) => Promise<void>;
-  generateColorways: (colors: string[], onGenerationComplete: (count: number) => Promise<void>) => Promise<void>;
+  generatePackFromReference: (onGenerationComplete: (count: number) => Promise<void>, user?: User | null) => Promise<void>;
+  generateColorways: (colors: string[], onGenerationComplete: (count: number) => Promise<void>, user?: User | null) => Promise<void>;
   generateAIBackground: (prompt: string) => Promise<void>;
   setGuideActive: (isActive: boolean) => void;
   setBestPracticesModalOpen: (isOpen: boolean) => void;
@@ -630,6 +631,73 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
       return true;
     },
 
+  // Helper function to save generated images to Cloudinary
+  saveGeneratedImages: async (user: User | null, studioMode: StudioMode, prompt?: string): Promise<void> => {
+    if (!user) {
+      console.warn('⚠️ [STORAGE] Cannot save images: User not logged in');
+      return;
+    }
+
+    const state = get();
+    const generatedImages = state.generatedImages;
+    
+    if (!generatedImages || generatedImages.length === 0 || generatedImages.every(img => !img)) {
+      console.warn('⚠️ [STORAGE] No images to save');
+      return;
+    }
+
+    // Map studio mode to workflow ID (matching MyCreations workflow IDs)
+    const workflowIdMap: Record<StudioMode, string> = {
+      'apparel': 'ai-photoshoot', // Virtual Photoshoot maps to AI Photoshoot
+      'product': 'product-photography', // Stage an Object maps to Product Photography
+      'design': 'product-photography', // MultiSnap maps to Product Photography (design mode)
+      'reimagine': 'photo-editor', // Variation Lab maps to Photo Editor
+      'video': 'video',
+    };
+
+    const workflowId = workflowIdMap[studioMode] || 'unknown';
+    const finalPrompt = prompt || `Generated ${studioMode} image`;
+
+    console.log(`💾 [STORAGE] Saving ${generatedImages.filter(img => img).length} image(s) for workflow: ${workflowId}`);
+
+    // Helper to convert base64 to File
+    const base64ToFile = (base64: string, filename: string): File => {
+      const arr = base64.split(',');
+      const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      return new File([u8arr], filename, { type: mime });
+    };
+
+    let savedCount = 0;
+    let failedCount = 0;
+
+    // Save each image
+    for (let i = 0; i < generatedImages.length; i++) {
+      const imageB64 = generatedImages[i];
+      if (!imageB64) {
+        console.warn(`⚠️ [STORAGE] Skipping empty image at index ${i}`);
+        continue;
+      }
+
+      try {
+        const imageFile = base64ToFile(imageB64, `${workflowId}_${Date.now()}_${i}.png`);
+        await storageService.uploadImage(imageFile, user.id, workflowId, `${finalPrompt} (${i + 1}/${generatedImages.length})`);
+        savedCount++;
+        console.log(`✅ [STORAGE] Saved image ${i + 1}/${generatedImages.length}`);
+      } catch (error) {
+        console.error(`❌ [STORAGE] Failed to save image ${i + 1}:`, error);
+        failedCount++;
+      }
+    }
+
+    console.log(`✅ [STORAGE] Save complete: ${savedCount} saved, ${failedCount} failed`);
+  },
+
   generateAsset: async (user, onGenerationComplete) => {
     const now = Date.now();
     const oneMinuteAgo = now - 60000;
@@ -729,6 +797,8 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     imageIndex++;
                 }
             }
+            // Save images before completing
+            await get().saveGeneratedImages(user, studioMode, `Complete Pack Generation`);
             await onGenerationComplete(totalImages);
         };
 
@@ -769,6 +839,8 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                             });
                         }), { onRetry: onRetry });
                     }
+                    // Save images before completing
+                    await get().saveGeneratedImages(user, 'apparel', `Virtual Photoshoot E-commerce Pack`);
                     await onGenerationComplete(packShots.length);
                 } else {
                     set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
@@ -780,6 +852,8 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         return { generatedImages: newImages };
                       });
                     }), { onRetry: onRetry });
+                    // Save images before completing
+                    await get().saveGeneratedImages(user, 'apparel', `Virtual Photoshoot Generation`);
                     await onGenerationComplete(numberOfImages);
                 }
                 break;
@@ -805,9 +879,11 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                                 const newImages = [...(currentState.generatedImages || [])];
                                 if (newImages.length > index) newImages[index] = imageB64;
                                 return { generatedImages: newImages };
-                            });
-                        }), { onRetry: onRetry });
+                        });
+                    }), { onRetry: onRetry });
                     }
+                    // Save images before completing
+                    await get().saveGeneratedImages(user, 'product', `Stage an Object E-commerce Pack`);
                     await onGenerationComplete(packShots.length);
                 } else if (!isModelSelected && productEcommercePack !== 'none') {
                     const pack = PRODUCT_ECOMMERCE_PACKS[productEcommercePack];
@@ -827,9 +903,11 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                                 const newImages = [...(currentState.generatedImages || [])];
                                 if (newImages.length > index) newImages[index] = imageB64;
                                 return { generatedImages: newImages };
-                            });
-                        }), { onRetry: onRetry });
+                        });
+                    }), { onRetry: onRetry });
                     }
+                    // Save images before completing
+                    await get().saveGeneratedImages(user, 'product', `Stage an Object Product Pack`);
                     await onGenerationComplete(packShots.length);
                 } else {
                     set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
@@ -841,6 +919,8 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                             return { generatedImages: newImages };
                         });
                     }), { onRetry: onRetry });
+                    // Save images before completing
+                    await get().saveGeneratedImages(user, 'product', `Stage an Object Generation`);
                     await onGenerationComplete(numberOfImages);
                 }
                 break;
@@ -882,6 +962,8 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         });
                     }), { onRetry: onRetry });
                 }
+                // Save images before completing
+                await get().saveGeneratedImages(user, 'design', `MultiSnap Mockup Pack Generation`);
                 await onGenerationComplete(shots.length);
 
               } else {
@@ -904,6 +986,8 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         return { generatedImages: newImages };
                     });
                 }), { onRetry: onRetry });
+                // Save images before completing
+                await get().saveGeneratedImages(user, 'design', `MultiSnap Generation`);
                 await onGenerationComplete(numberOfImages);
               }
               break;
@@ -919,6 +1003,8 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         return { generatedImages: newImages };
                     });
                 }), { onRetry: onRetry });
+                // Save images before completing
+                await get().saveGeneratedImages(user, 'reimagine', `Variation Lab Generation`);
                 await onGenerationComplete(numberOfImages);
                 break;
             }
@@ -1182,7 +1268,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
         generationController = null;
     }
   },
-  generatePackFromReference: async (onGenerationComplete) => {
+  generatePackFromReference: async (onGenerationComplete, user) => {
     const { studioMode, activeImageIndex, generatedImages } = get();
     if (activeImageIndex === null || !generatedImages || !generatedImages[activeImageIndex]) {
       set({ error: "No reference image selected to generate a pack." });
@@ -1237,6 +1323,10 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                 });
             }), { onRetry: onRetry });
         }
+        // Save images before completing
+        if (user) {
+            await get().saveGeneratedImages(user, 'apparel', `Virtual Photoshoot Pack from Reference`);
+        }
         await onGenerationComplete(packShots.length);
 
       } else if (studioMode === 'product') {
@@ -1281,6 +1371,10 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                 });
             }), { onRetry: onRetry });
         }
+        // Save images before completing
+        if (user) {
+            await get().saveGeneratedImages(user, 'product', `Stage an Object Pack from Reference`);
+        }
         await onGenerationComplete(packShots.length);
       }
     } catch (e: any) {
@@ -1290,7 +1384,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
         set({ isGenerating: false, loadingMessage: '' });
     }
   },
-  generateColorways: async (colors, onGenerationComplete) => {
+  generateColorways: async (colors, onGenerationComplete, user) => {
     const state = get();
     if (state.studioMode !== 'design' || !state.mockupImage || !state.designImage) {
         set({ error: "Colorway generation is only available in Design Mode with a mockup and design."});
@@ -1325,6 +1419,10 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     return { generatedImages: newImages };
                 });
             }), { onRetry: onRetry });
+        }
+        // Save images before completing
+        if (user) {
+            await get().saveGeneratedImages(user, 'design', `MultiSnap Colorway Generation`);
         }
         await onGenerationComplete(colors.length);
     } catch (e: any) {
