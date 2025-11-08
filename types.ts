@@ -421,7 +421,15 @@ export interface GeminiSettings {
   apiKey: string;
 }
 
+export interface CloudinarySettings {
+  cloudName: string;
+  uploadPreset: string;
+  apiKey?: string;
+  apiSecret?: string;
+}
+
 export interface ApiSettings {
   supabase: SupabaseSettings;
   gemini: GeminiSettings;
+  cloudinary: CloudinarySettings;
 }

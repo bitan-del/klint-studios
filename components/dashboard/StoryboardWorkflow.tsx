@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, Upload, Sparkles, Image as ImageIcon, Copy, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, Sparkles, Image as ImageIcon, Copy, Check, Loader2, FolderOpen } from 'lucide-react';
 import { geminiService } from '../../services/geminiService';
+import { ImageLibraryModal } from '../common/ImageLibraryModal';
 
 interface StoryboardWorkflowProps {
     onBack: () => void;
@@ -11,6 +12,8 @@ export const StoryboardWorkflow: React.FC<StoryboardWorkflowProps> = ({ onBack }
     const [generatedPrompt, setGeneratedPrompt] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
+    const [showLibraryModal, setShowLibraryModal] = useState(false);
+    const [uploadMode, setUploadMode] = useState<'upload' | 'library'>('upload');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,24 +146,65 @@ Return ONLY the prompt text, no explanations or metadata.`;
                                 <h2 className="text-lg font-semibold text-white">Upload Image</h2>
                             </div>
 
-                            {!uploadedImage ? (
-                                <div
-                                    onDragOver={handleDragOver}
-                                    onDrop={handleDrop}
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="border-2 border-dashed border-zinc-700 rounded-xl p-12 text-center cursor-pointer hover:border-emerald-500 hover:bg-zinc-900/50 transition-all"
+                            {/* Tabs */}
+                            <div className="flex gap-2 mb-4">
+                                <button
+                                    onClick={() => setUploadMode('upload')}
+                                    className={`
+                                        flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                        ${uploadMode === 'upload' 
+                                            ? 'bg-emerald-500 text-black' 
+                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                        }
+                                    `}
                                 >
-                                    <Upload className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-                                    <p className="text-zinc-400 mb-2">Click to upload or drag & drop</p>
-                                    <p className="text-xs text-zinc-500">PNG, JPG, WEBP up to 10MB</p>
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleFileSelect}
-                                        className="hidden"
-                                    />
-                                </div>
+                                    <Upload className="w-4 h-4 inline mr-2" />
+                                    Upload
+                                </button>
+                                <button
+                                    onClick={() => setUploadMode('library')}
+                                    className={`
+                                        flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                        ${uploadMode === 'library' 
+                                            ? 'bg-emerald-500 text-black' 
+                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                        }
+                                    `}
+                                >
+                                    <FolderOpen className="w-4 h-4 inline mr-2" />
+                                    From Library
+                                </button>
+                            </div>
+
+                            {!uploadedImage ? (
+                                uploadMode === 'upload' ? (
+                                    <div
+                                        onDragOver={handleDragOver}
+                                        onDrop={handleDrop}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="border-2 border-dashed border-zinc-700 rounded-xl p-12 text-center cursor-pointer hover:border-emerald-500 hover:bg-zinc-900/50 transition-all"
+                                    >
+                                        <Upload className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                                        <p className="text-zinc-400 mb-2">Click to upload or drag & drop</p>
+                                        <p className="text-xs text-zinc-500">PNG, JPG, WEBP up to 10MB</p>
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileSelect}
+                                            className="hidden"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div
+                                        onClick={() => setShowLibraryModal(true)}
+                                        className="border-2 border-dashed border-zinc-700 rounded-xl p-12 text-center cursor-pointer hover:border-emerald-500 hover:bg-zinc-900/50 transition-all"
+                                    >
+                                        <FolderOpen className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                                        <p className="text-zinc-400 mb-2">Click to select from library</p>
+                                        <p className="text-xs text-zinc-500">My Creations</p>
+                                    </div>
+                                )
                             ) : (
                                 <div className="relative rounded-xl overflow-hidden bg-zinc-900">
                                     <img
@@ -280,6 +324,14 @@ Return ONLY the prompt text, no explanations or metadata.`;
                     </div>
                 </div>
             </div>
+            
+            {/* Image Library Modal */}
+            <ImageLibraryModal
+                isOpen={showLibraryModal}
+                onClose={() => setShowLibraryModal(false)}
+                onSelect={(imageUrl) => setUploadedImage(imageUrl)}
+                title="Select from My Creations"
+            />
         </div>
     );
 };

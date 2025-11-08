@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, Upload, Sparkles, Image as ImageIcon, X, Loader2, Download } from 'lucide-react';
+import { ArrowLeft, Upload, Sparkles, Image as ImageIcon, X, Loader2, Download, FolderOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { geminiService } from '../../services/geminiService';
 import { useClipboardPaste } from '../../hooks/useClipboardPaste';
+import { storageService } from '../../services/storageService';
+import { ImageLibraryModal } from '../common/ImageLibraryModal';
 
 interface SocialMediaPostsWorkflowProps {
     onBack: () => void;
@@ -29,6 +31,8 @@ export const SocialMediaPostsWorkflow: React.FC<SocialMediaPostsWorkflowProps> =
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [currentProgress, setCurrentProgress] = useState(0);
+    const [showLibraryModal, setShowLibraryModal] = useState(false);
+    const [uploadMode, setUploadMode] = useState<'upload' | 'library'>('upload');
     
     const { user, incrementGenerationsUsed } = useAuth();
     const referenceInputRef = useRef<HTMLInputElement>(null);
@@ -224,6 +228,31 @@ Make it Instagram-ready, visually appealing, and on-brand.`;
             
             setGeneratedPosts(posts);
             if (user && posts.length > 0) {
+                // Helper function to convert base64 to File
+                const base64ToFile = (base64: string, filename: string): File => {
+                    const arr = base64.split(',');
+                    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+                    const bstr = atob(arr[1]);
+                    let n = bstr.length;
+                    const u8arr = new Uint8Array(n);
+                    while (n--) {
+                        u8arr[n] = bstr.charCodeAt(n);
+                    }
+                    return new File([u8arr], filename, { type: mime });
+                };
+                
+                // Save to Cloudinary storage
+                try {
+                    for (const postImage of posts) {
+                        const imageFile = base64ToFile(postImage, `social-media-post_${Date.now()}.png`);
+                        await storageService.uploadImage(imageFile, user.id, 'social-media-posts', 'Social media post');
+                    }
+                    console.log(`✅ ${posts.length} post(s) saved to Cloudinary`);
+                } catch (error) {
+                    console.warn('⚠️ Failed to save posts to Cloudinary:', error);
+                    // Continue even if Cloudinary save fails
+                }
+                
                 const result = await incrementGenerationsUsed(posts.length);
                 if (result.dailyLimitHit && onOpenDailyLimitModal) {
                     onOpenDailyLimitModal();
@@ -283,24 +312,65 @@ Make it Instagram-ready, visually appealing, and on-brand.`;
                                 </div>
                             </div>
 
-                            {!referenceImage ? (
-                                <div
-                                    onDragOver={handleDragOver}
-                                    onDrop={(e) => handleDrop(e, 'reference')}
-                                    onClick={() => referenceInputRef.current?.click()}
-                                    className="border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center cursor-pointer hover:border-emerald-500 hover:bg-zinc-900/50 transition-all"
+                            {/* Tabs */}
+                            <div className="flex gap-2 mb-4">
+                                <button
+                                    onClick={() => setUploadMode('upload')}
+                                    className={`
+                                        flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                        ${uploadMode === 'upload' 
+                                            ? 'bg-emerald-500 text-black' 
+                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                        }
+                                    `}
                                 >
-                                    <Upload className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-                                    <p className="text-zinc-400 text-sm mb-1">Click to upload or drag & drop</p>
-                                    <p className="text-xs text-zinc-500">PNG, JPG, WEBP</p>
-                                    <input
-                                        ref={referenceInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleFileSelect(e, 'reference')}
-                                        className="hidden"
-                                    />
-                                </div>
+                                    <Upload className="w-4 h-4 inline mr-2" />
+                                    Upload
+                                </button>
+                                <button
+                                    onClick={() => setUploadMode('library')}
+                                    className={`
+                                        flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                        ${uploadMode === 'library' 
+                                            ? 'bg-emerald-500 text-black' 
+                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                        }
+                                    `}
+                                >
+                                    <FolderOpen className="w-4 h-4 inline mr-2" />
+                                    From Library
+                                </button>
+                            </div>
+
+                            {!referenceImage ? (
+                                uploadMode === 'upload' ? (
+                                    <div
+                                        onDragOver={handleDragOver}
+                                        onDrop={(e) => handleDrop(e, 'reference')}
+                                        onClick={() => referenceInputRef.current?.click()}
+                                        className="border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center cursor-pointer hover:border-emerald-500 hover:bg-zinc-900/50 transition-all"
+                                    >
+                                        <Upload className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                                        <p className="text-zinc-400 text-sm mb-1">Click to upload or drag & drop</p>
+                                        <p className="text-xs text-zinc-500">PNG, JPG, WEBP</p>
+                                        <input
+                                            ref={referenceInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => handleFileSelect(e, 'reference')}
+                                            className="hidden"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div
+                                        onClick={() => setShowLibraryModal(true)}
+                                        className="border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center cursor-pointer hover:border-emerald-500 hover:bg-zinc-900/50 transition-all"
+                                    >
+                                        <FolderOpen className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                                        <p className="text-zinc-400 text-sm mb-1">Click to select from library</p>
+                                        <p className="text-xs text-zinc-500">My Creations</p>
+                                    </div>
+                                )
                             ) : (
                                 <div className="space-y-3">
                                     <div className="relative rounded-xl overflow-hidden bg-zinc-900">
@@ -528,6 +598,14 @@ Make it Instagram-ready, visually appealing, and on-brand.`;
                     </div>
                 </div>
             </div>
+            
+            {/* Image Library Modal */}
+            <ImageLibraryModal
+                isOpen={showLibraryModal}
+                onClose={() => setShowLibraryModal(false)}
+                onSelect={(imageUrl) => setReferenceImage(imageUrl)}
+                title="Select Reference from My Creations"
+            />
         </div>
     );
 };

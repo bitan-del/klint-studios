@@ -289,11 +289,30 @@ export const databaseService = {
       .single();
 
     if (error) {
-      console.error('Error fetching admin setting:', error);
+      // Don't log error if setting doesn't exist (404 is expected for missing settings)
+      if (error.code !== 'PGRST116') {
+        console.error('Error fetching admin setting:', key, error);
+      }
       return null;
     }
 
-    return data?.setting_value;
+    // Parse JSONB value - Supabase returns it as the actual value, but if it's a JSON string, parse it
+    const value = data?.setting_value;
+    if (value === null || value === undefined) {
+      return null;
+    }
+    
+    // If it's a string that looks like JSON (starts with quote), parse it
+    if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+      try {
+        return JSON.parse(value);
+      } catch {
+        // If parsing fails, return the string without quotes
+        return value.replace(/^"|"$/g, '');
+      }
+    }
+    
+    return value;
   },
 
   /**

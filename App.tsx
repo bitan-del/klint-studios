@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useStudio } from './context/StudioContext';
+import { initializeCloudinaryFromDatabase } from './services/cloudinaryInit';
 import { InputPanel } from './components/shared/InputPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { StudioView } from './components/studio/StudioView';
@@ -70,6 +71,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
     });
     const [selectedCurrency, setSelectedCurrency] = useState<Currency>('INR'); // Fixed to INR
     const [gemini, setGemini] = useState(apiSettings.gemini);
+    const [cloudinary, setCloudinary] = useState(apiSettings.cloudinary);
     
     // Loading and success states
     const [savingStripe, setSavingStripe] = useState(false);
@@ -103,6 +105,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
             });
             setSelectedCurrency('INR'); // Always use INR
             setGemini(apiSettings.gemini);
+            setCloudinary(apiSettings.cloudinary);
         }
     }, [isOpen, paymentSettings, planPrices, apiSettings]); // Sync when modal opens OR settings change
 
@@ -180,6 +183,15 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         setSavingGemini(false);
         setSavedGemini(true);
         setTimeout(() => setSavedGemini(false), 3000);
+    };
+    
+    const handleSaveCloudinary = async () => {
+        setSavingCloudinary(true);
+        setSavedCloudinary(false);
+        await updateApiSettings('cloudinary', cloudinary);
+        setSavingCloudinary(false);
+        setSavedCloudinary(true);
+        setTimeout(() => setSavedCloudinary(false), 3000);
     };
     
     const handlePlanChange = (userId: string, newPlan: UserPlan) => {
@@ -522,6 +534,61 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                         </button>
                                         <p className="text-xs text-zinc-500 mt-2">
                                             Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Google AI Studio</a>
+                                        </p>
+                                    </div>
+                                    
+                                    {/* Cloudinary */}
+                                    <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
+                                        <h4 className="font-bold text-zinc-100">Cloudinary (Image Storage)</h4>
+                                        <div className="space-y-2">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Cloud Name</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={cloudinary.cloudName} 
+                                                    onChange={(e) => setCloudinary({...cloudinary, cloudName: e.target.value})} 
+                                                    placeholder="your-cloud-name" 
+                                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Upload Preset</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={cloudinary.uploadPreset} 
+                                                    onChange={(e) => setCloudinary({...cloudinary, uploadPreset: e.target.value})} 
+                                                    placeholder="klint-studios-upload" 
+                                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">API Key (Optional)</label>
+                                                <PasswordInput 
+                                                    value={cloudinary.apiKey || ''} 
+                                                    onChange={(e) => setCloudinary({...cloudinary, apiKey: e.target.value})} 
+                                                    placeholder="Optional - for signed uploads" 
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">API Secret (Optional)</label>
+                                                <PasswordInput 
+                                                    value={cloudinary.apiSecret || ''} 
+                                                    onChange={(e) => setCloudinary({...cloudinary, apiSecret: e.target.value})} 
+                                                    placeholder="Optional - for signed uploads" 
+                                                />
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={handleSaveCloudinary} 
+                                            disabled={savingCloudinary || !cloudinary.cloudName || !cloudinary.uploadPreset}
+                                            className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
+                                        >
+                                            {savingCloudinary && <Loader2 size={16} className="animate-spin" />}
+                                            {savedCloudinary && <Check size={16} className="animate-bounce" />}
+                                            {savingCloudinary ? 'Saving...' : savedCloudinary ? 'Saved!' : 'Save Cloudinary Settings'}
+                                        </button>
+                                        <p className="text-xs text-zinc-500 mt-2">
+                                            Get your credentials from <a href="https://cloudinary.com/console" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Cloudinary Dashboard</a>
                                         </p>
                                     </div>
                                 </div>
@@ -1059,10 +1126,24 @@ const AppContent: React.FC = () => {
     );
 };
 
-const App: React.FC = () => (
-    <AuthProvider>
-        <AppContent />
-    </AuthProvider>
-);
+const App: React.FC = () => {
+    // Initialize Cloudinary early when app loads
+    useEffect(() => {
+        // Try to initialize Cloudinary after a short delay to ensure database connection is ready
+        const timer = setTimeout(() => {
+            initializeCloudinaryFromDatabase().catch(err => {
+                console.warn('⚠️ Failed to initialize Cloudinary on app load:', err);
+            });
+        }, 500);
+        
+        return () => clearTimeout(timer);
+    }, []);
+    
+    return (
+        <AuthProvider>
+            <AppContent />
+        </AuthProvider>
+    );
+};
 
 export default App;

@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import type { User, UserPlan, UserRole, PaymentSettings, PlanPrices, Currency, PaymentGatewaySettings, ApiSettings, SupabaseSettings, GeminiSettings } from '../types';
+import type { User, UserPlan, UserRole, PaymentSettings, PlanPrices, Currency, PaymentGatewaySettings, ApiSettings, SupabaseSettings, GeminiSettings, CloudinarySettings } from '../types';
 import { hasPermission as checkPermission, Feature, PLAN_DETAILS } from '../services/permissionsService';
 import { supabase } from '../services/supabaseClient';
 import { databaseService } from '../services/databaseService';
@@ -26,7 +26,7 @@ interface AuthState {
   setCurrency: (currency: Currency) => void;
   // Admin API Settings
   apiSettings: ApiSettings;
-  updateApiSettings: (service: 'supabase' | 'gemini', settings: Partial<SupabaseSettings> | Partial<GeminiSettings>) => void;
+  updateApiSettings: (service: 'supabase' | 'gemini' | 'cloudinary', settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings>) => void;
   // Subscription Management
   needsPayment: boolean;
   checkSubscriptionStatus: () => Promise<void>;
@@ -55,6 +55,12 @@ const initialApiSettings: ApiSettings = {
     },
     gemini: { 
       apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' 
+    },
+    cloudinary: {
+      cloudName: '',
+      uploadPreset: '',
+      apiKey: '',
+      apiSecret: ''
     }
 };
 
@@ -88,6 +94,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             ...current,
             gemini: { apiKey: geminiKey }
           }));
+        }
+        
+        // Load Cloudinary settings
+        console.log('🔄 Loading Cloudinary settings from database...');
+        const cloudinaryCloudName = await databaseService.getAdminSetting('cloudinary_cloud_name');
+        const cloudinaryUploadPreset = await databaseService.getAdminSetting('cloudinary_upload_preset');
+        const cloudinaryApiKey = await databaseService.getAdminSetting('cloudinary_api_key');
+        const cloudinaryApiSecret = await databaseService.getAdminSetting('cloudinary_api_secret');
+        
+        console.log('📦 Cloudinary settings retrieved:', {
+          cloudName: cloudinaryCloudName ? 'Found' : 'Missing',
+          uploadPreset: cloudinaryUploadPreset ? 'Found' : 'Missing',
+          apiKey: cloudinaryApiKey ? 'Found' : 'Missing',
+          apiSecret: cloudinaryApiSecret ? 'Found' : 'Missing'
+        });
+        
+        if (cloudinaryCloudName && cloudinaryUploadPreset) {
+          console.log('✅ Cloudinary settings loaded from database:', { 
+            cloudName: cloudinaryCloudName, 
+            uploadPreset: cloudinaryUploadPreset 
+          });
+          
+          setApiSettings(current => ({
+            ...current,
+            cloudinary: {
+              cloudName: cloudinaryCloudName,
+              uploadPreset: cloudinaryUploadPreset,
+              apiKey: cloudinaryApiKey || '',
+              apiSecret: cloudinaryApiSecret || ''
+            }
+          }));
+          
+          // Initialize Cloudinary service
+          try {
+            const { cloudinaryService } = await import('../services/cloudinaryService');
+            cloudinaryService.initialize({
+              cloudName: cloudinaryCloudName,
+              uploadPreset: cloudinaryUploadPreset,
+              apiKey: cloudinaryApiKey || undefined,
+              apiSecret: cloudinaryApiSecret || undefined
+            });
+            
+            console.log('✅ Cloudinary service initialized successfully');
+          } catch (error) {
+            console.error('❌ Failed to initialize Cloudinary service:', error);
+          }
+        } else {
+          console.error('❌ Cloudinary settings not found in database!');
+          console.error('   Cloud Name:', cloudinaryCloudName);
+          console.error('   Upload Preset:', cloudinaryUploadPreset);
+          console.error('   Please run the SQL script: scripts/setup-cloudinary.sql');
+          console.error('   Or configure in Admin Panel → Integrations → Cloudinary');
         }
 
         // Load Stripe settings
@@ -532,8 +590,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Update API settings (stores in localStorage for Gemini)
   const updateApiSettings = async (
-    service: 'supabase' | 'gemini', 
-    settings: Partial<SupabaseSettings> | Partial<GeminiSettings>
+    service: 'supabase' | 'gemini' | 'cloudinary', 
+    settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings>
   ) => {
     if (user?.role !== 'admin') return;
     
@@ -555,6 +613,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log('ℹ️  If you have other browser tabs open, they will automatically refresh within 5 minutes or on next API call.');
       } else {
         console.error('❌ Failed to save Gemini API key to database');
+      }
+    } else if (service === 'cloudinary') {
+      const cloudinarySettings = settings as CloudinarySettings;
+      
+      // Save to database
+      const cloudNameSuccess = await databaseService.setAdminSetting('cloudinary_cloud_name', cloudinarySettings.cloudName);
+      const uploadPresetSuccess = await databaseService.setAdminSetting('cloudinary_upload_preset', cloudinarySettings.uploadPreset);
+      const apiKeySuccess = cloudinarySettings.apiKey ? await databaseService.setAdminSetting('cloudinary_api_key', cloudinarySettings.apiKey) : true;
+      const apiSecretSuccess = cloudinarySettings.apiSecret ? await databaseService.setAdminSetting('cloudinary_api_secret', cloudinarySettings.apiSecret) : true;
+      
+      if (cloudNameSuccess && uploadPresetSuccess && apiKeySuccess && apiSecretSuccess) {
+        console.log('✅ Cloudinary settings saved to database');
+        // Initialize Cloudinary service
+        const { cloudinaryService } = await import('../services/cloudinaryService');
+        cloudinaryService.initialize({
+          cloudName: cloudinarySettings.cloudName,
+          uploadPreset: cloudinarySettings.uploadPreset,
+          apiKey: cloudinarySettings.apiKey,
+          apiSecret: cloudinarySettings.apiSecret
+        });
+        setApiSettings(current => ({ ...current, cloudinary: cloudinarySettings }));
+        console.log('✅ Cloudinary configured! Image uploads will now use Cloudinary storage.');
+      } else {
+        console.error('❌ Failed to save Cloudinary settings to database');
       }
     }
     // Supabase settings are in environment variables, not changeable at runtime

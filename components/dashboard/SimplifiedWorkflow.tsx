@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Upload, Wand2, Download, Image as ImageIcon, Sparkles, X, Check, Zap, Loader2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Upload, Wand2, Download, Image as ImageIcon, Sparkles, X, Check, Zap, Loader2, ChevronDown, FolderOpen } from 'lucide-react';
 import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../context/AuthContext';
 import { useClipboardPaste } from '../../hooks/useClipboardPaste';
+import { storageService } from '../../services/storageService';
+import { ImageLibraryModal } from '../common/ImageLibraryModal';
 
 interface SimplifiedWorkflowProps {
     workflowId: string;
@@ -34,6 +36,10 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     const [showAspectRatioDropdown, setShowAspectRatioDropdown] = useState(false);
     const [imageCount, setImageCount] = useState(4);
     const [showImageCountDropdown, setShowImageCountDropdown] = useState(false);
+    const [showLibraryModal, setShowLibraryModal] = useState(false);
+    const [showLibraryModal2, setShowLibraryModal2] = useState(false);
+    const [uploadMode, setUploadMode] = useState<'upload' | 'library'>('upload');
+    const [uploadMode2, setUploadMode2] = useState<'upload' | 'library'>('upload');
     const { user, incrementGenerationsUsed } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
@@ -231,14 +237,37 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
         setGeneratedImages([]);
         
         try {
+            // Helper function to convert base64 to File
+            const base64ToFile = (base64: string, filename: string): File => {
+                const arr = base64.split(',');
+                const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+                const bstr = atob(arr[1]);
+                let n = bstr.length;
+                const u8arr = new Uint8Array(n);
+                while (n--) {
+                    u8arr[n] = bstr.charCodeAt(n);
+                }
+                return new File([u8arr], filename, { type: mime });
+            };
+
             // Special handling for upscale workflow
             if (workflowId === 'upscale' && uploadedImage) {
                 console.log('🚀 Starting intelligent upscaling process...');
                 const upscaledImage = await geminiService.upscaleImage(uploadedImage, prompt);
                 setGeneratedImages([upscaledImage]);
                 
-                // Increment user's generation count (1 image)
+                // Save to Cloudinary storage
                 if (user) {
+                    try {
+                        const imageFile = base64ToFile(upscaledImage, `upscale_${Date.now()}.png`);
+                        await storageService.uploadImage(imageFile, user.id, workflowId, prompt);
+                        console.log('✅ Image saved to Cloudinary');
+                    } catch (error) {
+                        console.warn('⚠️ Failed to save image to Cloudinary:', error);
+                        // Continue even if Cloudinary save fails
+                    }
+                    
+                    // Increment user's generation count (1 image)
                     const result = await incrementGenerationsUsed(1);
                     if (result.dailyLimitHit && onOpenDailyLimitModal) {
                         onOpenDailyLimitModal();
@@ -266,8 +295,21 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 
                 setGeneratedImages(validImages);
                 
-                // Increment user's generation count
-                if (user) {
+                // Save to Cloudinary storage
+                if (user && validImages.length > 0) {
+                    try {
+                        // Save all generated images
+                        for (const imageB64 of validImages) {
+                            const imageFile = base64ToFile(imageB64, `${workflowId}_${Date.now()}.png`);
+                            await storageService.uploadImage(imageFile, user.id, workflowId, prompt);
+                        }
+                        console.log(`✅ ${validImages.length} image(s) saved to Cloudinary`);
+                    } catch (error) {
+                        console.warn('⚠️ Failed to save images to Cloudinary:', error);
+                        // Continue even if Cloudinary save fails
+                    }
+                    
+                    // Increment user's generation count
                     const result = await incrementGenerationsUsed(validImages.length);
                     if (result.dailyLimitHit && onOpenDailyLimitModal) {
                         onOpenDailyLimitModal();
@@ -332,6 +374,37 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     <label className="block text-sm font-medium text-zinc-300 mb-3">
                                         {config.upload1Label}
                                     </label>
+                                    
+                                    {/* Tabs */}
+                                    <div className="flex gap-2 mb-3">
+                                        <button
+                                            onClick={() => setUploadMode('upload')}
+                                            className={`
+                                                flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                                ${uploadMode === 'upload' 
+                                                    ? 'bg-emerald-500 text-black' 
+                                                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                }
+                                            `}
+                                        >
+                                            <Upload className="w-4 h-4 inline mr-2" />
+                                            Upload
+                                        </button>
+                                        <button
+                                            onClick={() => setUploadMode('library')}
+                                            className={`
+                                                flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                                ${uploadMode === 'library' 
+                                                    ? 'bg-emerald-500 text-black' 
+                                                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                }
+                                            `}
+                                        >
+                                            <FolderOpen className="w-4 h-4 inline mr-2" />
+                                            From Library
+                                        </button>
+                                    </div>
+                                    
                                     <input
                                         ref={fileInputRef}
                                         type="file"
@@ -354,7 +427,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                                 <X className="w-4 h-4 text-zinc-300" />
                                             </button>
                                         </div>
-                                    ) : (
+                                    ) : uploadMode === 'upload' ? (
                                         <div
                                             onClick={() => fileInputRef.current?.click()}
                                             onDragOver={handleDragOver}
@@ -385,6 +458,21 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                                 PNG, JPG, WEBP
                                             </p>
                                         </div>
+                                    ) : (
+                                        <div
+                                            onClick={() => setShowLibraryModal(true)}
+                                            className="relative rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all duration-300 cursor-pointer h-64 flex flex-col items-center justify-center"
+                                        >
+                                            <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-zinc-800 group-hover:bg-zinc-700 transition-all duration-300">
+                                                <FolderOpen className="w-6 h-6 text-zinc-400" />
+                                            </div>
+                                            <p className="text-sm font-medium mb-2 text-zinc-300">
+                                                Click to select from library
+                                            </p>
+                                            <p className="text-xs text-zinc-500">
+                                                My Creations
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
 
@@ -393,6 +481,37 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     <label className="block text-sm font-medium text-zinc-300 mb-3">
                                         {config.upload2Label}
                                     </label>
+                                    
+                                    {/* Tabs */}
+                                    <div className="flex gap-2 mb-3">
+                                        <button
+                                            onClick={() => setUploadMode2('upload')}
+                                            className={`
+                                                flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                                ${uploadMode2 === 'upload' 
+                                                    ? 'bg-emerald-500 text-black' 
+                                                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                }
+                                            `}
+                                        >
+                                            <Upload className="w-4 h-4 inline mr-2" />
+                                            Upload
+                                        </button>
+                                        <button
+                                            onClick={() => setUploadMode2('library')}
+                                            className={`
+                                                flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                                ${uploadMode2 === 'library' 
+                                                    ? 'bg-emerald-500 text-black' 
+                                                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                }
+                                            `}
+                                        >
+                                            <FolderOpen className="w-4 h-4 inline mr-2" />
+                                            From Library
+                                        </button>
+                                    </div>
+                                    
                                     <input
                                         ref={fileInputRef2}
                                         type="file"
@@ -424,7 +543,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                                 <X className="w-4 h-4 text-zinc-300" />
                                             </button>
                                         </div>
-                                    ) : (
+                                    ) : uploadMode2 === 'upload' ? (
                                         <div
                                             onClick={() => fileInputRef2.current?.click()}
                                             onDragOver={(e) => {
@@ -469,6 +588,21 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                                 PNG, JPG, WEBP
                                             </p>
                                         </div>
+                                    ) : (
+                                        <div
+                                            onClick={() => setShowLibraryModal2(true)}
+                                            className="relative rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all duration-300 cursor-pointer h-64 flex flex-col items-center justify-center"
+                                        >
+                                            <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-zinc-800 group-hover:bg-zinc-700 transition-all duration-300">
+                                                <FolderOpen className="w-6 h-6 text-zinc-400" />
+                                            </div>
+                                            <p className="text-sm font-medium mb-2 text-zinc-300">
+                                                Click to select from library
+                                            </p>
+                                            <p className="text-xs text-zinc-500">
+                                                My Creations
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -477,6 +611,37 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                 <label className="block text-sm font-medium text-zinc-300 mb-3">
                                     Upload Image {workflowId === 'upscale' ? '(Required)' : (workflowId === 'ai-photoshoot' || workflowId === 'virtual-tryon' ? '(Recommended)' : '(Optional)')}
                                 </label>
+                                
+                                {/* Tabs */}
+                                <div className="flex gap-2 mb-3">
+                                    <button
+                                        onClick={() => setUploadMode('upload')}
+                                        className={`
+                                            flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                            ${uploadMode === 'upload' 
+                                                ? 'bg-emerald-500 text-black' 
+                                                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                            }
+                                        `}
+                                    >
+                                        <Upload className="w-4 h-4 inline mr-2" />
+                                        Upload
+                                    </button>
+                                    <button
+                                        onClick={() => setUploadMode('library')}
+                                        className={`
+                                            flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                                            ${uploadMode === 'library' 
+                                                ? 'bg-emerald-500 text-black' 
+                                                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                            }
+                                        `}
+                                    >
+                                        <FolderOpen className="w-4 h-4 inline mr-2" />
+                                        From Library
+                                    </button>
+                                </div>
+                                
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -499,7 +664,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                             <X className="w-4 h-4 text-zinc-300" />
                                         </button>
                                     </div>
-                                ) : (
+                                ) : uploadMode === 'upload' ? (
                                     <div
                                         onClick={() => fileInputRef.current?.click()}
                                         onDragOver={handleDragOver}
@@ -528,6 +693,21 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                         </p>
                                         <p className="text-sm text-zinc-500">
                                             PNG, JPG, WEBP up to 10MB
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div
+                                        onClick={() => setShowLibraryModal(true)}
+                                        className="relative rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all duration-300 cursor-pointer h-80 flex flex-col items-center justify-center"
+                                    >
+                                        <div className="w-16 h-16 rounded-2xl mb-6 flex items-center justify-center bg-zinc-800 group-hover:bg-zinc-700 transition-all duration-300">
+                                            <FolderOpen className="w-8 h-8 text-zinc-400" />
+                                        </div>
+                                        <p className="text-base font-medium mb-2 text-zinc-300">
+                                            Click to select from library
+                                        </p>
+                                        <p className="text-sm text-zinc-500">
+                                            My Creations
                                         </p>
                                     </div>
                                 )}
@@ -775,6 +955,22 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                     </div>
                 </div>
             </div>
+            
+            {/* Image Library Modals */}
+            <ImageLibraryModal
+                isOpen={showLibraryModal}
+                onClose={() => setShowLibraryModal(false)}
+                onSelect={(imageUrl) => setUploadedImage(imageUrl)}
+                title="Select from My Creations"
+                workflowId={workflowId}
+            />
+            <ImageLibraryModal
+                isOpen={showLibraryModal2}
+                onClose={() => setShowLibraryModal2(false)}
+                onSelect={(imageUrl) => setUploadedImage2(imageUrl)}
+                title="Select from My Creations"
+                workflowId={workflowId}
+            />
         </div>
     );
 };

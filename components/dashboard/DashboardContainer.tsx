@@ -3,7 +3,8 @@ import { DashboardHome } from './DashboardHome';
 import { SimplifiedWorkflow } from './SimplifiedWorkflow';
 import { StoryboardWorkflow } from './StoryboardWorkflow';
 import { SocialMediaPostsWorkflow } from './SocialMediaPostsWorkflow';
-import { User, Settings, LogOut, CreditCard, Menu, X, Layers, Zap, Lock } from 'lucide-react';
+import { MyCreations } from './MyCreations';
+import { User, Settings, LogOut, CreditCard, Menu, X, Layers, Zap, Lock, Image as ImageIcon } from 'lucide-react';
 import { KLogo } from '../shared/KLogo';
 import { Footer } from '../shared/Footer';
 import type { User as UserType } from '../../types';
@@ -26,14 +27,22 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
     onSwitchToAdvanced,
 }) => {
     const [currentWorkflow, setCurrentWorkflow] = useState<string | null>(null);
+    const [currentView, setCurrentView] = useState<'home' | 'workflow' | 'creations'>('home');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
 
     const handleSelectWorkflow = (workflowId: string) => {
         setCurrentWorkflow(workflowId);
+        setCurrentView('workflow');
     };
 
     const handleBackToDashboard = () => {
+        setCurrentWorkflow(null);
+        setCurrentView('home');
+    };
+
+    const handleViewCreations = () => {
+        setCurrentView('creations');
         setCurrentWorkflow(null);
     };
 
@@ -92,6 +101,17 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
 
                             {/* Center Navigation */}
                             <div className="hidden lg:flex items-center gap-1">
+                                <button
+                                    onClick={handleViewCreations}
+                                    className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${
+                                        currentView === 'creations'
+                                            ? 'text-emerald-400 bg-emerald-500/10'
+                                            : 'text-white/70 hover:text-white hover:bg-white/5'
+                                    }`}
+                                >
+                                    <ImageIcon size={16} />
+                                    My Creations
+                                </button>
                                 <button
                                     onClick={onOpenPayment}
                                     className="px-4 py-1.5 text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-all"
@@ -164,6 +184,21 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                                 </div>
                                                 
                                                 <div className="p-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            handleViewCreations();
+                                                            setShowUserMenu(false);
+                                                        }}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-white/5 rounded-lg transition-colors ${
+                                                            currentView === 'creations'
+                                                                ? 'text-emerald-400 bg-emerald-500/10'
+                                                                : 'text-zinc-300'
+                                                        }`}
+                                                    >
+                                                        <ImageIcon className="w-4 h-4" />
+                                                        My Creations
+                                                    </button>
+                                                    
                                                     {onSwitchToAdvanced && (
                                                         <button
                                                             onClick={() => { 
@@ -260,6 +295,21 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                         )}
                                     </div>
                                 </div>
+                                
+                                <button
+                                    onClick={() => { 
+                                        handleViewCreations();
+                                        setIsMobileMenuOpen(false);
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-white/5 rounded-lg transition-colors ${
+                                        currentView === 'creations'
+                                            ? 'text-emerald-400 bg-emerald-500/10'
+                                            : 'text-zinc-300'
+                                    }`}
+                                >
+                                    <ImageIcon className="w-4 h-4" />
+                                    My Creations
+                                </button>
                                 
                                 {onSwitchToAdvanced && (
                                     <button
@@ -364,7 +414,12 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-0">
-                {currentWorkflow ? (
+                {currentView === 'creations' ? (
+                    <MyCreations 
+                        onBack={handleBackToDashboard}
+                        key={currentView} // Force re-render when navigating to this view
+                    />
+                ) : currentWorkflow ? (
                     currentWorkflow === 'storyboard' ? (
                         <StoryboardWorkflow onBack={handleBackToDashboard} />
                     ) : currentWorkflow === 'social-media-posts' ? (
