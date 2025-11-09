@@ -107,24 +107,58 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     throw new Error('Failed to generate code challenge for PKCE');
   }
   
-  // Store verifier in database with redirect URI as part of the key
-  // This allows retrieval even if state parameter is not returned
-  const timestamp = Date.now();
-  const storageKey = `canva_pkce_${redirectUri.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}`;
+  // Generate a unique session ID for this OAuth flow
+  const sessionId = `canva_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
   
+  // Store verifier in Edge Function (server-side, most reliable)
   try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Supabase URL or anon key not configured');
+    }
+    
+    const storeUrl = `${supabaseUrl}/functions/v1/store-canva-verifier`;
+    
+    const storeResponse = await fetch(storeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        verifier: codeVerifier,
+        redirect_uri: redirectUri,
+      }),
+    });
+    
+    if (!storeResponse.ok) {
+      const errorText = await storeResponse.text();
+      console.error('❌ Failed to store verifier in Edge Function:', errorText);
+      throw new Error('Failed to store code verifier server-side');
+    }
+    
+    console.log('🔐 PKCE Code Verifier stored in Edge Function');
+    console.log('🔐 Session ID:', sessionId);
+    
+    // Also store in database as backup (with session ID key for retrieval)
     const { databaseService } = await import('./databaseService');
     const verifierData = JSON.stringify({
       verifier: codeVerifier,
       redirectUri: redirectUri,
-      timestamp: timestamp,
-      codeChallenge: codeChallenge, // Store challenge too for verification
+      timestamp: Date.now(),
+      sessionId: sessionId,
     });
     
-    // Store in database
+    // Store with session ID key for easy retrieval
+    await databaseService.setAdminSetting(`canva_pkce_verifier_${sessionId}`, verifierData);
+    
+    // Also store with timestamp key as additional backup
+    const storageKey = `canva_pkce_${redirectUri.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
     await databaseService.setAdminSetting(storageKey, verifierData);
-    console.log('🔐 PKCE Code Verifier stored in database');
-    console.log('🔐 Storage key:', storageKey);
+    console.log('🔐 Also stored in database as backup (with session ID key)');
     
     // Also store in browser storage as primary backup (more reliable than database for this)
     if (typeof window !== 'undefined') {
@@ -132,7 +166,8 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
         const browserData = JSON.stringify({
           verifier: codeVerifier,
           redirectUri: redirectUri,
-          timestamp: timestamp,
+          timestamp: Date.now(),
+          sessionId: sessionId, // Include session ID for Edge Function lookup
           storageKey: storageKey, // Include DB key for reference
         });
         
@@ -186,8 +221,8 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     }
   }
   
-  // Use simple state since Canva may not return it anyway
-  const state = 'canva_auth';
+  // Include session ID in state parameter so we can retrieve verifier
+  const state = `canva_auth_${sessionId}`;
   
   const params = new URLSearchParams({
     client_id: canvaConfig.clientId,
@@ -206,7 +241,8 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
   console.log('📍 Redirect URI:', redirectUri);
   console.log('🔑 Client ID:', canvaConfig.clientId);
   console.log('✅ Code Challenge Method: S256');
-  console.log('🔐 Session ID in state:', sessionId);
+  console.log('🔐 Session ID:', sessionId);
+  console.log('🔐 State parameter includes session ID for verifier retrieval');
   
   return authUrl;
 }
@@ -220,7 +256,7 @@ export async function exchangeCodeForToken(
   redirectUri: string,
   state?: string
 ): Promise<{ accessToken: string; refreshToken: string }> {
-  // Retrieve code verifier - prioritize browser storage (most reliable)
+  // Retrieve code verifier - prioritize Edge Function (server-side, most reliable)
   let verifier = codeVerifier;
   let storedData: { verifier: string; timestamp: number; redirectUri?: string; storageKey?: string } | null = null;
   
@@ -228,9 +264,64 @@ export async function exchangeCodeForToken(
   console.log('📍 Redirect URI:', redirectUri);
   console.log('📍 State parameter:', state || 'null');
   
-  // Try browser storage FIRST (most reliable, persists across redirects on same origin)
+  // Extract session ID from state parameter
+  let sessionId: string | null = null;
+  if (state && state.startsWith('canva_auth_')) {
+    sessionId = state.replace('canva_auth_', '');
+    console.log('🔐 Session ID extracted from state:', sessionId);
+  }
+  
+  // If no session ID from state, try to get it from browser storage
+  if (!sessionId && typeof window !== 'undefined') {
+    try {
+      const storedDataStr = localStorage.getItem('canva_code_verifier') || sessionStorage.getItem('canva_code_verifier');
+      if (storedDataStr) {
+        const parsed = JSON.parse(storedDataStr);
+        if (parsed.sessionId) {
+          sessionId = parsed.sessionId;
+          console.log('🔐 Session ID found in browser storage:', sessionId);
+        }
+      }
+    } catch (e) {
+      // Ignore parsing errors
+    }
+  }
+  
+  // Try Edge Function FIRST (server-side, most reliable)
+  if (!verifier && sessionId && typeof window !== 'undefined') {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseAnonKey) {
+        const retrieveUrl = `${supabaseUrl}/functions/v1/store-canva-verifier?session_id=${encodeURIComponent(sessionId)}`;
+        
+        console.log('🔍 Retrieving verifier from Edge Function...');
+        const retrieveResponse = await fetch(retrieveUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+        });
+        
+        if (retrieveResponse.ok) {
+          const data = await retrieveResponse.json();
+          if (data.verifier) {
+            verifier = data.verifier;
+            console.log('✅ Code verifier retrieved from Edge Function (server-side)!');
+          }
+        } else {
+          console.warn('⚠️ Edge Function retrieval failed, trying browser storage...');
+        }
+      }
+    } catch (edgeError) {
+      console.warn('⚠️ Edge Function error, trying browser storage:', edgeError);
+    }
+  }
+  
+  // Fallback to browser storage
   if (!verifier && typeof window !== 'undefined') {
-    console.log('🔍 Checking browser storage first...');
+    console.log('🔍 Checking browser storage...');
     
     // Try cookies FIRST (most reliable across redirects)
     const getCookie = (name: string): string | null => {
@@ -243,7 +334,7 @@ export async function exchangeCodeForToken(
     const cookieVerifier = getCookie('canva_code_verifier');
     if (cookieVerifier) {
       verifier = cookieVerifier;
-      console.log('✅ Code verifier found in COOKIE (most reliable!)');
+      console.log('✅ Code verifier found in COOKIE');
     }
     
     // Try localStorage (more persistent than sessionStorage)
@@ -330,6 +421,31 @@ export async function exchangeCodeForToken(
       }
     } catch (dbError) {
       console.warn('⚠️ Could not retrieve from database:', dbError);
+    }
+  }
+  
+  // Last resort: Try to get verifier from database using session ID if we have it
+  if (!verifier && sessionId) {
+    try {
+      console.log('🔍 Last resort: Trying database with session ID:', sessionId);
+      const { databaseService } = await import('./databaseService');
+      // Try to find verifier stored with this session ID
+      const dbData = await databaseService.getAdminSetting(`canva_pkce_verifier_${sessionId}`);
+      if (dbData) {
+        try {
+          const dbParsed = JSON.parse(dbData);
+          if (dbParsed.verifier) {
+            verifier = dbParsed.verifier;
+            console.log('✅ Code verifier retrieved from database (session ID lookup)');
+            // Clean up
+            await databaseService.setAdminSetting(`canva_pkce_verifier_${sessionId}`, '');
+          }
+        } catch (e) {
+          console.warn('⚠️ Could not parse database verifier data');
+        }
+      }
+    } catch (dbError) {
+      console.warn('⚠️ Database lookup failed:', dbError);
     }
   }
   
