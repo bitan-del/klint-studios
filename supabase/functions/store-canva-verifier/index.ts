@@ -77,6 +77,7 @@ serve(async (req) => {
           let bestAge = Infinity
           
           // Find the most recent valid verifier
+          // Since keys are sorted by updated_at DESC, check most recent first
           for (const item of allKeys) {
             try {
               const verifierData = JSON.parse(item.setting_value)
@@ -92,23 +93,39 @@ serve(async (req) => {
               const matchesRedirect = !redirectUriInData || 
                                      redirectUriInData === redirectUri
               
-              // Increase to 15 minutes to account for OAuth flow delays
-              const isRecent = age < 15 * 60 * 1000
+              // OAuth flow should be fast (seconds to 2-3 minutes max)
+              // Use 5 minutes for normal flow, 10 minutes as extended window
+              const isVeryRecent = age < 5 * 60 * 1000  // Less than 5 minutes
+              const isRecent = age < 10 * 60 * 1000      // Less than 10 minutes
               
               console.log(`🔍 Checking key: ${item.setting_key}`)
               console.log(`  - Age: ${Math.round(age / 1000)}s (${Math.round(age / 60000)} minutes)`)
               console.log(`  - Redirect URI in data: ${redirectUriInData || 'none'}`)
               console.log(`  - Request redirect URI: ${redirectUri}`)
               console.log(`  - Matches redirect: ${matchesRedirect}`)
-              console.log(`  - Is recent (< 15 min): ${isRecent}`)
+              console.log(`  - Is very recent (< 5 min): ${isVeryRecent}`)
+              console.log(`  - Is recent (< 10 min): ${isRecent}`)
               
-              // Must be less than 15 minutes old (increased from 10 minutes)
-              if (matchesRedirect && isRecent && age < bestAge) {
-                bestMatch = { item, verifierData, age }
-                bestAge = age
-                console.log(`✅ Found valid match: ${item.setting_key}`)
+              // Prioritize very recent verifiers (normal OAuth flow)
+              // Since keys are sorted by updated_at DESC, first match is most recent
+              if (matchesRedirect) {
+                if (isVeryRecent) {
+                  // Found very recent match - use it immediately (this is the real-time verifier)
+                  bestMatch = { item, verifierData, age }
+                  bestAge = age
+                  console.log(`✅✅✅ Found VERY RECENT match (real-time): ${item.setting_key}`)
+                  console.log(`📍 This is the verifier from the current OAuth flow`)
+                  break // Stop checking - we found the right one!
+                } else if (isRecent && !bestMatch) {
+                  // Fallback to recent if no very recent match yet (but keep checking for very recent)
+                  bestMatch = { item, verifierData, age }
+                  bestAge = age
+                  console.log(`✅ Found recent match (temporary, still checking for very recent): ${item.setting_key}`)
+                } else {
+                  console.log(`❌ Key rejected: too old (${Math.round(age/1000)}s) or already have better match`)
+                }
               } else {
-                console.log(`❌ Key rejected: matchesRedirect=${matchesRedirect}, isRecent=${isRecent}`)
+                console.log(`❌ Key rejected: redirect URI mismatch`)
               }
             } catch (e) {
               console.warn('⚠️ Could not parse verifier data for key:', item.setting_key, e)
@@ -135,14 +152,14 @@ serve(async (req) => {
           } else {
             console.log('❌ No valid verifier found with redirect URI match (checked', allKeys.length, 'keys)')
             
-            // LAST RESORT: Use most recent verifier regardless of redirect URI (if less than 15 min old)
+            // LAST RESORT: Use most recent verifier regardless of redirect URI (if less than 10 min old)
             console.log('🔍 LAST RESORT: Trying most recent verifier regardless of redirect URI...')
             for (const item of allKeys) {
               try {
                 const verifierData = JSON.parse(item.setting_value)
                 if (verifierData.verifier) {
                   const age = now - (verifierData.timestamp || 0)
-                  if (age < 15 * 60 * 1000) {
+                  if (age < 10 * 60 * 1000) {
                     console.log('✅ Using most recent verifier as last resort:', item.setting_key)
                     console.log('📍 Age:', Math.round(age / 1000), 'seconds')
                     
