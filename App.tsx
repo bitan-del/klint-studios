@@ -628,35 +628,51 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                         {!canva.accessToken && canva.clientId && canva.clientSecret && (
                                             <div className="space-y-2">
                                                 <button
-                                                    onClick={async () => {
+                                                    onClick={async (e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        
+                                                        const button = e.currentTarget;
+                                                        const originalText = button.innerHTML;
+                                                        button.disabled = true;
+                                                        button.innerHTML = '<span class="animate-spin">⏳</span> Connecting...';
+                                                        
                                                         try {
+                                                            console.log('🚀 Button clicked - Starting Canva OAuth flow...');
+                                                            
                                                             const { getCanvaAuthUrl } = await import('./services/canvaService');
                                                             // Always use the exact production URL (Canva requires exact match)
                                                             // This MUST match the redirect URI in CanvaCallback.tsx and Canva Developer Portal
                                                             const redirectUri = 'https://www.klintstudios.com/canva-callback.html';
                                                             
-                                                            console.log('🚀 Starting Canva OAuth flow...');
                                                             console.log('📍 Using redirect URI:', redirectUri);
+                                                            console.log('📍 Client ID:', canva.clientId);
+                                                            console.log('📍 Client Secret:', canva.clientSecret ? '***configured***' : 'MISSING');
                                                             
                                                             // Generate auth URL (stores verifier SERVER-SIDE ONLY)
                                                             // getCanvaAuthUrl will throw an error if storage fails
+                                                            console.log('⏳ Generating auth URL and storing verifier...');
                                                             const authUrl = await getCanvaAuthUrl(redirectUri);
                                                             
                                                             console.log('✅ Code verifier stored server-side successfully');
-                                                            console.log('✅ Redirecting to Canva...');
-                                                            console.log('📍 Auth URL:', authUrl.substring(0, 100) + '...');
+                                                            console.log('✅ Auth URL generated:', authUrl.substring(0, 150) + '...');
+                                                            console.log('✅ Redirecting to Canva in 500ms...');
                                                             
                                                             // Small delay to ensure Edge Function storage commits
                                                             // (getCanvaAuthUrl already waits 1.5s, so this is just extra safety)
                                                             await new Promise(resolve => setTimeout(resolve, 500));
                                                             
+                                                            console.log('🔄 NOW REDIRECTING TO CANVA...');
                                                             window.location.href = authUrl;
-                                                        } catch (error) {
-                                                            console.error('Error initiating Canva OAuth:', error);
-                                                            alert('Failed to start Canva authentication. Please check the console for details.');
+                                                        } catch (error: any) {
+                                                            console.error('❌ Error initiating Canva OAuth:', error);
+                                                            console.error('❌ Error stack:', error.stack);
+                                                            button.disabled = false;
+                                                            button.innerHTML = originalText;
+                                                            alert(`Failed to start Canva authentication:\n\n${error.message}\n\nPlease check the browser console (F12) for more details.`);
                                                         }
                                                     }}
-                                                    className="w-full sm:w-auto text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md transition-all flex items-center justify-center gap-2 mt-2"
+                                                    className="w-full sm:w-auto text-sm font-semibold bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md transition-all flex items-center justify-center gap-2 mt-2"
                                                 >
                                                     <Link2 size={16} />
                                                     Connect Canva Account
