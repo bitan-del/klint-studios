@@ -72,11 +72,20 @@ serve(async (req) => {
       code: code.substring(0, 20) + '...',
       redirect_uri: redirect_uri,
       redirect_uri_length: redirect_uri.length,
+      redirect_uri_encoded: encodeURIComponent(redirect_uri),
       code_verifier_length: code_verifier.length,
       code_verifier_preview: code_verifier.substring(0, 20) + '...',
     })
     console.log('⚠️ CRITICAL: redirect_uri MUST match exactly what was used in authorization request!')
     console.log('📍 Redirect URI being sent:', redirect_uri)
+    console.log('📍 Redirect URI (raw):', JSON.stringify(redirect_uri))
+    console.log('📍 Token endpoint URL:', `${CANVA_AUTH_BASE}/token`)
+    console.log('📍 Client ID (first 10 chars):', clientId.substring(0, 10) + '...')
+    console.log('📍 Authorization header (first 20 chars):', `Basic ${auth.substring(0, 20)}...`)
+    
+    // Log the actual request body that will be sent
+    const requestBodyStr = requestBody.toString()
+    console.log('📤 Request body string:', requestBodyStr.substring(0, 200) + '...')
 
     const tokenResponse = await fetch(`${CANVA_AUTH_BASE}/token`, {
       method: 'POST',
@@ -104,7 +113,13 @@ serve(async (req) => {
         const errorJson = JSON.parse(errorText)
         if (errorJson.error) {
           errorMessage = `Canva error: ${errorJson.error}`
-          errorDetails = errorJson.error_description || ''
+          errorDetails = errorJson.error_description || errorJson.message || ''
+          console.error('❌ Canva error details:', {
+            error: errorJson.error,
+            error_description: errorJson.error_description,
+            error_uri: errorJson.error_uri,
+            full_response: errorJson
+          })
         }
       } catch {
         // Not JSON, it's HTML - Canva returned an error page
