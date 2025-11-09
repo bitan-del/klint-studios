@@ -106,11 +106,15 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     throw new Error('Failed to generate code challenge for PKCE');
   }
   
-  // Store verifier in sessionStorage for later use
+  // Store verifier in both sessionStorage and localStorage for reliability
+  // sessionStorage persists across page navigations on same origin
+  // localStorage provides a backup in case sessionStorage is cleared
   if (typeof window !== 'undefined') {
     sessionStorage.setItem('canva_code_verifier', codeVerifier);
+    localStorage.setItem('canva_code_verifier', codeVerifier);
     console.log('🔐 PKCE Code Verifier generated and stored');
     console.log('🔐 Code Challenge:', codeChallenge.substring(0, 20) + '...');
+    console.log('🔐 Stored in both sessionStorage and localStorage');
   }
   
   const params = new URLSearchParams({
@@ -143,18 +147,42 @@ export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
 ): Promise<{ accessToken: string; refreshToken: string }> {
-  // Retrieve code verifier from sessionStorage
+  // Retrieve code verifier from multiple sources
   let verifier = codeVerifier;
+  
   if (!verifier && typeof window !== 'undefined') {
+    // Try sessionStorage first
     verifier = sessionStorage.getItem('canva_code_verifier');
+    console.log('🔍 Code verifier from sessionStorage:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+    
+    // If not in sessionStorage, try localStorage as fallback
+    if (!verifier) {
+      verifier = localStorage.getItem('canva_code_verifier');
+      console.log('🔍 Code verifier from localStorage:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+    }
+    
+    // Also check URL hash/params in case it was passed there
+    if (!verifier) {
+      const urlParams = new URLSearchParams(window.location.search);
+      verifier = urlParams.get('code_verifier');
+      console.log('🔍 Code verifier from URL params:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+    }
+    
+    // Remove from storage after retrieval
     if (verifier) {
       sessionStorage.removeItem('canva_code_verifier');
+      localStorage.removeItem('canva_code_verifier');
     }
   }
 
   if (!verifier) {
+    console.error('❌ Code verifier not found in any storage location');
+    console.error('📍 Available sessionStorage keys:', typeof window !== 'undefined' ? Object.keys(sessionStorage) : 'N/A');
+    console.error('📍 Available localStorage keys:', typeof window !== 'undefined' ? Object.keys(localStorage) : 'N/A');
     throw new Error('Code verifier not found. Please restart OAuth flow.');
   }
+  
+  console.log('✅ Code verifier found:', verifier.substring(0, 20) + '...');
 
   // Get Supabase URL and anon key from environment variables
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;

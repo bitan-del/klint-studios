@@ -8,6 +8,13 @@ export const CanvaCallback: React.FC = () => {
 
   useEffect(() => {
     const handleCallback = async () => {
+      // Log storage contents for debugging
+      console.log('🔍 Storage check on callback page load:');
+      console.log('  - sessionStorage.canva_code_verifier:', sessionStorage.getItem('canva_code_verifier') ? 'exists' : 'not found');
+      console.log('  - localStorage.canva_code_verifier:', localStorage.getItem('canva_code_verifier') ? 'exists' : 'not found');
+      console.log('  - All sessionStorage keys:', Object.keys(sessionStorage));
+      console.log('  - All localStorage keys:', Object.keys(localStorage));
+      
       // Parse URL parameters directly from window location
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
