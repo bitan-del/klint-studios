@@ -660,7 +660,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                             
                                                             // Longer delay to ensure Edge Function storage commits
                                                             console.log('⏳ Waiting for server-side storage to commit...');
-                                                            await new Promise(resolve => setTimeout(resolve, 1000));
+                                                            await new Promise(resolve => setTimeout(resolve, 2000));
                                                             
                                                             window.location.href = authUrl;
                                                         } catch (error) {

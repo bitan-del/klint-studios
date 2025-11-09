@@ -137,11 +137,26 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     if (!storeResponse.ok) {
       const errorText = await storeResponse.text();
       console.error('❌ Failed to store verifier in Edge Function:', errorText);
+      console.error('❌ Status:', storeResponse.status, storeResponse.statusText);
       throw new Error('Failed to store code verifier server-side');
     }
     
+    const storeResult = await storeResponse.json();
     console.log('🔐 PKCE Code Verifier stored in Edge Function');
     console.log('🔐 Session ID:', sessionId);
+    console.log('🔐 Storage result:', storeResult);
+    
+    if (!storeResult.success) {
+      console.error('❌ Edge Function storage did not return success');
+      console.error('❌ Response:', storeResult);
+      throw new Error('Edge Function storage failed');
+    }
+    
+    console.log('✅ Edge Function confirmed storage success');
+    console.log('✅ Keys stored:', storeResult.keys_stored || 1);
+    
+    // Small delay to ensure database write commits
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Also store in database as backup (with session ID key for retrieval)
     const { databaseService } = await import('./databaseService');
