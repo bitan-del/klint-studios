@@ -52,6 +52,16 @@ serve(async (req) => {
       throw new Error('Invalid client secret format')
     }
     
+    // Validate client secret is correct length (should be 64 characters)
+    if (clientSecret.length !== 64) {
+      console.error('❌ CRITICAL: Client secret length mismatch!')
+      console.error('  - Actual length:', clientSecret.length)
+      console.error('  - Expected length: 64')
+      console.error('  - Secret (first 20):', clientSecret.substring(0, 20))
+      console.error('  - Secret (last 20):', clientSecret.substring(clientSecret.length - 20))
+      throw new Error(`Client secret length incorrect: ${clientSecret.length} (expected 64). Please verify the secret is set correctly in Supabase secrets.`)
+    }
+    
     console.log('🔑 Client credentials loaded from environment variables:')
     console.log('  - Client ID:', clientId)
     console.log('  - Client ID length:', clientId.length)
