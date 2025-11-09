@@ -189,11 +189,42 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
   console.log('🔗 Canva Auth URL generated');
   console.log('📍 Redirect URI in authorization URL:', redirectUri);
   console.log('📍 Redirect URI length:', redirectUri.length);
+  console.log('📍 Redirect URI (URL encoded in auth URL):', encodeURIComponent(redirectUri));
+  console.log('📍 Full authorization URL (first 200 chars):', authUrl.substring(0, 200) + '...');
+  console.log('📍 Code Challenge (first 20 chars):', codeChallenge.substring(0, 20) + '...');
+  console.log('📍 Code Challenge length:', codeChallenge.length);
   console.log('⚠️ CRITICAL: This redirect_uri MUST match EXACTLY in token exchange!');
+  console.log('⚠️ CRITICAL: Code verifier MUST match this code challenge!');
   console.log('🔑 Client ID:', canvaConfig.clientId);
   console.log('✅ Code Challenge Method: S256');
   console.log('🔐 Session ID:', sessionId);
   console.log('🔐 State parameter (for CSRF protection):', state);
+  
+  // Store the code challenge with the verifier for verification
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseUrl && supabaseAnonKey) {
+      // Store code challenge for verification (optional, for debugging)
+      await fetch(`${supabaseUrl}/functions/v1/store-canva-verifier`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          verifier: codeVerifier,
+          redirect_uri: redirectUri,
+          code_challenge: codeChallenge, // Store for verification
+        }),
+      }).catch(() => {
+        // Ignore errors, this is just for debugging
+      });
+    }
+  } catch (e) {
+    // Ignore errors
+  }
   
   return authUrl;
 }
