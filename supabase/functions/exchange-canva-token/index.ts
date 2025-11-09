@@ -45,8 +45,32 @@ serve(async (req) => {
       throw new Error('Canva client ID and secret not configured in admin settings')
     }
 
-    const clientId = clientIdData.setting_value.replace(/"/g, '').trim()
-    const clientSecret = clientSecretData.setting_value.replace(/"/g, '').trim()
+    let clientId = clientIdData.setting_value
+    let clientSecret = clientSecretData.setting_value
+    
+    // Remove quotes if present (JSON stringified)
+    if (clientId.startsWith('"') && clientId.endsWith('"')) {
+      clientId = clientId.slice(1, -1)
+    }
+    if (clientSecret.startsWith('"') && clientSecret.endsWith('"')) {
+      clientSecret = clientSecret.slice(1, -1)
+    }
+    
+    clientId = clientId.trim()
+    clientSecret = clientSecret.trim()
+    
+    // Validate credentials format
+    if (!clientId || clientId.length < 5) {
+      throw new Error('Invalid client ID format')
+    }
+    if (!clientSecret || clientSecret.length < 10) {
+      throw new Error('Invalid client secret format')
+    }
+    
+    console.log('🔑 Client credentials loaded:')
+    console.log('  - Client ID length:', clientId.length)
+    console.log('  - Client ID format:', clientId.startsWith('OC-') ? 'Valid (OC- prefix)' : 'Unknown format')
+    console.log('  - Client Secret length:', clientSecret.length)
 
     // Log request details (without exposing secrets)
     console.log('🔄 Exchanging code for token with Canva...')
@@ -62,13 +86,16 @@ serve(async (req) => {
     // Ensure redirect_uri is exactly as it should be (no encoding issues)
     const normalizedRedirectUri = redirect_uri.trim()
     
+    // Use URLSearchParams - it handles encoding correctly
+    // The redirect_uri should be the exact same string (not re-encoded)
+    // URLSearchParams will encode it the same way as in the authorization URL
     const requestBody = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: normalizedRedirectUri, // Use normalized version
+      redirect_uri: normalizedRedirectUri, // Same exact string as used in authorization URL
       code_verifier,
-      // Note: client_id and client_secret are NOT in body, they're in Authorization header
     })
+    const requestBodyStr = requestBody.toString()
     
     console.log('📤 Request body params:', {
       grant_type: 'authorization_code',
@@ -87,10 +114,10 @@ serve(async (req) => {
     console.log('📍 Client ID length:', clientId.length)
     console.log('📍 Client Secret length:', clientSecret.length)
     
-    // Log the actual request body that will be sent
-    const requestBodyStr = requestBody.toString()
+    // Log the request body
     console.log('📤 Request body string (first 300 chars):', requestBodyStr.substring(0, 300))
-    console.log('📤 Request body contains redirect_uri:', requestBodyStr.includes(normalizedRedirectUri) ? 'YES' : 'NO')
+    console.log('📤 Request body contains redirect_uri:', requestBodyStr.includes(normalizedRedirectUri) ? 'YES (raw)' : 'NO')
+    console.log('📤 Request body contains encoded redirect_uri:', requestBodyStr.includes(encodeURIComponent(normalizedRedirectUri)) ? 'YES (encoded)' : 'NO')
 
     // Canva token endpoint - must be /api/oauth/token (matches authorization endpoint pattern)
     // Authorization endpoint is /api/oauth/authorize, so token endpoint is /api/oauth/token
@@ -103,8 +130,9 @@ serve(async (req) => {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Basic ${auth}`,
+        'Accept': 'application/json', // Request JSON response
       },
-      body: requestBody.toString(),
+      body: requestBodyStr, // URLSearchParams handles encoding correctly
     })
 
     console.log('📥 Canva response status:', tokenResponse.status, tokenResponse.statusText)
@@ -165,15 +193,25 @@ serve(async (req) => {
         }
       }
       
-      console.error('❌ Full error details:', {
+      // Create comprehensive error object with all details
+      const fullErrorDetails = {
         status: tokenResponse.status,
         statusText: tokenResponse.statusText,
-        redirect_uri_used: redirect_uri,
+        redirect_uri_used: normalizedRedirectUri,
+        redirect_uri_length: normalizedRedirectUri.length,
+        code_length: code.length,
+        code_verifier_length: code_verifier.length,
+        client_id_length: clientId.length,
+        token_endpoint: tokenEndpoint,
         error_message: errorMessage,
         error_details: errorDetails,
-      })
+        canva_response: errorText.substring(0, 500), // First 500 chars of Canva's response
+      }
       
-      throw new Error(errorMessage)
+      console.error('❌ Full error details:', JSON.stringify(fullErrorDetails, null, 2))
+      
+      // Return detailed error to client
+      throw new Error(`${errorMessage}\n\nDetails: ${errorDetails}\n\nCanva Response: ${errorText.substring(0, 200)}`)
     }
 
     const tokenData = await tokenResponse.json()
