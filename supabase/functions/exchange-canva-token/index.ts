@@ -59,35 +59,44 @@ serve(async (req) => {
     // According to Canva docs: https://canva.dev/docs/connect/authentication
     const auth = btoa(`${clientId}:${clientSecret}`)
 
+    // Ensure redirect_uri is exactly as it should be (no encoding issues)
+    const normalizedRedirectUri = redirect_uri.trim()
+    
     const requestBody = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri,
+      redirect_uri: normalizedRedirectUri, // Use normalized version
       code_verifier,
       // Note: client_id and client_secret are NOT in body, they're in Authorization header
     })
-
+    
     console.log('📤 Request body params:', {
       grant_type: 'authorization_code',
       code: code.substring(0, 20) + '...',
-      redirect_uri: redirect_uri,
-      redirect_uri_length: redirect_uri.length,
-      redirect_uri_encoded: encodeURIComponent(redirect_uri),
+      redirect_uri: normalizedRedirectUri,
+      redirect_uri_length: normalizedRedirectUri.length,
+      redirect_uri_bytes: new TextEncoder().encode(normalizedRedirectUri).length,
       code_verifier_length: code_verifier.length,
       code_verifier_preview: code_verifier.substring(0, 20) + '...',
     })
     console.log('⚠️ CRITICAL: redirect_uri MUST match exactly what was used in authorization request!')
-    console.log('📍 Redirect URI being sent:', redirect_uri)
-    console.log('📍 Redirect URI (raw):', JSON.stringify(redirect_uri))
-    console.log('📍 Token endpoint URL:', `${CANVA_AUTH_BASE}/token`)
+    console.log('📍 Redirect URI being sent:', normalizedRedirectUri)
+    console.log('📍 Redirect URI (raw JSON):', JSON.stringify(normalizedRedirectUri))
+    console.log('📍 Redirect URI (URL encoded):', encodeURIComponent(normalizedRedirectUri))
     console.log('📍 Client ID (first 10 chars):', clientId.substring(0, 10) + '...')
-    console.log('📍 Authorization header (first 20 chars):', `Basic ${auth.substring(0, 20)}...`)
+    console.log('📍 Client ID length:', clientId.length)
+    console.log('📍 Client Secret length:', clientSecret.length)
     
     // Log the actual request body that will be sent
     const requestBodyStr = requestBody.toString()
-    console.log('📤 Request body string:', requestBodyStr.substring(0, 200) + '...')
+    console.log('📤 Request body string (first 300 chars):', requestBodyStr.substring(0, 300))
+    console.log('📤 Request body contains redirect_uri:', requestBodyStr.includes(normalizedRedirectUri) ? 'YES' : 'NO')
 
-    const tokenResponse = await fetch(`${CANVA_AUTH_BASE}/token`, {
+    // Canva token endpoint is /api/oauth/token (not /api/token)
+    const tokenEndpoint = `${CANVA_AUTH_BASE}/oauth/token`
+    console.log('📍 Token endpoint URL:', tokenEndpoint)
+    
+    const tokenResponse = await fetch(tokenEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
