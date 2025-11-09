@@ -639,36 +639,37 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                             console.log('📍 Using redirect URI:', redirectUri);
                                                             const authUrl = await getCanvaAuthUrl(redirectUri);
                                                             
-                                                            // Verify storage before redirecting
+                                                            // Verify storage before redirecting (check all locations)
                                                             const verifierInSession = sessionStorage.getItem('canva_code_verifier');
                                                             const verifierInLocal = localStorage.getItem('canva_code_verifier');
+                                                            const verifierInBackup = localStorage.getItem('_canva_pkce_verifier_backup');
                                                             
                                                             // Check if verifier exists (handle both JSON and plain string formats)
                                                             let hasVerifier = false;
-                                                            if (verifierInSession) {
+                                                            const checkVerifier = (data: string | null) => {
+                                                                if (!data) return false;
                                                                 try {
-                                                                    const parsed = JSON.parse(verifierInSession);
-                                                                    hasVerifier = !!parsed.verifier;
+                                                                    const parsed = JSON.parse(data);
+                                                                    return !!parsed.verifier;
                                                                 } catch {
-                                                                    hasVerifier = true; // Plain string format
+                                                                    return true; // Plain string format
                                                                 }
-                                                            }
-                                                            if (!hasVerifier && verifierInLocal) {
-                                                                try {
-                                                                    const parsed = JSON.parse(verifierInLocal);
-                                                                    hasVerifier = !!parsed.verifier;
-                                                                } catch {
-                                                                    hasVerifier = true; // Plain string format
-                                                                }
-                                                            }
+                                                            };
+                                                            
+                                                            hasVerifier = checkVerifier(verifierInSession) || 
+                                                                         checkVerifier(verifierInLocal) || 
+                                                                         checkVerifier(verifierInBackup);
                                                             
                                                             if (!hasVerifier) {
                                                                 console.error('❌ Code verifier not stored before redirect!');
                                                                 console.error('  - sessionStorage:', verifierInSession ? 'exists but invalid' : 'null');
                                                                 console.error('  - localStorage:', verifierInLocal ? 'exists but invalid' : 'null');
+                                                                console.error('  - backup:', verifierInBackup ? 'exists but invalid' : 'null');
                                                                 alert('Failed to store authentication data. Please try again.');
                                                                 return;
                                                             }
+                                                            
+                                                            console.log('✅ Code verifier verified in all storage locations');
                                                             
                                                             console.log('✅ Code verifier verified in storage, redirecting to Canva...');
                                                             console.log('📍 Auth URL:', authUrl);

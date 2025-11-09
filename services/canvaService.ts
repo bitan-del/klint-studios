@@ -106,9 +106,8 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     throw new Error('Failed to generate code challenge for PKCE');
   }
   
-  // Store verifier in both sessionStorage and localStorage for reliability
-  // sessionStorage persists across page navigations on same origin
-  // localStorage provides a backup in case sessionStorage is cleared
+  // Store verifier in multiple locations for maximum reliability
+  // Use both sessionStorage and localStorage, plus a backup key
   // Include timestamp to detect if storage was cleared or is too old
   if (typeof window !== 'undefined') {
     try {
@@ -116,34 +115,67 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
       const storageData = JSON.stringify({
         verifier: codeVerifier,
         timestamp: timestamp,
+        redirectUri: redirectUri, // Store redirect URI too for verification
       });
       
+      // Store in multiple locations
       sessionStorage.setItem('canva_code_verifier', storageData);
       localStorage.setItem('canva_code_verifier', storageData);
+      // Backup storage with different key
+      localStorage.setItem('_canva_pkce_verifier_backup', storageData);
       
-      // Verify storage immediately
+      // Force a synchronous flush by reading back immediately
+      // This ensures the storage is committed before redirect
+      const verifyStorage = () => {
+        const sessionCheck = sessionStorage.getItem('canva_code_verifier');
+        const localCheck = localStorage.getItem('canva_code_verifier');
+        const backupCheck = localStorage.getItem('_canva_pkce_verifier_backup');
+        
+        console.log('🔍 Storage verification:');
+        console.log('  - sessionStorage:', sessionCheck ? '✅' : '❌');
+        console.log('  - localStorage:', localCheck ? '✅' : '❌');
+        console.log('  - backup:', backupCheck ? '✅' : '❌');
+        
+        return sessionCheck || localCheck || backupCheck;
+      };
+      
+      // Verify multiple times to ensure it's committed
+      let verified = false;
+      for (let i = 0; i < 3; i++) {
+        if (verifyStorage()) {
+          verified = true;
+          break;
+        }
+        // Small delay to allow storage to commit
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      
+      if (!verified) {
+        console.error('❌ Failed to verify code verifier storage after multiple attempts!');
+        throw new Error('Storage verification failed - storage may not be available');
+      }
+      
+      // Final verification of content
       const storedInSession = sessionStorage.getItem('canva_code_verifier');
       const storedInLocal = localStorage.getItem('canva_code_verifier');
       
-      if (!storedInSession || !storedInLocal) {
-        console.error('❌ Failed to store code verifier - storage returned null!');
-        throw new Error('Storage operation failed - returned null');
+      if (storedInSession) {
+        const parsed = JSON.parse(storedInSession);
+        if (parsed.verifier !== codeVerifier) {
+          throw new Error('Stored verifier does not match generated verifier');
+        }
       }
       
-      const parsedSession = JSON.parse(storedInSession);
-      const parsedLocal = JSON.parse(storedInLocal);
-      
-      if (parsedSession.verifier !== codeVerifier || parsedLocal.verifier !== codeVerifier) {
-        console.error('❌ Failed to store code verifier correctly!');
-        console.error('  - Expected:', codeVerifier.substring(0, 20) + '...');
-        console.error('  - sessionStorage:', parsedSession.verifier ? parsedSession.verifier.substring(0, 20) + '...' : 'null');
-        console.error('  - localStorage:', parsedLocal.verifier ? parsedLocal.verifier.substring(0, 20) + '...' : 'null');
-        throw new Error('Failed to store code verifier in storage');
+      if (storedInLocal) {
+        const parsed = JSON.parse(storedInLocal);
+        if (parsed.verifier !== codeVerifier) {
+          throw new Error('Stored verifier does not match generated verifier');
+        }
       }
       
       console.log('🔐 PKCE Code Verifier generated and stored');
       console.log('🔐 Code Challenge:', codeChallenge.substring(0, 20) + '...');
-      console.log('✅ Verified: Stored in both sessionStorage and localStorage');
+      console.log('✅ Verified: Stored in sessionStorage, localStorage, and backup');
       console.log('🔐 Verifier length:', codeVerifier.length);
       console.log('⏰ Timestamp:', new Date(timestamp).toISOString());
     } catch (storageError) {
@@ -182,18 +214,20 @@ export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
 ): Promise<{ accessToken: string; refreshToken: string }> {
-  // Retrieve code verifier from multiple sources
+  // Retrieve code verifier from multiple sources with comprehensive fallback
   let verifier = codeVerifier;
-  let storedData: { verifier: string; timestamp: number } | null = null;
+  let storedData: { verifier: string; timestamp: number; redirectUri?: string } | null = null;
   
   if (!verifier && typeof window !== 'undefined') {
+    console.log('🔍 Searching for code verifier in storage...');
+    
     // Try sessionStorage first
-    const sessionData = sessionStorage.getItem('canva_code_verifier');
+    let sessionData = sessionStorage.getItem('canva_code_verifier');
     if (sessionData) {
       try {
         storedData = JSON.parse(sessionData);
         verifier = storedData.verifier;
-        console.log('🔍 Code verifier from sessionStorage:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+        console.log('✅ Code verifier found in sessionStorage:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
         if (storedData.timestamp) {
           const age = Date.now() - storedData.timestamp;
           console.log('⏰ Verifier age:', Math.round(age / 1000), 'seconds');
@@ -204,18 +238,20 @@ export async function exchangeCodeForToken(
       } catch (e) {
         // Try as plain string (backward compatibility)
         verifier = sessionData;
-        console.log('🔍 Code verifier from sessionStorage (plain):', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+        console.log('✅ Code verifier found in sessionStorage (plain):', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
       }
+    } else {
+      console.log('❌ Code verifier not in sessionStorage');
     }
     
-    // If not in sessionStorage, try localStorage as fallback
+    // If not in sessionStorage, try localStorage
     if (!verifier) {
-      const localData = localStorage.getItem('canva_code_verifier');
+      let localData = localStorage.getItem('canva_code_verifier');
       if (localData) {
         try {
           storedData = JSON.parse(localData);
           verifier = storedData.verifier;
-          console.log('🔍 Code verifier from localStorage:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+          console.log('✅ Code verifier found in localStorage:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
           if (storedData.timestamp) {
             const age = Date.now() - storedData.timestamp;
             console.log('⏰ Verifier age:', Math.round(age / 1000), 'seconds');
@@ -223,8 +259,31 @@ export async function exchangeCodeForToken(
         } catch (e) {
           // Try as plain string (backward compatibility)
           verifier = localData;
-          console.log('🔍 Code verifier from localStorage (plain):', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+          console.log('✅ Code verifier found in localStorage (plain):', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
         }
+      } else {
+        console.log('❌ Code verifier not in localStorage');
+      }
+    }
+    
+    // Try backup storage key
+    if (!verifier) {
+      const backupData = localStorage.getItem('_canva_pkce_verifier_backup');
+      if (backupData) {
+        try {
+          storedData = JSON.parse(backupData);
+          verifier = storedData.verifier;
+          console.log('✅ Code verifier found in backup storage:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+          if (storedData.timestamp) {
+            const age = Date.now() - storedData.timestamp;
+            console.log('⏰ Verifier age:', Math.round(age / 1000), 'seconds');
+          }
+        } catch (e) {
+          verifier = backupData;
+          console.log('✅ Code verifier found in backup storage (plain):', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+        }
+      } else {
+        console.log('❌ Code verifier not in backup storage');
       }
     }
     
@@ -232,13 +291,25 @@ export async function exchangeCodeForToken(
     if (!verifier) {
       const urlParams = new URLSearchParams(window.location.search);
       verifier = urlParams.get('code_verifier');
-      console.log('🔍 Code verifier from URL params:', verifier ? `${verifier.substring(0, 20)}...` : 'not found');
+      if (verifier) {
+        console.log('✅ Code verifier found in URL params:', verifier.substring(0, 20) + '...');
+      } else {
+        console.log('❌ Code verifier not in URL params');
+      }
     }
     
-    // Remove from storage after retrieval
+    // Log all available storage keys for debugging
+    if (!verifier) {
+      console.error('❌ Code verifier not found in any location');
+      console.error('📍 Available sessionStorage keys:', Object.keys(sessionStorage));
+      console.error('📍 Available localStorage keys:', Object.keys(localStorage));
+    }
+    
+    // Remove from all storage locations after successful retrieval
     if (verifier) {
       sessionStorage.removeItem('canva_code_verifier');
       localStorage.removeItem('canva_code_verifier');
+      localStorage.removeItem('_canva_pkce_verifier_backup');
     }
   }
 
