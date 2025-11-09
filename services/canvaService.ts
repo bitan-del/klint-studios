@@ -154,8 +154,8 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     // Wait for storage to commit to database
     // Longer delay ensures database write completes before redirect
     console.log('⏳ Waiting for database write to commit...');
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('✅ Database write should be committed');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    console.log('✅ Database write should be committed - ready to redirect');
   } catch (error: any) {
     console.error('❌ Server-side storage error:', error);
     throw new Error('Failed to store code verifier: ' + error.message);

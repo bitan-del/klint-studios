@@ -269,6 +269,25 @@ serve(async (req) => {
       }
 
       console.log('✅ Verifier storage complete')
+      
+      // Clean up old verifiers (older than 10 minutes) to prevent database bloat
+      try {
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+        const { error: cleanupError } = await supabase
+          .from('admin_settings')
+          .delete()
+          .like('setting_key', 'canva_pkce%')
+          .lt('updated_at', tenMinutesAgo)
+        
+        if (cleanupError) {
+          console.warn('⚠️ Could not clean up old verifiers:', cleanupError)
+        } else {
+          console.log('🧹 Cleaned up old verifiers (> 10 minutes)')
+        }
+      } catch (cleanupErr) {
+        console.warn('⚠️ Cleanup error (non-fatal):', cleanupErr)
+      }
+      
       return new Response(
         JSON.stringify({ success: true, session_id, keys_stored: redirect_uri ? 2 : 1 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
