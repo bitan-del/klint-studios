@@ -43,7 +43,10 @@ serve(async (req) => {
               .eq('setting_key', `canva_pkce_verifier_${sessionId}`)
 
             return new Response(
-              JSON.stringify({ verifier: verifierData.verifier }),
+              JSON.stringify({ 
+                verifier: verifierData.verifier,
+                redirect_uri: verifierData.redirect_uri || verifierData.redirectUri || ''
+              }),
               { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
           } catch (e) {
@@ -147,16 +150,19 @@ serve(async (req) => {
             console.log('📍 Matched key:', bestMatch.item.setting_key)
             console.log('📍 Age:', Math.round(bestMatch.age / 1000), 'seconds')
             
-            // Clean up this entry
-            await supabase
-              .from('admin_settings')
-              .delete()
-              .eq('setting_key', bestMatch.item.setting_key)
-            
-            return new Response(
-              JSON.stringify({ verifier: bestMatch.verifierData.verifier }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
+                  // Clean up this entry
+                  await supabase
+                    .from('admin_settings')
+                    .delete()
+                    .eq('setting_key', bestMatch.item.setting_key)
+                  
+                  return new Response(
+                    JSON.stringify({ 
+                      verifier: bestMatch.verifierData.verifier,
+                      redirect_uri: bestMatch.verifierData.redirect_uri || bestMatch.verifierData.redirectUri || ''
+                    }),
+                    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                  )
           } else {
             console.log('❌ No valid verifier found with redirect URI match (checked', allKeys.length, 'keys)')
             
@@ -176,16 +182,19 @@ serve(async (req) => {
                     console.log('✅ Using most recent verifier as last resort:', item.setting_key)
                     console.log('📍 Age:', Math.round(age / 1000), 'seconds')
                     
-                    // Clean up
-                    await supabase
-                      .from('admin_settings')
-                      .delete()
-                      .eq('setting_key', item.setting_key)
-                    
-                    return new Response(
-                      JSON.stringify({ verifier: verifierData.verifier }),
-                      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                    )
+                          // Clean up
+                          await supabase
+                            .from('admin_settings')
+                            .delete()
+                            .eq('setting_key', item.setting_key)
+                          
+                          return new Response(
+                            JSON.stringify({ 
+                              verifier: verifierData.verifier,
+                              redirect_uri: verifierData.redirect_uri || verifierData.redirectUri || ''
+                            }),
+                            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                          )
                   }
                 }
               } catch (e) {

@@ -248,6 +248,16 @@ export async function exchangeCodeForToken(
           if (data.verifier) {
             verifier = data.verifier;
             console.log('✅ Code verifier retrieved from Edge Function (server-side)!');
+            
+            // Use the EXACT redirect URI that was stored with the verifier
+            // This ensures byte-for-byte matching with what was used in authorization URL
+            if (data.redirect_uri) {
+              redirectUri = data.redirect_uri;
+              console.log('✅ Using stored redirect URI (exact match):', redirectUri);
+              console.log('📍 This ensures it matches exactly what was used in authorization URL');
+            } else {
+              console.warn('⚠️ No redirect_uri in stored data, using provided one');
+            }
           }
         } else {
           const errorText = await retrieveResponse.text();
