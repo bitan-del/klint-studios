@@ -22,121 +22,35 @@ serve(async (req) => {
       throw new Error('Missing required parameters: code, redirect_uri, code_verifier')
     }
 
-    // Get Supabase client with service role key for admin access
+    // Get Supabase client with service role key for admin access (for saving tokens)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get Canva credentials from admin_settings
-    const { data: clientIdData } = await supabase
-      .from('admin_settings')
-      .select('setting_value')
-      .eq('setting_key', 'canva_client_id')
-      .single()
+    // Get Canva credentials from environment variables (Edge Function secrets)
+    // This avoids JSON parsing issues from database
+    const clientId = Deno.env.get('CANVA_CLIENT_ID')?.trim()
+    const clientSecret = Deno.env.get('CANVA_CLIENT_SECRET')?.trim()
 
-    const { data: clientSecretData } = await supabase
-      .from('admin_settings')
-      .select('setting_value')
-      .eq('setting_key', 'canva_client_secret')
-      .single()
-
-    if (!clientIdData || !clientSecretData) {
-      throw new Error('Canva client ID and secret not configured in admin settings')
+    if (!clientId || !clientSecret) {
+      throw new Error('Canva client ID and secret not configured in Edge Function secrets. Please set CANVA_CLIENT_ID and CANVA_CLIENT_SECRET in Supabase Dashboard → Settings → Edge Functions → Secrets')
     }
 
-    // Parse JSON values - setting_value is a JSON type column
-    // Supabase returns JSON values which might be strings with quotes or already parsed
-    let clientId: string
-    let clientSecret: string
-    
-    // Log raw values for debugging
-    const rawClientId = clientIdData.setting_value
-    const rawClientSecret = clientSecretData.setting_value
-    
-    console.log('🔍 Raw client ID type:', typeof rawClientId)
-    console.log('🔍 Raw client ID value (first 30 chars):', String(rawClientId).substring(0, 30))
-    console.log('🔍 Raw client secret type:', typeof rawClientSecret)
-    console.log('🔍 Raw client secret value (first 30 chars):', String(rawClientSecret).substring(0, 30))
-    
-    try {
-      // Handle client ID parsing
-      if (typeof rawClientId === 'string') {
-        // If it's a string, check if it's JSON-encoded (starts/ends with quotes)
-        const clientIdStr = rawClientId.trim()
-        if (clientIdStr.startsWith('"') && clientIdStr.endsWith('"')) {
-          // It's a JSON string, parse it
-          clientId = JSON.parse(clientIdStr)
-          console.log('✅ Client ID was JSON-encoded, parsed successfully')
-        } else {
-          // It's already a plain string
-          clientId = clientIdStr
-          console.log('✅ Client ID was plain string')
-        }
-      } else {
-        // Already parsed by Supabase client
-        clientId = String(rawClientId)
-        console.log('✅ Client ID was already parsed')
-      }
-    } catch (e) {
-      console.error('❌ Error parsing client ID:', e)
-      // Fallback: treat as string and remove quotes manually if present
-      const fallback = String(rawClientId).trim()
-      clientId = fallback.startsWith('"') && fallback.endsWith('"') 
-        ? fallback.slice(1, -1) 
-        : fallback
-      console.log('⚠️ Used fallback parsing for client ID')
-    }
-    
-    try {
-      // Handle client secret parsing
-      if (typeof rawClientSecret === 'string') {
-        // If it's a string, check if it's JSON-encoded (starts/ends with quotes)
-        const clientSecretStr = rawClientSecret.trim()
-        if (clientSecretStr.startsWith('"') && clientSecretStr.endsWith('"')) {
-          // It's a JSON string, parse it
-          clientSecret = JSON.parse(clientSecretStr)
-          console.log('✅ Client secret was JSON-encoded, parsed successfully')
-        } else {
-          // It's already a plain string
-          clientSecret = clientSecretStr
-          console.log('✅ Client secret was plain string')
-        }
-      } else {
-        // Already parsed by Supabase client
-        clientSecret = String(rawClientSecret)
-        console.log('✅ Client secret was already parsed')
-      }
-    } catch (e) {
-      console.error('❌ Error parsing client secret:', e)
-      // Fallback: treat as string and remove quotes manually if present
-      const fallback = String(rawClientSecret).trim()
-      clientSecret = fallback.startsWith('"') && fallback.endsWith('"') 
-        ? fallback.slice(1, -1) 
-        : fallback
-      console.log('⚠️ Used fallback parsing for client secret')
-    }
-    
-    clientId = clientId.trim()
-    clientSecret = clientSecret.trim()
-    
-    console.log('🔍 Parsed client ID:', clientId)
-    console.log('🔍 Parsed client ID length:', clientId.length)
-    console.log('🔍 Parsed client secret length:', clientSecret.length)
-    console.log('🔍 Parsed client secret (first 10 chars):', clientSecret.substring(0, 10) + '...')
-    
     // Validate credentials format
-    if (!clientId || clientId.length < 5) {
+    if (clientId.length < 5) {
       throw new Error('Invalid client ID format')
     }
-    if (!clientSecret || clientSecret.length < 10) {
+    if (clientSecret.length < 10) {
       throw new Error('Invalid client secret format')
     }
     
-    console.log('🔑 Client credentials loaded:')
+    console.log('🔑 Client credentials loaded from environment variables:')
+    console.log('  - Client ID:', clientId)
     console.log('  - Client ID length:', clientId.length)
     console.log('  - Client ID format:', clientId.startsWith('OC-') ? 'Valid (OC- prefix)' : 'Unknown format')
     console.log('  - Client Secret length:', clientSecret.length)
+    console.log('  - Client Secret (first 10 chars):', clientSecret.substring(0, 10) + '...')
 
     // Log request details (without exposing secrets)
     console.log('🔄 Exchanging code for token with Canva...')
