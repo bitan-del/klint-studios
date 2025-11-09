@@ -171,7 +171,7 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     code_challenge_method: 'S256',
   });
 
-  const authUrl = `${CANVA_AUTH_BASE}/authorize?${params.toString()}`;
+  const authUrl = `${CANVA_AUTH_BASE}/oauth/authorize?${params.toString()}`;
   
   // Log the URL for debugging (without sensitive data)
   console.log('🔗 Canva Auth URL generated');
