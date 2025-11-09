@@ -107,33 +107,34 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     throw new Error('Failed to generate code challenge for PKCE');
   }
   
-  // NEW APPROACH: Encode verifier directly in state parameter
-  // This ensures it comes back with the callback - no storage needed!
-  // Format: base64(JSON({v: verifier, t: timestamp, r: redirectUri}))
-  const stateData = {
-    v: codeVerifier, // verifier
-    t: Date.now(), // timestamp  
-    r: redirectUri, // redirect URI
-  };
+  // SIMPLE APPROACH: Store verifier in cookie - cookies persist across redirects!
+  // Generate a simple ID to link the cookie
+  const verifierId = `v_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const state = `canva_${verifierId}`;
   
-  // Encode state data as base64 URL-safe
-  const stateJson = JSON.stringify(stateData);
-  const stateEncoded = btoa(stateJson).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const state = `canva_${stateEncoded}`;
-  
-  console.log('🔐 NEW APPROACH: Verifier encoded in state parameter');
-  console.log('🔐 State will come back with callback - no storage needed!');
-  console.log('🔐 Verifier length:', codeVerifier.length);
-  console.log('🔐 State length:', state.length);
-  
-  // Still store in browser as backup (but state is primary)
   if (typeof window !== 'undefined') {
+    // Store verifier in cookie with 10 minute expiry
+    // Cookies are the MOST reliable for OAuth redirects
+    const isSecure = window.location.protocol === 'https:';
+    const secureFlag = isSecure ? '; Secure' : '';
+    const cookieExpiry = new Date(Date.now() + 10 * 60 * 1000).toUTCString();
+    
+    // Store in cookie - this WILL persist across redirects
+    document.cookie = `canva_verifier_${verifierId}=${encodeURIComponent(codeVerifier)}; expires=${cookieExpiry}; path=/; SameSite=Lax${secureFlag}`;
+    
+    // Also store with a fixed name for easy lookup
+    document.cookie = `canva_code_verifier=${encodeURIComponent(codeVerifier)}; expires=${cookieExpiry}; path=/; SameSite=Lax${secureFlag}`;
+    
+    // Also store in localStorage as backup
     try {
       localStorage.setItem('canva_code_verifier', codeVerifier);
+      localStorage.setItem(`canva_verifier_${verifierId}`, codeVerifier);
       sessionStorage.setItem('canva_code_verifier', codeVerifier);
-      console.log('🔐 Also stored in browser storage as backup');
+      console.log('🔐 Verifier stored in COOKIE (primary) and localStorage (backup)');
+      console.log('🔐 Verifier ID:', verifierId);
+      console.log('🔐 Cookie will persist across Canva redirect!');
     } catch (e) {
-      console.warn('⚠️ Browser storage backup failed, but state parameter will work');
+      console.warn('⚠️ localStorage backup failed, but cookie will work');
     }
   }
   
@@ -177,35 +178,38 @@ export async function exchangeCodeForToken(
   console.log('📍 Redirect URI:', redirectUri);
   console.log('📍 State parameter:', state || 'null');
   
-  // NEW APPROACH: Try to decode verifier from state parameter FIRST
-  // This is the most reliable - it comes back with the callback!
-  if (state && state.startsWith('canva_')) {
-    try {
-      // Extract base64-encoded data (everything after 'canva_')
-      const stateDataEncoded = state.replace('canva_', '');
-      // Decode base64 (restore URL-safe characters)
-      const stateDataJson = atob(stateDataEncoded.replace(/-/g, '+').replace(/_/g, '/'));
-      const stateData = JSON.parse(stateDataJson);
-      
-      // Verify it's recent (less than 10 minutes old)
-      const age = Date.now() - (stateData.t || 0);
-      if (age < 10 * 60 * 1000) {
-        // Verify redirect URI matches
-        if (!stateData.r || stateData.r === redirectUri) {
-          verifier = stateData.v;
-          console.log('✅✅✅ Code verifier decoded from STATE PARAMETER!');
-          console.log('📍 Age:', Math.round(age / 1000), 'seconds');
-          console.log('🔐 This is the NEW approach - no storage needed!');
-        } else {
-          console.warn('⚠️ State parameter redirect URI mismatch');
-        }
-      } else {
-        console.warn('⚠️ State parameter verifier expired (older than 10 minutes)');
+  // COOKIE-BASED APPROACH: Check cookies FIRST - they persist across redirects!
+  if (!verifier && typeof window !== 'undefined') {
+    const getCookie = (name: string): string | null => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) {
+        const cookieValue = parts.pop()!.split(';').shift()!;
+        return decodeURIComponent(cookieValue);
       }
-    } catch (e) {
-      console.warn('⚠️ Could not decode state parameter:', e);
-      // Continue to fallback methods
+      return null;
+    };
+    
+    // Try fixed cookie name first
+    const cookieVerifier = getCookie('canva_code_verifier');
+    if (cookieVerifier) {
+      verifier = cookieVerifier;
+      console.log('✅✅✅ Code verifier found in COOKIE (fixed name)!');
     }
+    
+    // If state has verifier ID, try that cookie too
+    if (!verifier && state && state.startsWith('canva_v_')) {
+      const verifierId = state.replace('canva_', '');
+      const idCookieVerifier = getCookie(`canva_verifier_${verifierId}`);
+      if (idCookieVerifier) {
+        verifier = idCookieVerifier;
+        console.log('✅✅✅ Code verifier found in COOKIE (by ID)!');
+        console.log('📍 Verifier ID:', verifierId);
+      }
+    }
+    
+    // Log all cookies for debugging
+    console.log('🍪 All cookies:', document.cookie);
   }
   
   // Extract session ID from state parameter (for old approach fallback)
