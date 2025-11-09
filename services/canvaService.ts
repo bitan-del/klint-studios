@@ -165,9 +165,9 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     client_id: canvaConfig.clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    // Use scopes that match your Canva Developer Portal configuration
-    // These must match EXACTLY what's enabled in your integration settings
-    scope: 'app:write folder:write design:content:read folder:permission:write asset:write comment:write app:read folder:permission:read profile:read folder:read asset:read design:meta:read design:permission:read comment:read brandtemplate:content:read design:permission:write design:content:write brandtemplate:meta:read',
+    // Scopes must match EXACTLY what's enabled in Canva Developer Portal
+    // Based on your portal configuration (Reading and Writing table)
+    scope: 'app:read app:write asset:read asset:write brandtemplate:content:read brandtemplate:meta:read comment:read comment:write design:content:read design:content:write design:meta:read design:permission:read design:permission:write folder:read folder:write folder:permission:read folder:permission:write profile:read',
     state: state,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
