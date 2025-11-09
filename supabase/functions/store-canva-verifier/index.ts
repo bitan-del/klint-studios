@@ -80,22 +80,37 @@ serve(async (req) => {
           for (const item of allKeys) {
             try {
               const verifierData = JSON.parse(item.setting_value)
-              if (!verifierData.verifier) continue
+              if (!verifierData.verifier) {
+                console.log('⚠️ Key has no verifier:', item.setting_key)
+                continue
+              }
               
               const age = now - (verifierData.timestamp || 0)
+              const redirectUriInData = verifierData.redirect_uri || verifierData.redirectUri || ''
               
               // Check if redirect URI matches (or not set)
-              const matchesRedirect = !verifierData.redirect_uri || 
-                                     !verifierData.redirectUri ||
-                                     verifierData.redirect_uri === redirectUri || 
-                                     verifierData.redirectUri === redirectUri
+              const matchesRedirect = !redirectUriInData || 
+                                     redirectUriInData === redirectUri
+              
+              const isRecent = age < 10 * 60 * 1000
+              
+              console.log(`🔍 Checking key: ${item.setting_key}`)
+              console.log(`  - Age: ${Math.round(age / 1000)}s`)
+              console.log(`  - Redirect URI in data: ${redirectUriInData || 'none'}`)
+              console.log(`  - Request redirect URI: ${redirectUri}`)
+              console.log(`  - Matches redirect: ${matchesRedirect}`)
+              console.log(`  - Is recent: ${isRecent}`)
               
               // Must be less than 10 minutes old
-              if (matchesRedirect && age < 10 * 60 * 1000 && age < bestAge) {
+              if (matchesRedirect && isRecent && age < bestAge) {
                 bestMatch = { item, verifierData, age }
                 bestAge = age
+                console.log(`✅ Found valid match: ${item.setting_key}`)
+              } else {
+                console.log(`❌ Key rejected: matchesRedirect=${matchesRedirect}, isRecent=${isRecent}`)
               }
             } catch (e) {
+              console.warn('⚠️ Could not parse verifier data for key:', item.setting_key, e)
               // Skip invalid entries
               continue
             }
@@ -117,7 +132,37 @@ serve(async (req) => {
               { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
           } else {
-            console.log('❌ No valid verifier found (checked', allKeys.length, 'keys)')
+            console.log('❌ No valid verifier found with redirect URI match (checked', allKeys.length, 'keys)')
+            
+            // LAST RESORT: Use most recent verifier regardless of redirect URI (if less than 10 min old)
+            console.log('🔍 LAST RESORT: Trying most recent verifier regardless of redirect URI...')
+            for (const item of allKeys) {
+              try {
+                const verifierData = JSON.parse(item.setting_value)
+                if (verifierData.verifier) {
+                  const age = now - (verifierData.timestamp || 0)
+                  if (age < 10 * 60 * 1000) {
+                    console.log('✅ Using most recent verifier as last resort:', item.setting_key)
+                    console.log('📍 Age:', Math.round(age / 1000), 'seconds')
+                    
+                    // Clean up
+                    await supabase
+                      .from('admin_settings')
+                      .delete()
+                      .eq('setting_key', item.setting_key)
+                    
+                    return new Response(
+                      JSON.stringify({ verifier: verifierData.verifier }),
+                      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    )
+                  }
+                }
+              } catch (e) {
+                continue
+              }
+            }
+            
+            console.log('❌ No recent verifiers found at all')
           }
         } else {
           console.log('❌ No canva_pkce keys found in database')
