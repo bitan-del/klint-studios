@@ -86,7 +86,13 @@ serve(async (req) => {
                 continue
               }
               
-              const age = now - (verifierData.timestamp || 0)
+              // Use database updated_at for age calculation (more reliable than JSON timestamp)
+              const dbUpdatedAt = new Date(item.updated_at).getTime()
+              const jsonTimestamp = verifierData.timestamp || 0
+              // Use the more recent of the two timestamps
+              const storedTime = Math.max(dbUpdatedAt, jsonTimestamp)
+              const age = now - storedTime
+              
               const redirectUriInData = verifierData.redirect_uri || verifierData.redirectUri || ''
               
               // Check if redirect URI matches (or not set)
@@ -99,6 +105,8 @@ serve(async (req) => {
               const isRecent = age < 10 * 60 * 1000      // Less than 10 minutes
               
               console.log(`🔍 Checking key: ${item.setting_key}`)
+              console.log(`  - DB updated_at: ${item.updated_at}`)
+              console.log(`  - JSON timestamp: ${jsonTimestamp ? new Date(jsonTimestamp).toISOString() : 'none'}`)
               console.log(`  - Age: ${Math.round(age / 1000)}s (${Math.round(age / 60000)} minutes)`)
               console.log(`  - Redirect URI in data: ${redirectUriInData || 'none'}`)
               console.log(`  - Request redirect URI: ${redirectUri}`)
@@ -158,7 +166,12 @@ serve(async (req) => {
               try {
                 const verifierData = JSON.parse(item.setting_value)
                 if (verifierData.verifier) {
-                  const age = now - (verifierData.timestamp || 0)
+                  // Use database updated_at for age (more reliable)
+                  const dbUpdatedAt = new Date(item.updated_at).getTime()
+                  const jsonTimestamp = verifierData.timestamp || 0
+                  const storedTime = Math.max(dbUpdatedAt, jsonTimestamp)
+                  const age = now - storedTime
+                  
                   if (age < 10 * 60 * 1000) {
                     console.log('✅ Using most recent verifier as last resort:', item.setting_key)
                     console.log('📍 Age:', Math.round(age / 1000), 'seconds')
@@ -188,7 +201,10 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ error: 'Verifier not found or expired' }),
+        JSON.stringify({ 
+          error: 'Verifier not found or expired',
+          message: 'No recent verifier found. This usually means: 1) The OAuth flow is too old (>10 minutes), 2) No verifier was stored when you clicked "Connect", or 3) You\'re trying to use an old authorization code. Please start a fresh OAuth flow by clicking "Connect Canva Account" again.'
+        }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
