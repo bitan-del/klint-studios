@@ -107,140 +107,35 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     throw new Error('Failed to generate code challenge for PKCE');
   }
   
-  // Generate a unique session ID for this OAuth flow
-  const sessionId = `canva_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  // NEW APPROACH: Encode verifier directly in state parameter
+  // This ensures it comes back with the callback - no storage needed!
+  // Format: base64(JSON({v: verifier, t: timestamp, r: redirectUri}))
+  const stateData = {
+    v: codeVerifier, // verifier
+    t: Date.now(), // timestamp  
+    r: redirectUri, // redirect URI
+  };
   
-  // Store verifier in Edge Function (server-side, most reliable)
-  try {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Supabase URL or anon key not configured');
-    }
-    
-    const storeUrl = `${supabaseUrl}/functions/v1/store-canva-verifier`;
-    
-    const storeResponse = await fetch(storeUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-      },
-      body: JSON.stringify({
-        session_id: sessionId,
-        verifier: codeVerifier,
-        redirect_uri: redirectUri,
-      }),
-    });
-    
-    if (!storeResponse.ok) {
-      const errorText = await storeResponse.text();
-      console.error('❌ Failed to store verifier in Edge Function:', errorText);
-      console.error('❌ Status:', storeResponse.status, storeResponse.statusText);
-      throw new Error('Failed to store code verifier server-side');
-    }
-    
-    const storeResult = await storeResponse.json();
-    console.log('🔐 PKCE Code Verifier stored in Edge Function');
-    console.log('🔐 Session ID:', sessionId);
-    console.log('🔐 Storage result:', storeResult);
-    
-    if (!storeResult.success) {
-      console.error('❌ Edge Function storage did not return success');
-      console.error('❌ Response:', storeResult);
-      throw new Error('Edge Function storage failed');
-    }
-    
-    console.log('✅ Edge Function confirmed storage success');
-    console.log('✅ Keys stored:', storeResult.keys_stored || 1);
-    
-    // Small delay to ensure database write commits
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Also store in database as backup (with session ID key for retrieval)
-    const { databaseService } = await import('./databaseService');
-    const verifierData = JSON.stringify({
-      verifier: codeVerifier,
-      redirectUri: redirectUri,
-      timestamp: Date.now(),
-      sessionId: sessionId,
-    });
-    
-    // Store with session ID key for easy retrieval
-    await databaseService.setAdminSetting(`canva_pkce_verifier_${sessionId}`, verifierData);
-    
-    // Also store with timestamp key as additional backup
-    const storageKey = `canva_pkce_${redirectUri.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
-    await databaseService.setAdminSetting(storageKey, verifierData);
-    console.log('🔐 Also stored in database as backup (with session ID key)');
-    
-    // Also store in browser storage as primary backup (more reliable than database for this)
-    if (typeof window !== 'undefined') {
-      try {
-        const browserData = JSON.stringify({
-          verifier: codeVerifier,
-          redirectUri: redirectUri,
-          timestamp: Date.now(),
-          sessionId: sessionId, // Include session ID for Edge Function lookup
-          storageKey: storageKey, // Include DB key for reference
-        });
-        
-        // Store in multiple ways for maximum reliability
-        sessionStorage.setItem('canva_code_verifier', browserData);
-        localStorage.setItem('canva_code_verifier', browserData);
-        // Also store as plain string as ultimate fallback
-        localStorage.setItem('_canva_verifier_plain', codeVerifier);
-        
-        // Store in cookie (persists across redirects better)
-        // Only use Secure flag on HTTPS
-        const isSecure = window.location.protocol === 'https:';
-        const secureFlag = isSecure ? '; Secure' : '';
-        const cookieExpiry = new Date(Date.now() + 10 * 60 * 1000).toUTCString(); // 10 minutes
-        document.cookie = `canva_code_verifier=${encodeURIComponent(codeVerifier)}; expires=${cookieExpiry}; path=/; SameSite=Lax${secureFlag}`;
-        document.cookie = `canva_pkce_data=${encodeURIComponent(browserData)}; expires=${cookieExpiry}; path=/; SameSite=Lax${secureFlag}`;
-        
-        // Verify it was stored
-        const verifyLocal = localStorage.getItem('canva_code_verifier');
-        const verifyPlain = localStorage.getItem('_canva_verifier_plain');
-        const verifyCookie = document.cookie.includes('canva_code_verifier=');
-        
-        if (verifyLocal && verifyPlain && verifyCookie) {
-          console.log('🔐 Verified: Stored in browser storage AND cookies successfully');
-        } else {
-          console.warn('⚠️ Some storage methods failed:');
-          console.warn('  - localStorage:', verifyLocal ? '✅' : '❌');
-          console.warn('  - plain storage:', verifyPlain ? '✅' : '❌');
-          console.warn('  - cookie:', verifyCookie ? '✅' : '❌');
-        }
-      } catch (e) {
-        console.error('❌ Could not store in browser storage:', e);
-        throw new Error('Browser storage failed: ' + e);
-      }
-    }
-    
-    console.log('🔐 PKCE Code Verifier generated and stored');
-    console.log('🔐 Code Challenge:', codeChallenge.substring(0, 20) + '...');
-    console.log('🔐 Verifier length:', codeVerifier.length);
-  } catch (dbError: any) {
-    console.error('❌ Database storage error:', dbError);
-    // Fallback to browser storage only
-    if (typeof window !== 'undefined') {
-      const storageData = JSON.stringify({
-        verifier: codeVerifier,
-        redirectUri: redirectUri,
-        timestamp: timestamp,
-      });
-      sessionStorage.setItem('canva_code_verifier', storageData);
-      localStorage.setItem('canva_code_verifier', storageData);
-      console.warn('⚠️ Using browser storage fallback only');
-    } else {
-      throw new Error('Failed to store code verifier: ' + dbError.message);
+  // Encode state data as base64 URL-safe
+  const stateJson = JSON.stringify(stateData);
+  const stateEncoded = btoa(stateJson).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const state = `canva_${stateEncoded}`;
+  
+  console.log('🔐 NEW APPROACH: Verifier encoded in state parameter');
+  console.log('🔐 State will come back with callback - no storage needed!');
+  console.log('🔐 Verifier length:', codeVerifier.length);
+  console.log('🔐 State length:', state.length);
+  
+  // Still store in browser as backup (but state is primary)
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('canva_code_verifier', codeVerifier);
+      sessionStorage.setItem('canva_code_verifier', codeVerifier);
+      console.log('🔐 Also stored in browser storage as backup');
+    } catch (e) {
+      console.warn('⚠️ Browser storage backup failed, but state parameter will work');
     }
   }
-  
-  // Include session ID in state parameter so we can retrieve verifier
-  const state = `canva_auth_${sessionId}`;
   
   const params = new URLSearchParams({
     client_id: canvaConfig.clientId,
@@ -282,11 +177,42 @@ export async function exchangeCodeForToken(
   console.log('📍 Redirect URI:', redirectUri);
   console.log('📍 State parameter:', state || 'null');
   
-  // Extract session ID from state parameter
+  // NEW APPROACH: Try to decode verifier from state parameter FIRST
+  // This is the most reliable - it comes back with the callback!
+  if (state && state.startsWith('canva_')) {
+    try {
+      // Extract base64-encoded data (everything after 'canva_')
+      const stateDataEncoded = state.replace('canva_', '');
+      // Decode base64 (restore URL-safe characters)
+      const stateDataJson = atob(stateDataEncoded.replace(/-/g, '+').replace(/_/g, '/'));
+      const stateData = JSON.parse(stateDataJson);
+      
+      // Verify it's recent (less than 10 minutes old)
+      const age = Date.now() - (stateData.t || 0);
+      if (age < 10 * 60 * 1000) {
+        // Verify redirect URI matches
+        if (!stateData.r || stateData.r === redirectUri) {
+          verifier = stateData.v;
+          console.log('✅✅✅ Code verifier decoded from STATE PARAMETER!');
+          console.log('📍 Age:', Math.round(age / 1000), 'seconds');
+          console.log('🔐 This is the NEW approach - no storage needed!');
+        } else {
+          console.warn('⚠️ State parameter redirect URI mismatch');
+        }
+      } else {
+        console.warn('⚠️ State parameter verifier expired (older than 10 minutes)');
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not decode state parameter:', e);
+      // Continue to fallback methods
+    }
+  }
+  
+  // Extract session ID from state parameter (for old approach fallback)
   let sessionId: string | null = null;
   if (state && state.startsWith('canva_auth_')) {
     sessionId = state.replace('canva_auth_', '');
-    console.log('🔐 Session ID extracted from state:', sessionId);
+    console.log('🔐 Session ID extracted from state (old format):', sessionId);
   }
   
   // If no session ID from state, try to get it from browser storage
@@ -480,6 +406,74 @@ export async function exchangeCodeForToken(
       }
     } catch (dbError) {
       console.warn('⚠️ Database lookup failed:', dbError);
+    }
+  }
+  
+  // FINAL FALLBACK: Direct Supabase query for ANY recent verifier
+  if (!verifier && typeof window !== 'undefined') {
+    try {
+      console.log('🔍 FINAL FALLBACK: Direct Supabase query for any recent verifier');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseAnonKey) {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        // Get ALL canva_pkce keys from the last hour
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { data: allVerifiers, error: queryError } = await supabase
+          .from('admin_settings')
+          .select('setting_key, setting_value, updated_at')
+          .like('setting_key', 'canva_pkce%')
+          .gte('updated_at', oneHourAgo)
+          .order('updated_at', { ascending: false })
+          .limit(10);
+        
+        if (!queryError && allVerifiers && allVerifiers.length > 0) {
+          console.log(`📊 Found ${allVerifiers.length} recent verifiers in database`);
+          
+          // Find the most recent valid one
+          const now = Date.now();
+          for (const item of allVerifiers) {
+            try {
+              const verifierData = JSON.parse(item.setting_value);
+              if (verifierData.verifier) {
+                const age = now - (verifierData.timestamp || 0);
+                // Accept if less than 10 minutes old and redirect URI matches (or not set)
+                const matches = !verifierData.redirect_uri || 
+                               !verifierData.redirectUri ||
+                               verifierData.redirect_uri === redirectUri ||
+                               verifierData.redirectUri === redirectUri;
+                
+                if (matches && age < 10 * 60 * 1000) {
+                  verifier = verifierData.verifier;
+                  console.log('✅ Code verifier found via FINAL FALLBACK (direct DB query)');
+                  console.log('📍 Key:', item.setting_key);
+                  console.log('📍 Age:', Math.round(age / 1000), 'seconds');
+                  
+                  // Clean up
+                  await supabase
+                    .from('admin_settings')
+                    .delete()
+                    .eq('setting_key', item.setting_key);
+                  
+                  break;
+                }
+              }
+            } catch (e) {
+              // Skip invalid entries
+              continue;
+            }
+          }
+        } else if (queryError) {
+          console.warn('⚠️ Direct DB query error:', queryError);
+        } else {
+          console.log('❌ No recent verifiers found in direct DB query');
+        }
+      }
+    } catch (finalError) {
+      console.warn('⚠️ Final fallback failed:', finalError);
     }
   }
   
