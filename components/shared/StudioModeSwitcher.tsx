@@ -1,14 +1,23 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Layers, Package, Palette, ImageUp, MoreHorizontal } from 'lucide-react';
+import { Layers, Package, Palette, ImageUp, MoreHorizontal, Sparkles } from 'lucide-react';
 import { useStudio } from '../../context/StudioContext';
+import { useAuth } from '../../context/AuthContext';
 import type { StudioMode } from '../../types';
 import { InfoTooltip } from './InfoTooltip';
 
-export const StudioModeSwitcher: React.FC = () => {
+interface StudioModeSwitcherProps {
+    onShowBrandStudios?: () => void;
+}
+
+export const StudioModeSwitcher: React.FC<StudioModeSwitcherProps> = ({ onShowBrandStudios }) => {
     const { studioMode, setStudioMode, t } = useStudio();
+    const { user } = useAuth();
     const [isDropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    
+    // Check if user has access to Brand Studios
+    const hasBrandStudiosAccess = user?.plan === 'brand' || user?.role === 'admin' || user?.role === 'super_admin';
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -27,7 +36,7 @@ export const StudioModeSwitcher: React.FC = () => {
         setDropdownOpen(false);
     };
 
-    const isDropdownActive = studioMode === 'design' || studioMode === 'reimagine';
+    const isDropdownActive = studioMode === 'design' || studioMode === 'reimagine' || (hasBrandStudiosAccess && onShowBrandStudios);
 
     return (
         <div className="flex-shrink-0 bg-zinc-900 p-1 rounded-full flex items-center gap-1 border border-zinc-800 shadow-inner-soft">
@@ -80,6 +89,21 @@ export const StudioModeSwitcher: React.FC = () => {
                             <ImageUp size={16} />
                             <span>{t('photo_editor')}</span>
                         </button>
+                        {hasBrandStudiosAccess && onShowBrandStudios && (
+                            <>
+                                <div className="h-px bg-white/10 my-1" />
+                                <button
+                                    onClick={() => {
+                                        onShowBrandStudios();
+                                        setDropdownOpen(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 p-2 text-sm font-medium rounded-md transition-colors text-purple-300 hover:bg-purple-600/20"
+                                >
+                                    <Sparkles size={16} />
+                                    <span>Brand Studios</span>
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
             </div>

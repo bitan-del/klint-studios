@@ -312,7 +312,7 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
                     loading="lazy"
                   />
                   {/* Overlay on hover */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 flex-wrap">
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-4">
                     {/* Canva Button */}
                     <button
                       onClick={async () => {
@@ -350,88 +350,28 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
                           }
                         }
                       }}
-                      className="px-4 py-2.5 bg-gray-900/80 hover:bg-gray-800/90 border border-gray-600/50 rounded-lg transition-all flex items-center gap-3 text-white text-sm font-medium backdrop-blur-sm shadow-lg"
+                      className="flex-1 px-2 py-0.5 bg-gray-900/80 hover:bg-gray-800/90 border border-gray-600/50 rounded-lg transition-all flex items-center justify-center backdrop-blur-sm shadow-lg h-[34px]"
                       title="Edit image in Canva"
                     >
-                      {/* Canva Logo - Official from web */}
+                      {/* Canva Logo */}
                       <img 
-                        src="https://static.canva.com/web/images/12487a1e0770d29351bd4ce9622e97db.ico" 
+                        src="/icons/canva-logo.png" 
                         alt="Canva" 
-                        className="w-6 h-6 rounded-full flex-shrink-0"
-                        onError={(e) => {
-                          // Fallback to SVG if image fails to load
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          const parent = target.parentElement;
-                          if (parent) {
-                            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                            svg.setAttribute('width', '24');
-                            svg.setAttribute('height', '24');
-                            svg.setAttribute('viewBox', '0 0 24 24');
-                            svg.setAttribute('fill', 'none');
-                            svg.className.baseVal = 'w-6 h-6 rounded-full flex-shrink-0';
-                            
-                            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-                            const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-                            gradient.setAttribute('id', `canva-grad-${image.id}`);
-                            gradient.setAttribute('x1', '0%');
-                            gradient.setAttribute('y1', '0%');
-                            gradient.setAttribute('x2', '100%');
-                            gradient.setAttribute('y2', '100%');
-                            
-                            const stops = [
-                              { offset: '0%', color: '#00C4CC' },
-                              { offset: '25%', color: '#3B82F6' },
-                              { offset: '50%', color: '#8B5CF6' },
-                              { offset: '75%', color: '#EC4899' },
-                              { offset: '100%', color: '#F43F5E' }
-                            ];
-                            
-                            stops.forEach(stop => {
-                              const stopEl = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-                              stopEl.setAttribute('offset', stop.offset);
-                              stopEl.setAttribute('stop-color', stop.color);
-                              gradient.appendChild(stopEl);
-                            });
-                            
-                            defs.appendChild(gradient);
-                            svg.appendChild(defs);
-                            
-                            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                            circle.setAttribute('cx', '12');
-                            circle.setAttribute('cy', '12');
-                            circle.setAttribute('r', '12');
-                            circle.setAttribute('fill', `url(#canva-grad-${image.id})`);
-                            svg.appendChild(circle);
-                            
-                            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                            text.setAttribute('x', '12');
-                            text.setAttribute('y', '17.5');
-                            text.setAttribute('font-size', '14');
-                            text.setAttribute('fill', 'white');
-                            text.setAttribute('text-anchor', 'middle');
-                            text.setAttribute('font-weight', '800');
-                            text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif');
-                            text.textContent = 'C';
-                            svg.appendChild(text);
-                            
-                            parent.appendChild(svg);
-                          }
-                        }}
+                        className="w-9 h-9 rounded-full flex-shrink-0 object-contain brightness-0 invert"
+                        style={{ filter: 'brightness(0) invert(1)' }}
                       />
-                      <span>Edit image</span>
                     </button>
                     
                     <button
                       onClick={() => handleDownload(image.cloudinary_url, image.id)}
-                      className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors"
+                      className="flex-1 p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors flex items-center justify-center h-[34px]"
                       title="Download"
                     >
                       <Download size={18} />
                     </button>
                     <button
                       onClick={() => setShowDeleteConfirm(image.id)}
-                      className="p-2 bg-red-600 hover:bg-red-500 rounded-lg transition-colors"
+                      className="flex-1 p-2 bg-red-600 hover:bg-red-500 rounded-lg transition-colors flex items-center justify-center h-[34px]"
                       title="Delete"
                     >
                       <Trash2 size={18} />

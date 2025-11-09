@@ -5,3 +5,4 @@ export * from './shared';
 export * from './auth';
 export * from './reimagine';
 export * from './video';
+export * from './brand';
