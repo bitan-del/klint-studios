@@ -638,15 +638,25 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                             console.log('🚀 Starting Canva OAuth flow...');
                                                             console.log('📍 Using redirect URI:', redirectUri);
                                                             
-                                                            // Generate auth URL (stores verifier in database)
+                                                            // Generate auth URL (stores verifier in database and browser storage)
                                                             const authUrl = await getCanvaAuthUrl(redirectUri);
                                                             
-                                                            console.log('✅ Code verifier stored in database');
+                                                            // Verify storage one more time before redirect
+                                                            const finalCheck = localStorage.getItem('canva_code_verifier') || 
+                                                                              localStorage.getItem('_canva_verifier_plain');
+                                                            
+                                                            if (!finalCheck) {
+                                                                console.error('❌ CRITICAL: Code verifier not in storage before redirect!');
+                                                                alert('Failed to store authentication data. Please try again.');
+                                                                return;
+                                                            }
+                                                            
+                                                            console.log('✅ Code verifier verified in storage before redirect');
                                                             console.log('✅ Redirecting to Canva...');
                                                             console.log('📍 Auth URL:', authUrl);
                                                             
-                                                            // Small delay to ensure database write completes
-                                                            await new Promise(resolve => setTimeout(resolve, 200));
+                                                            // Longer delay to ensure all storage commits
+                                                            await new Promise(resolve => setTimeout(resolve, 500));
                                                             
                                                             window.location.href = authUrl;
                                                         } catch (error) {

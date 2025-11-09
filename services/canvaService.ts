@@ -107,32 +107,55 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
     throw new Error('Failed to generate code challenge for PKCE');
   }
   
-  // Generate a unique session ID to link the verifier
-  const sessionId = `canva_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  // Store verifier in database with redirect URI as part of the key
+  // This allows retrieval even if state parameter is not returned
+  const timestamp = Date.now();
+  const storageKey = `canva_pkce_${redirectUri.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}`;
   
-  // Store verifier in database (persists across redirects)
   try {
     const { databaseService } = await import('./databaseService');
     const verifierData = JSON.stringify({
       verifier: codeVerifier,
       redirectUri: redirectUri,
-      timestamp: Date.now(),
+      timestamp: timestamp,
+      codeChallenge: codeChallenge, // Store challenge too for verification
     });
     
-    // Store in database with session ID as key
-    await databaseService.setAdminSetting(`canva_pkce_${sessionId}`, verifierData);
+    // Store in database
+    await databaseService.setAdminSetting(storageKey, verifierData);
     console.log('🔐 PKCE Code Verifier stored in database');
-    console.log('🔐 Session ID:', sessionId);
+    console.log('🔐 Storage key:', storageKey);
     
-    // Also store in browser storage as backup
+    // Also store in browser storage as primary backup (more reliable than database for this)
     if (typeof window !== 'undefined') {
       try {
-        sessionStorage.setItem('canva_code_verifier', verifierData);
-        localStorage.setItem('canva_code_verifier', verifierData);
-        localStorage.setItem('canva_pkce_session_id', sessionId);
-        console.log('🔐 Also stored in browser storage as backup');
+        const browserData = JSON.stringify({
+          verifier: codeVerifier,
+          redirectUri: redirectUri,
+          timestamp: timestamp,
+          storageKey: storageKey, // Include DB key for reference
+        });
+        
+        // Store in multiple ways for maximum reliability
+        sessionStorage.setItem('canva_code_verifier', browserData);
+        localStorage.setItem('canva_code_verifier', browserData);
+        // Also store as plain string as ultimate fallback
+        localStorage.setItem('_canva_verifier_plain', codeVerifier);
+        
+        // Verify it was stored
+        const verifyLocal = localStorage.getItem('canva_code_verifier');
+        const verifyPlain = localStorage.getItem('_canva_verifier_plain');
+        
+        if (verifyLocal && verifyPlain) {
+          console.log('🔐 Verified: Stored in browser storage successfully');
+        } else {
+          console.error('❌ Storage verification failed!');
+          console.error('  - canva_code_verifier:', verifyLocal ? 'exists' : 'MISSING');
+          console.error('  - _canva_verifier_plain:', verifyPlain ? 'exists' : 'MISSING');
+        }
       } catch (e) {
-        console.warn('⚠️ Could not store in browser storage, but database storage succeeded');
+        console.error('❌ Could not store in browser storage:', e);
+        throw new Error('Browser storage failed: ' + e);
       }
     }
     
@@ -146,19 +169,18 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
       const storageData = JSON.stringify({
         verifier: codeVerifier,
         redirectUri: redirectUri,
-        timestamp: Date.now(),
+        timestamp: timestamp,
       });
       sessionStorage.setItem('canva_code_verifier', storageData);
       localStorage.setItem('canva_code_verifier', storageData);
-      localStorage.setItem('canva_pkce_session_id', sessionId);
-      console.warn('⚠️ Using browser storage fallback');
+      console.warn('⚠️ Using browser storage fallback only');
     } else {
       throw new Error('Failed to store code verifier: ' + dbError.message);
     }
   }
   
-  // Include session ID in state parameter so we can retrieve verifier later
-  const state = `canva_auth_${sessionId}`;
+  // Use simple state since Canva may not return it anyway
+  const state = 'canva_auth';
   
   const params = new URLSearchParams({
     client_id: canvaConfig.clientId,
@@ -191,92 +213,119 @@ export async function exchangeCodeForToken(
   redirectUri: string,
   state?: string
 ): Promise<{ accessToken: string; refreshToken: string }> {
-  // Retrieve code verifier from database using session ID from state parameter
+  // Retrieve code verifier - prioritize browser storage (most reliable)
   let verifier = codeVerifier;
-  let storedData: { verifier: string; timestamp: number; redirectUri?: string } | null = null;
+  let storedData: { verifier: string; timestamp: number; redirectUri?: string; storageKey?: string } | null = null;
   
   console.log('🔍 Retrieving code verifier...');
+  console.log('📍 Redirect URI:', redirectUri);
+  console.log('📍 State parameter:', state || 'null');
   
-  // Extract session ID from state parameter
-  let sessionId: string | null = null;
-  if (state && state.startsWith('canva_auth_')) {
-    sessionId = state.replace('canva_auth_', '');
-    console.log('🔐 Session ID from state:', sessionId);
+  // Try browser storage FIRST (most reliable, persists across redirects on same origin)
+  if (!verifier && typeof window !== 'undefined') {
+    console.log('🔍 Checking browser storage first...');
+    
+    // Try localStorage first (more persistent than sessionStorage)
+    let localData = localStorage.getItem('canva_code_verifier');
+    if (localData) {
+      try {
+        storedData = JSON.parse(localData);
+        // Verify redirect URI matches
+        if (storedData.redirectUri === redirectUri || !storedData.redirectUri) {
+          verifier = storedData.verifier;
+          const age = Date.now() - (storedData.timestamp || 0);
+          console.log('✅ Code verifier found in localStorage');
+          console.log('⏰ Verifier age:', Math.round(age / 1000), 'seconds');
+          if (age > 10 * 60 * 1000) {
+            console.warn('⚠️ Verifier is older than 10 minutes');
+          }
+        } else {
+          console.warn('⚠️ Redirect URI mismatch in localStorage, ignoring');
+        }
+      } catch (e) {
+        // Try as plain string
+        verifier = localData;
+        console.log('✅ Code verifier found in localStorage (plain format)');
+      }
+    }
+    
+    // Try sessionStorage as backup
+    if (!verifier) {
+      let sessionData = sessionStorage.getItem('canva_code_verifier');
+      if (sessionData) {
+        try {
+          storedData = JSON.parse(sessionData);
+          if (storedData.redirectUri === redirectUri || !storedData.redirectUri) {
+            verifier = storedData.verifier;
+            console.log('✅ Code verifier found in sessionStorage');
+          } else {
+            console.warn('⚠️ Redirect URI mismatch in sessionStorage, ignoring');
+          }
+        } catch (e) {
+          verifier = sessionData;
+          console.log('✅ Code verifier found in sessionStorage (plain format)');
+        }
+      }
+    }
+    
+    // Try plain verifier as ultimate fallback
+    if (!verifier) {
+      const plainVerifier = localStorage.getItem('_canva_verifier_plain');
+      if (plainVerifier) {
+        verifier = plainVerifier;
+        console.log('✅ Code verifier found in plain storage fallback');
+      }
+    }
+    
+    // Log what we found
+    if (verifier) {
+      console.log('✅ Code verifier retrieved from browser storage');
+    } else {
+      console.log('❌ Code verifier not found in browser storage');
+      console.log('📍 Available localStorage keys:', Object.keys(localStorage).filter(k => k.includes('canva')));
+      console.log('📍 Available sessionStorage keys:', Object.keys(sessionStorage).filter(k => k.includes('canva')));
+    }
   }
   
-  // Try database first (most reliable)
-  if (!verifier && sessionId) {
+  // Try database as fallback (if we have storage key from browser storage)
+  if (!verifier && storedData?.storageKey) {
     try {
+      console.log('🔍 Trying database with storage key:', storedData.storageKey);
       const { databaseService } = await import('./databaseService');
-      const dbData = await databaseService.getAdminSetting(`canva_pkce_${sessionId}`);
+      const dbData = await databaseService.getAdminSetting(storedData.storageKey);
       
       if (dbData) {
         try {
-          storedData = JSON.parse(dbData);
-          verifier = storedData.verifier;
-          console.log('✅ Code verifier retrieved from database');
-          console.log('⏰ Verifier age:', Math.round((Date.now() - storedData.timestamp) / 1000), 'seconds');
-          
-          // Clean up database entry after retrieval
-          await databaseService.setAdminSetting(`canva_pkce_${sessionId}`, '');
+          const dbParsed = JSON.parse(dbData);
+          if (dbParsed.redirectUri === redirectUri) {
+            verifier = dbParsed.verifier;
+            console.log('✅ Code verifier retrieved from database');
+            // Clean up
+            await databaseService.setAdminSetting(storedData.storageKey, '');
+          }
         } catch (e) {
           console.warn('⚠️ Could not parse database verifier data');
         }
       }
     } catch (dbError) {
-      console.warn('⚠️ Could not retrieve from database, trying browser storage:', dbError);
+      console.warn('⚠️ Could not retrieve from database:', dbError);
     }
   }
   
-  // Fallback to browser storage
-  if (!verifier && typeof window !== 'undefined') {
-    console.log('🔍 Trying browser storage...');
-    
-    // Try sessionStorage first
-    let sessionData = sessionStorage.getItem('canva_code_verifier');
-    if (sessionData) {
-      try {
-        storedData = JSON.parse(sessionData);
-        verifier = storedData.verifier;
-        console.log('✅ Code verifier found in sessionStorage');
-      } catch (e) {
-        verifier = sessionData;
-        console.log('✅ Code verifier found in sessionStorage (plain)');
-      }
-    }
-    
-    // Try localStorage
-    if (!verifier) {
-      let localData = localStorage.getItem('canva_code_verifier');
-      if (localData) {
-        try {
-          storedData = JSON.parse(localData);
-          verifier = storedData.verifier;
-          console.log('✅ Code verifier found in localStorage');
-        } catch (e) {
-          verifier = localData;
-          console.log('✅ Code verifier found in localStorage (plain)');
-        }
-      }
-    }
-    
-    // Clean up browser storage after retrieval
-    if (verifier) {
-      sessionStorage.removeItem('canva_code_verifier');
-      localStorage.removeItem('canva_code_verifier');
-      localStorage.removeItem('canva_pkce_session_id');
-    }
+  // Clean up browser storage after successful retrieval
+  if (verifier && typeof window !== 'undefined') {
+    sessionStorage.removeItem('canva_code_verifier');
+    localStorage.removeItem('canva_code_verifier');
+    localStorage.removeItem('_canva_verifier_plain');
   }
 
   if (!verifier) {
-    console.error('❌ Code verifier not found in database or browser storage');
-    if (sessionId) {
-      console.error('🔐 Session ID was:', sessionId);
-    }
+    console.error('❌ Code verifier not found in any storage location');
+    console.error('📍 Tried: localStorage, sessionStorage, database');
     throw new Error('Code verifier not found. Please restart OAuth flow.');
   }
   
-  console.log('✅ Code verifier retrieved:', verifier.substring(0, 20) + '...');
+  console.log('✅ Code verifier retrieved successfully:', verifier.substring(0, 20) + '...');
 
   // Get Supabase URL and anon key from environment variables
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
