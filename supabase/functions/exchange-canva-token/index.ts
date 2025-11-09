@@ -45,19 +45,51 @@ serve(async (req) => {
       throw new Error('Canva client ID and secret not configured in admin settings')
     }
 
-    let clientId = clientIdData.setting_value
-    let clientSecret = clientSecretData.setting_value
+    // Parse JSON values - setting_value is a JSON type column
+    let clientId: string
+    let clientSecret: string
     
-    // Remove quotes if present (JSON stringified)
-    if (clientId.startsWith('"') && clientId.endsWith('"')) {
-      clientId = clientId.slice(1, -1)
+    try {
+      // If it's already a string, use it directly
+      // If it's JSON, parse it
+      if (typeof clientIdData.setting_value === 'string') {
+        clientId = clientIdData.setting_value
+        // Remove quotes if JSON stringified
+        if (clientId.startsWith('"') && clientId.endsWith('"')) {
+          clientId = JSON.parse(clientId)
+        }
+      } else {
+        // It's already parsed JSON
+        clientId = String(clientIdData.setting_value)
+      }
+    } catch (e) {
+      // Fallback: treat as string
+      clientId = String(clientIdData.setting_value)
     }
-    if (clientSecret.startsWith('"') && clientSecret.endsWith('"')) {
-      clientSecret = clientSecret.slice(1, -1)
+    
+    try {
+      if (typeof clientSecretData.setting_value === 'string') {
+        clientSecret = clientSecretData.setting_value
+        // Remove quotes if JSON stringified
+        if (clientSecret.startsWith('"') && clientSecret.endsWith('"')) {
+          clientSecret = JSON.parse(clientSecret)
+        }
+      } else {
+        // It's already parsed JSON
+        clientSecret = String(clientSecretData.setting_value)
+      }
+    } catch (e) {
+      // Fallback: treat as string
+      clientSecret = String(clientSecretData.setting_value)
     }
     
     clientId = clientId.trim()
     clientSecret = clientSecret.trim()
+    
+    console.log('🔍 Raw client ID type:', typeof clientIdData.setting_value)
+    console.log('🔍 Raw client secret type:', typeof clientSecretData.setting_value)
+    console.log('🔍 Parsed client ID length:', clientId.length)
+    console.log('🔍 Parsed client secret length:', clientSecret.length)
     
     // Validate credentials format
     if (!clientId || clientId.length < 5) {
