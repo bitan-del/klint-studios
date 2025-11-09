@@ -638,25 +638,29 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                             console.log('🚀 Starting Canva OAuth flow...');
                                                             console.log('📍 Using redirect URI:', redirectUri);
                                                             
-                                                            // Generate auth URL (stores verifier in database and browser storage)
+                                                            // Generate auth URL (stores verifier in Edge Function, database, and browser storage)
                                                             const authUrl = await getCanvaAuthUrl(redirectUri);
                                                             
                                                             // Verify storage one more time before redirect
                                                             const finalCheck = localStorage.getItem('canva_code_verifier') || 
-                                                                              localStorage.getItem('_canva_verifier_plain');
+                                                                              localStorage.getItem('_canva_verifier_plain') ||
+                                                                              document.cookie.includes('canva_code_verifier=');
                                                             
                                                             if (!finalCheck) {
                                                                 console.error('❌ CRITICAL: Code verifier not in storage before redirect!');
+                                                                console.error('📍 Checked: localStorage, cookies');
                                                                 alert('Failed to store authentication data. Please try again.');
                                                                 return;
                                                             }
                                                             
                                                             console.log('✅ Code verifier verified in storage before redirect');
+                                                            console.log('✅ All storage methods confirmed');
                                                             console.log('✅ Redirecting to Canva...');
-                                                            console.log('📍 Auth URL:', authUrl);
+                                                            console.log('📍 Auth URL:', authUrl.substring(0, 100) + '...');
                                                             
-                                                            // Longer delay to ensure all storage commits
-                                                            await new Promise(resolve => setTimeout(resolve, 500));
+                                                            // Longer delay to ensure Edge Function storage commits
+                                                            console.log('⏳ Waiting for server-side storage to commit...');
+                                                            await new Promise(resolve => setTimeout(resolve, 1000));
                                                             
                                                             window.location.href = authUrl;
                                                         } catch (error) {

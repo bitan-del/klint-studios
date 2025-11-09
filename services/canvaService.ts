@@ -178,9 +178,12 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
         localStorage.setItem('_canva_verifier_plain', codeVerifier);
         
         // Store in cookie (persists across redirects better)
+        // Only use Secure flag on HTTPS
+        const isSecure = window.location.protocol === 'https:';
+        const secureFlag = isSecure ? '; Secure' : '';
         const cookieExpiry = new Date(Date.now() + 10 * 60 * 1000).toUTCString(); // 10 minutes
-        document.cookie = `canva_code_verifier=${encodeURIComponent(codeVerifier)}; expires=${cookieExpiry}; path=/; SameSite=Lax; Secure`;
-        document.cookie = `canva_pkce_data=${encodeURIComponent(browserData)}; expires=${cookieExpiry}; path=/; SameSite=Lax; Secure`;
+        document.cookie = `canva_code_verifier=${encodeURIComponent(codeVerifier)}; expires=${cookieExpiry}; path=/; SameSite=Lax${secureFlag}`;
+        document.cookie = `canva_pkce_data=${encodeURIComponent(browserData)}; expires=${cookieExpiry}; path=/; SameSite=Lax${secureFlag}`;
         
         // Verify it was stored
         const verifyLocal = localStorage.getItem('canva_code_verifier');
@@ -288,15 +291,29 @@ export async function exchangeCodeForToken(
   }
   
   // Try Edge Function FIRST (server-side, most reliable)
-  if (!verifier && sessionId && typeof window !== 'undefined') {
+  if (!verifier && typeof window !== 'undefined') {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       
       if (supabaseUrl && supabaseAnonKey) {
-        const retrieveUrl = `${supabaseUrl}/functions/v1/store-canva-verifier?session_id=${encodeURIComponent(sessionId)}`;
+        // Build URL with session ID (if available) and redirect URI (for fallback)
+        const params = new URLSearchParams({
+          redirect_uri: redirectUri,
+        });
+        if (sessionId) {
+          params.set('session_id', sessionId);
+        }
+        const retrieveUrl = `${supabaseUrl}/functions/v1/store-canva-verifier?${params.toString()}`;
         
         console.log('🔍 Retrieving verifier from Edge Function...');
+        if (sessionId) {
+          console.log('📍 Using session ID:', sessionId);
+        } else {
+          console.log('⚠️ No session ID, using redirect URI fallback');
+        }
+        console.log('📍 Redirect URI:', redirectUri);
+        
         const retrieveResponse = await fetch(retrieveUrl, {
           method: 'GET',
           headers: {
@@ -311,7 +328,9 @@ export async function exchangeCodeForToken(
             console.log('✅ Code verifier retrieved from Edge Function (server-side)!');
           }
         } else {
-          console.warn('⚠️ Edge Function retrieval failed, trying browser storage...');
+          const errorText = await retrieveResponse.text();
+          console.warn('⚠️ Edge Function retrieval failed:', errorText);
+          console.warn('⚠️ Trying browser storage fallback...');
         }
       }
     } catch (edgeError) {
