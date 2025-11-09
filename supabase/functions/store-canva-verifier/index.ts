@@ -55,28 +55,51 @@ serve(async (req) => {
       // Fallback: If no session ID or not found, try to get most recent for redirect URI
       if (redirectUri) {
         console.log('🔍 Fallback: Searching for verifier by redirect URI')
-        const redirectUriHash = redirectUri.replace(/[^a-zA-Z0-9]/g, '_')
+        console.log('📍 Redirect URI:', redirectUri)
         
-        // Get all verifiers for this redirect URI (keys starting with canva_pkce_)
-        const { data: allVerifiers, error: searchError } = await supabase
+        // Strategy 1: Search for timestamp keys (canva_pkce_<hash>_<timestamp>)
+        const redirectUriHash = redirectUri.replace(/[^a-zA-Z0-9]/g, '_')
+        const { data: timestampVerifiers, error: timestampError } = await supabase
           .from('admin_settings')
           .select('setting_key, setting_value, updated_at')
           .like('setting_key', `canva_pkce_${redirectUriHash}_%`)
           .order('updated_at', { ascending: false })
-          .limit(5)
+          .limit(10)
 
-        if (!searchError && allVerifiers && allVerifiers.length > 0) {
-          // Find the most recent one within last 10 minutes
+        // Strategy 2: Search for ALL session ID keys (canva_pkce_verifier_*) and check redirect_uri
+        const { data: sessionVerifiers, error: sessionError } = await supabase
+          .from('admin_settings')
+          .select('setting_key, setting_value, updated_at')
+          .like('setting_key', 'canva_pkce_verifier_%')
+          .order('updated_at', { ascending: false })
+          .limit(10)
+
+        // Combine both results
+        const allVerifiers = [
+          ...(timestampVerifiers || []),
+          ...(sessionVerifiers || [])
+        ]
+
+        if (allVerifiers.length > 0) {
+          console.log(`🔍 Found ${allVerifiers.length} potential verifiers, checking...`)
+          
+          // Find the most recent one within last 10 minutes that matches redirect URI
           const now = Date.now()
           for (const item of allVerifiers) {
             try {
               const verifierData = JSON.parse(item.setting_value)
               const age = now - (verifierData.timestamp || 0)
+              const matchesRedirect = verifierData.redirect_uri === redirectUri || 
+                                     verifierData.redirectUri === redirectUri ||
+                                     !verifierData.redirect_uri // Allow if redirect_uri not set
               
               // Only use if it's for the correct redirect URI and less than 10 minutes old
-              if ((verifierData.redirectUri === redirectUri || !verifierData.redirectUri) && age < 10 * 60 * 1000) {
+              if (matchesRedirect && age < 10 * 60 * 1000) {
                 console.log('✅ Found verifier by redirect URI fallback')
-                // Clean up
+                console.log('📍 Matched key:', item.setting_key)
+                console.log('📍 Age:', Math.round(age / 1000), 'seconds')
+                
+                // Clean up this entry
                 await supabase
                   .from('admin_settings')
                   .delete()
@@ -86,11 +109,20 @@ serve(async (req) => {
                   JSON.stringify({ verifier: verifierData.verifier }),
                   { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                 )
+              } else {
+                console.log('⚠️ Verifier found but:', {
+                  matchesRedirect,
+                  age: Math.round(age / 1000) + 's',
+                  redirect_uri: verifierData.redirect_uri || verifierData.redirectUri
+                })
               }
             } catch (e) {
+              console.warn('⚠️ Could not parse verifier data:', e)
               // Skip invalid entries
             }
           }
+        } else {
+          console.log('❌ No verifiers found in database')
         }
       }
 
@@ -116,8 +148,10 @@ serve(async (req) => {
         verifier,
         redirect_uri: redirect_uri || '',
         timestamp: Date.now(),
+        sessionId: session_id, // Include for reference
       })
 
+      // Store with session ID key (primary)
       const { error: storeError } = await supabase
         .from('admin_settings')
         .upsert({
@@ -134,6 +168,29 @@ serve(async (req) => {
           JSON.stringify({ error: 'Failed to store verifier' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
+      }
+
+      // Also store with redirect URI + timestamp key for fallback retrieval
+      if (redirect_uri) {
+        const redirectUriHash = redirect_uri.replace(/[^a-zA-Z0-9]/g, '_')
+        const timestampKey = `canva_pkce_${redirectUriHash}_${Date.now()}`
+        
+        const { error: fallbackError } = await supabase
+          .from('admin_settings')
+          .upsert({
+            setting_key: timestampKey,
+            setting_value: verifierData,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'setting_key',
+          })
+
+        if (fallbackError) {
+          console.warn('Warning: Could not store fallback key:', fallbackError)
+          // Don't fail the request, primary key is stored
+        } else {
+          console.log('✅ Stored verifier with both session ID and timestamp keys')
+        }
       }
 
       return new Response(
