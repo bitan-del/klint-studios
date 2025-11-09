@@ -45,12 +45,34 @@ serve(async (req) => {
       throw new Error('Canva client ID and secret not configured in admin settings')
     }
 
-    const clientId = clientIdData.setting_value.replace(/"/g, '')
-    const clientSecret = clientSecretData.setting_value.replace(/"/g, '')
+    const clientId = clientIdData.setting_value.replace(/"/g, '').trim()
+    const clientSecret = clientSecretData.setting_value.replace(/"/g, '').trim()
+
+    // Log request details (without exposing secrets)
+    console.log('🔄 Exchanging code for token with Canva...')
+    console.log('📍 Client ID:', clientId.substring(0, 10) + '...')
+    console.log('📍 Redirect URI:', redirect_uri)
+    console.log('📍 Code length:', code.length)
+    console.log('📍 Code verifier length:', code_verifier.length)
 
     // Exchange authorization code for access token using Basic Authentication
     // According to Canva docs: https://canva.dev/docs/connect/authentication
     const auth = btoa(`${clientId}:${clientSecret}`)
+
+    const requestBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri,
+      code_verifier,
+      // Note: client_id and client_secret are NOT in body, they're in Authorization header
+    })
+
+    console.log('📤 Request body params:', {
+      grant_type: 'authorization_code',
+      code: code.substring(0, 20) + '...',
+      redirect_uri,
+      code_verifier: code_verifier.substring(0, 20) + '...',
+    })
 
     const tokenResponse = await fetch(`${CANVA_AUTH_BASE}/token`, {
       method: 'POST',
@@ -58,19 +80,35 @@ serve(async (req) => {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Basic ${auth}`,
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri,
-        code_verifier,
-        // Note: client_id and client_secret are NOT in body, they're in Authorization header
-      }),
+      body: requestBody.toString(),
     })
+
+    console.log('📥 Canva response status:', tokenResponse.status, tokenResponse.statusText)
+    console.log('📥 Canva response headers:', Object.fromEntries(tokenResponse.headers.entries()))
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
-      console.error('Canva token exchange error:', errorText)
-      throw new Error(`Canva token exchange failed: ${tokenResponse.statusText} - ${errorText}`)
+      console.error('❌ Canva token exchange error:')
+      console.error('  - Status:', tokenResponse.status, tokenResponse.statusText)
+      console.error('  - Response (first 500 chars):', errorText.substring(0, 500))
+      
+      // Try to parse as JSON if possible
+      let errorMessage = `Canva token exchange failed: ${tokenResponse.statusText}`
+      try {
+        const errorJson = JSON.parse(errorText)
+        if (errorJson.error) {
+          errorMessage = `Canva error: ${errorJson.error} - ${errorJson.error_description || ''}`
+        }
+      } catch {
+        // Not JSON, use the HTML/text response
+        if (errorText.includes('Forbidden')) {
+          errorMessage = 'Canva rejected the request. Please check: 1) Client ID and Secret are correct, 2) Redirect URI matches exactly, 3) Authorization code is valid and not expired.'
+        } else {
+          errorMessage = `Canva error: ${errorText.substring(0, 200)}`
+        }
+      }
+      
+      throw new Error(errorMessage)
     }
 
     const tokenData = await tokenResponse.json()
