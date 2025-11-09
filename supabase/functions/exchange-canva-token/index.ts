@@ -71,14 +71,24 @@ serve(async (req) => {
 
     // Log request details (without exposing secrets)
     console.log('🔄 Exchanging code for token with Canva...')
-    console.log('📍 Client ID:', clientId.substring(0, 10) + '...')
+    console.log('📍 Client ID (full):', clientId)
+    console.log('📍 Client ID length:', clientId.length)
     console.log('📍 Redirect URI:', redirect_uri)
+    console.log('📍 Redirect URI length:', redirect_uri.length)
     console.log('📍 Code length:', code.length)
     console.log('📍 Code verifier length:', code_verifier.length)
+    console.log('📍 Code verifier (first 20 chars):', code_verifier.substring(0, 20) + '...')
+    console.log('📍 Code verifier (last 20 chars):', '...' + code_verifier.substring(code_verifier.length - 20))
 
     // Exchange authorization code for access token using Basic Authentication
     // According to Canva docs: https://canva.dev/docs/connect/authentication
     const auth = btoa(`${clientId}:${clientSecret}`)
+    
+    console.log('🔐 Basic Auth header created:')
+    console.log('  - Client ID used:', clientId)
+    console.log('  - Client Secret length:', clientSecret.length)
+    console.log('  - Auth header (first 30 chars):', `Basic ${auth.substring(0, 30)}...`)
+    console.log('  - Auth header length:', auth.length)
 
     // Ensure redirect_uri is exactly as it should be (no encoding issues)
     const normalizedRedirectUri = redirect_uri.trim()
