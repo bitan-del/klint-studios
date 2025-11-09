@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 const CANVA_AUTH_BASE = 'https://www.canva.com/api'
@@ -79,11 +80,16 @@ serve(async (req) => {
     }
 
     // Save tokens to database
+    // Note: setting_value should be stored as string, not JSON stringified if it's already a string
+    const accessTokenValue = typeof tokenData.access_token === 'string' 
+      ? tokenData.access_token 
+      : JSON.stringify(tokenData.access_token);
+    
     const { error: accessTokenError } = await supabase
       .from('admin_settings')
       .upsert({
         setting_key: 'canva_access_token',
-        setting_value: JSON.stringify(tokenData.access_token),
+        setting_value: accessTokenValue,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'setting_key',
@@ -91,15 +97,22 @@ serve(async (req) => {
 
     if (accessTokenError) {
       console.error('Error saving access token:', accessTokenError)
-      throw new Error('Failed to save access token to database')
+      // Log but don't throw - we still want to return the token to the client
+      console.warn('⚠️ Could not save access token to database, but returning token to client')
+    } else {
+      console.log('✅ Access token saved to database')
     }
 
     if (tokenData.refresh_token) {
+      const refreshTokenValue = typeof tokenData.refresh_token === 'string'
+        ? tokenData.refresh_token
+        : JSON.stringify(tokenData.refresh_token);
+        
       const { error: refreshTokenError } = await supabase
         .from('admin_settings')
         .upsert({
           setting_key: 'canva_refresh_token',
-          setting_value: JSON.stringify(tokenData.refresh_token),
+          setting_value: refreshTokenValue,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'setting_key',
@@ -108,6 +121,8 @@ serve(async (req) => {
       if (refreshTokenError) {
         console.error('Error saving refresh token:', refreshTokenError)
         // Don't throw error for refresh token, access token is more important
+      } else {
+        console.log('✅ Refresh token saved to database')
       }
     }
 
