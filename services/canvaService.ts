@@ -137,15 +137,12 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
 
 /**
  * Exchange authorization code for access token (with PKCE)
+ * Uses Supabase Edge Function to avoid CORS issues with client credentials
  */
 export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
 ): Promise<{ accessToken: string; refreshToken: string }> {
-  if (!canvaConfig.clientId || !canvaConfig.clientSecret) {
-    throw new Error('Canva client ID and secret not configured');
-  }
-
   // Retrieve code verifier from sessionStorage
   let verifier = codeVerifier;
   if (!verifier && typeof window !== 'undefined') {
@@ -159,43 +156,68 @@ export async function exchangeCodeForToken(
     throw new Error('Code verifier not found. Please restart OAuth flow.');
   }
 
-  const response = await fetch(`${CANVA_AUTH_BASE}/token`, {
+  // Get Supabase URL and anon key from environment variables
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase URL or anon key not configured');
+  }
+
+  // Call Supabase Edge Function to exchange token
+  // This avoids CORS issues since client credentials must be used server-side
+  const functionUrl = `${supabaseUrl}/functions/v1/exchange-canva-token`;
+  
+  console.log('🔄 Exchanging authorization code for token via backend...');
+  console.log('📍 Function URL:', functionUrl);
+  
+  const response = await fetch(functionUrl, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseAnonKey}`, // Use anon key for function access
     },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
+    body: JSON.stringify({
       code,
       redirect_uri: redirectUri,
-      client_id: canvaConfig.clientId,
-      client_secret: canvaConfig.clientSecret,
       code_verifier: verifier,
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('Canva token exchange error:', errorText);
-    throw new Error(`Canva token exchange failed: ${response.statusText} - ${errorText}`);
+    let errorMessage = `Token exchange failed: ${response.statusText}`;
+    
+    try {
+      const errorData = JSON.parse(errorText);
+      errorMessage = errorData.error || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    
+    console.error('❌ Canva token exchange error:', errorMessage);
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();
   
+  if (!data.access_token) {
+    throw new Error('No access token received from backend');
+  }
+  
   // Clear code verifier after use
   codeVerifier = null;
   
-  // Save tokens to database
-  const { databaseService } = await import('./databaseService');
-  await databaseService.setAdminSetting('canva_access_token', data.access_token);
-  if (data.refresh_token) {
-    await databaseService.setAdminSetting('canva_refresh_token', data.refresh_token);
-  }
-  
-  // Update config
+  // Update local config
   canvaConfig.accessToken = data.access_token;
   if (data.refresh_token) {
     canvaConfig.refreshToken = data.refresh_token;
+  }
+  
+  console.log('✅ Tokens received and saved to database');
+  console.log('  - Access token:', data.access_token.substring(0, 20) + '...');
+  if (data.refresh_token) {
+    console.log('  - Refresh token:', data.refresh_token.substring(0, 20) + '...');
   }
   
   return {

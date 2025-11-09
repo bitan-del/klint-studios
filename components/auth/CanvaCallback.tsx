@@ -26,11 +26,24 @@ export const CanvaCallback: React.FC = () => {
         return;
       }
 
+      // Add logging to debug state parameter
+      console.log('🔍 OAuth Callback Received:');
+      console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'null');
+      console.log('  - State:', state || 'null');
+      console.log('  - Expected State: canva_auth');
+      console.log('  - State Match:', state === 'canva_auth');
+      console.log('  - Full URL:', window.location.href);
+
       if (state !== 'canva_auth') {
+        console.error('❌ State mismatch!');
+        console.error('  - Received:', state);
+        console.error('  - Expected: canva_auth');
         setStatus('error');
-        setError('Invalid state parameter');
+        setError(`Invalid state parameter. Received: ${state || 'null'}, Expected: canva_auth`);
         return;
       }
+
+      console.log('✅ State parameter validated successfully');
 
       try {
         // Get redirect URI (should match what you configured in Canva)
