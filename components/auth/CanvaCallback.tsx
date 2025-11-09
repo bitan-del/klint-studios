@@ -41,16 +41,17 @@ export const CanvaCallback: React.FC = () => {
       console.log('  - State Match:', state === 'canva_auth');
       console.log('  - Full URL:', window.location.href);
 
-      // Note: Canva may not return the state parameter, but PKCE provides CSRF protection
-      // So we'll log a warning but continue if state is missing
-      if (state && state !== 'canva_auth') {
-        console.warn('⚠️ State parameter mismatch, but continuing with PKCE validation');
-        console.warn('  - Received:', state);
-        console.warn('  - Expected: canva_auth');
-      } else if (!state) {
-        console.warn('⚠️ State parameter not returned by Canva, but PKCE will provide security');
-      } else {
+      // Note: State parameter now contains session ID: canva_auth_<sessionId>
+      // This allows us to retrieve the code verifier from the database
+      if (state && state.startsWith('canva_auth_')) {
         console.log('✅ State parameter validated successfully');
+        console.log('🔐 Session ID extracted from state');
+      } else if (!state) {
+        console.warn('⚠️ State parameter not returned by Canva');
+        console.warn('⚠️ Will try to retrieve verifier from browser storage as fallback');
+      } else {
+        console.warn('⚠️ State parameter format unexpected:', state);
+        console.warn('⚠️ Will try to retrieve verifier from browser storage as fallback');
       }
 
       try {
@@ -61,9 +62,10 @@ export const CanvaCallback: React.FC = () => {
         console.log('🔄 Exchanging code for token...');
         console.log('📍 Using redirect URI:', redirectUri);
         console.log('📍 Current origin:', window.location.origin);
+        console.log('📍 State parameter:', state || 'null');
         
-        // Exchange code for tokens
-        await exchangeCodeForToken(code, redirectUri);
+        // Exchange code for tokens (pass state to retrieve verifier from database)
+        await exchangeCodeForToken(code, redirectUri, state || undefined);
         
         setStatus('success');
         
