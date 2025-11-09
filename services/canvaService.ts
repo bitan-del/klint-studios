@@ -142,16 +142,23 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
         // Also store as plain string as ultimate fallback
         localStorage.setItem('_canva_verifier_plain', codeVerifier);
         
+        // Store in cookie (persists across redirects better)
+        const cookieExpiry = new Date(Date.now() + 10 * 60 * 1000).toUTCString(); // 10 minutes
+        document.cookie = `canva_code_verifier=${encodeURIComponent(codeVerifier)}; expires=${cookieExpiry}; path=/; SameSite=Lax; Secure`;
+        document.cookie = `canva_pkce_data=${encodeURIComponent(browserData)}; expires=${cookieExpiry}; path=/; SameSite=Lax; Secure`;
+        
         // Verify it was stored
         const verifyLocal = localStorage.getItem('canva_code_verifier');
         const verifyPlain = localStorage.getItem('_canva_verifier_plain');
+        const verifyCookie = document.cookie.includes('canva_code_verifier=');
         
-        if (verifyLocal && verifyPlain) {
-          console.log('🔐 Verified: Stored in browser storage successfully');
+        if (verifyLocal && verifyPlain && verifyCookie) {
+          console.log('🔐 Verified: Stored in browser storage AND cookies successfully');
         } else {
-          console.error('❌ Storage verification failed!');
-          console.error('  - canva_code_verifier:', verifyLocal ? 'exists' : 'MISSING');
-          console.error('  - _canva_verifier_plain:', verifyPlain ? 'exists' : 'MISSING');
+          console.warn('⚠️ Some storage methods failed:');
+          console.warn('  - localStorage:', verifyLocal ? '✅' : '❌');
+          console.warn('  - plain storage:', verifyPlain ? '✅' : '❌');
+          console.warn('  - cookie:', verifyCookie ? '✅' : '❌');
         }
       } catch (e) {
         console.error('❌ Could not store in browser storage:', e);
@@ -225,7 +232,21 @@ export async function exchangeCodeForToken(
   if (!verifier && typeof window !== 'undefined') {
     console.log('🔍 Checking browser storage first...');
     
-    // Try localStorage first (more persistent than sessionStorage)
+    // Try cookies FIRST (most reliable across redirects)
+    const getCookie = (name: string): string | null => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return decodeURIComponent(parts.pop()!.split(';').shift()!);
+      return null;
+    };
+    
+    const cookieVerifier = getCookie('canva_code_verifier');
+    if (cookieVerifier) {
+      verifier = cookieVerifier;
+      console.log('✅ Code verifier found in COOKIE (most reliable!)');
+    }
+    
+    // Try localStorage (more persistent than sessionStorage)
     let localData = localStorage.getItem('canva_code_verifier');
     if (localData) {
       try {
@@ -312,11 +333,14 @@ export async function exchangeCodeForToken(
     }
   }
   
-  // Clean up browser storage after successful retrieval
+  // Clean up browser storage and cookies after successful retrieval
   if (verifier && typeof window !== 'undefined') {
     sessionStorage.removeItem('canva_code_verifier');
     localStorage.removeItem('canva_code_verifier');
     localStorage.removeItem('_canva_verifier_plain');
+    // Clear cookies
+    document.cookie = 'canva_code_verifier=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    document.cookie = 'canva_pkce_data=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
   }
 
   if (!verifier) {
