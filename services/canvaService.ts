@@ -175,11 +175,13 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
   
   // Log the URL for debugging (without sensitive data)
   console.log('🔗 Canva Auth URL generated');
-  console.log('📍 Redirect URI:', redirectUri);
+  console.log('📍 Redirect URI in authorization URL:', redirectUri);
+  console.log('📍 Redirect URI length:', redirectUri.length);
+  console.log('⚠️ CRITICAL: This redirect_uri MUST match EXACTLY in token exchange!');
   console.log('🔑 Client ID:', canvaConfig.clientId);
   console.log('✅ Code Challenge Method: S256');
   console.log('🔐 Session ID:', sessionId);
-  console.log('🔐 State parameter includes session ID for verifier retrieval');
+  console.log('🔐 State parameter (for CSRF protection):', state);
   
   return authUrl;
 }
@@ -279,6 +281,9 @@ export async function exchangeCodeForToken(
   
   console.log('🔄 Exchanging authorization code for token via backend...');
   console.log('📍 Function URL:', functionUrl);
+  console.log('📍 Redirect URI being sent to token exchange:', redirectUri);
+  console.log('📍 Redirect URI length:', redirectUri.length);
+  console.log('⚠️ CRITICAL: This redirect_uri MUST match EXACTLY what was used in authorization URL!');
   
   const response = await fetch(functionUrl, {
     method: 'POST',

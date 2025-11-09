@@ -70,9 +70,13 @@ serve(async (req) => {
     console.log('📤 Request body params:', {
       grant_type: 'authorization_code',
       code: code.substring(0, 20) + '...',
-      redirect_uri,
-      code_verifier: code_verifier.substring(0, 20) + '...',
+      redirect_uri: redirect_uri,
+      redirect_uri_length: redirect_uri.length,
+      code_verifier_length: code_verifier.length,
+      code_verifier_preview: code_verifier.substring(0, 20) + '...',
     })
+    console.log('⚠️ CRITICAL: redirect_uri MUST match exactly what was used in authorization request!')
+    console.log('📍 Redirect URI being sent:', redirect_uri)
 
     const tokenResponse = await fetch(`${CANVA_AUTH_BASE}/token`, {
       method: 'POST',
@@ -94,19 +98,42 @@ serve(async (req) => {
       
       // Try to parse as JSON if possible
       let errorMessage = `Canva token exchange failed: ${tokenResponse.statusText}`
+      let errorDetails = ''
+      
       try {
         const errorJson = JSON.parse(errorText)
         if (errorJson.error) {
-          errorMessage = `Canva error: ${errorJson.error} - ${errorJson.error_description || ''}`
+          errorMessage = `Canva error: ${errorJson.error}`
+          errorDetails = errorJson.error_description || ''
         }
       } catch {
-        // Not JSON, use the HTML/text response
-        if (errorText.includes('Forbidden')) {
-          errorMessage = 'Canva rejected the request. Please check: 1) Client ID and Secret are correct, 2) Redirect URI matches exactly, 3) Authorization code is valid and not expired.'
+        // Not JSON, it's HTML - Canva returned an error page
+        console.error('❌ Canva returned HTML error page instead of JSON')
+        console.error('❌ This usually means:')
+        console.error('   1. redirect_uri does not match exactly')
+        console.error('   2. code_verifier does not match code_challenge')
+        console.error('   3. Authorization code is invalid/expired')
+        console.error('   4. Client credentials are incorrect')
+        
+        if (errorText.includes('Forbidden') || errorText.includes('403')) {
+          errorMessage = 'Canva rejected the request (403 Forbidden). Most likely causes:'
+          errorDetails = '1) Redirect URI does not match exactly what was used in authorization request\n2) Code verifier does not match the code challenge\n3) Authorization code expired or invalid'
+        } else if (errorText.includes('Bad Request') || errorText.includes('400')) {
+          errorMessage = 'Canva rejected the request (400 Bad Request). Most likely causes:'
+          errorDetails = '1) Redirect URI mismatch - must match EXACTLY (including trailing slashes, http vs https)\n2) Code verifier mismatch\n3) Missing or invalid parameters'
         } else {
-          errorMessage = `Canva error: ${errorText.substring(0, 200)}`
+          errorMessage = 'Canva returned an error page'
+          errorDetails = `Status: ${tokenResponse.status}. Check that redirect_uri matches exactly.`
         }
       }
+      
+      console.error('❌ Full error details:', {
+        status: tokenResponse.status,
+        statusText: tokenResponse.statusText,
+        redirect_uri_used: redirect_uri,
+        error_message: errorMessage,
+        error_details: errorDetails,
+      })
       
       throw new Error(errorMessage)
     }
