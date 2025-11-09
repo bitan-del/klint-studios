@@ -46,50 +46,84 @@ serve(async (req) => {
     }
 
     // Parse JSON values - setting_value is a JSON type column
+    // Supabase returns JSON values which might be strings with quotes or already parsed
     let clientId: string
     let clientSecret: string
     
+    // Log raw values for debugging
+    const rawClientId = clientIdData.setting_value
+    const rawClientSecret = clientSecretData.setting_value
+    
+    console.log('🔍 Raw client ID type:', typeof rawClientId)
+    console.log('🔍 Raw client ID value (first 30 chars):', String(rawClientId).substring(0, 30))
+    console.log('🔍 Raw client secret type:', typeof rawClientSecret)
+    console.log('🔍 Raw client secret value (first 30 chars):', String(rawClientSecret).substring(0, 30))
+    
     try {
-      // If it's already a string, use it directly
-      // If it's JSON, parse it
-      if (typeof clientIdData.setting_value === 'string') {
-        clientId = clientIdData.setting_value
-        // Remove quotes if JSON stringified
-        if (clientId.startsWith('"') && clientId.endsWith('"')) {
-          clientId = JSON.parse(clientId)
+      // Handle client ID parsing
+      if (typeof rawClientId === 'string') {
+        // If it's a string, check if it's JSON-encoded (starts/ends with quotes)
+        const clientIdStr = rawClientId.trim()
+        if (clientIdStr.startsWith('"') && clientIdStr.endsWith('"')) {
+          // It's a JSON string, parse it
+          clientId = JSON.parse(clientIdStr)
+          console.log('✅ Client ID was JSON-encoded, parsed successfully')
+        } else {
+          // It's already a plain string
+          clientId = clientIdStr
+          console.log('✅ Client ID was plain string')
         }
       } else {
-        // It's already parsed JSON
-        clientId = String(clientIdData.setting_value)
+        // Already parsed by Supabase client
+        clientId = String(rawClientId)
+        console.log('✅ Client ID was already parsed')
       }
     } catch (e) {
-      // Fallback: treat as string
-      clientId = String(clientIdData.setting_value)
+      console.error('❌ Error parsing client ID:', e)
+      // Fallback: treat as string and remove quotes manually if present
+      const fallback = String(rawClientId).trim()
+      clientId = fallback.startsWith('"') && fallback.endsWith('"') 
+        ? fallback.slice(1, -1) 
+        : fallback
+      console.log('⚠️ Used fallback parsing for client ID')
     }
     
     try {
-      if (typeof clientSecretData.setting_value === 'string') {
-        clientSecret = clientSecretData.setting_value
-        // Remove quotes if JSON stringified
-        if (clientSecret.startsWith('"') && clientSecret.endsWith('"')) {
-          clientSecret = JSON.parse(clientSecret)
+      // Handle client secret parsing
+      if (typeof rawClientSecret === 'string') {
+        // If it's a string, check if it's JSON-encoded (starts/ends with quotes)
+        const clientSecretStr = rawClientSecret.trim()
+        if (clientSecretStr.startsWith('"') && clientSecretStr.endsWith('"')) {
+          // It's a JSON string, parse it
+          clientSecret = JSON.parse(clientSecretStr)
+          console.log('✅ Client secret was JSON-encoded, parsed successfully')
+        } else {
+          // It's already a plain string
+          clientSecret = clientSecretStr
+          console.log('✅ Client secret was plain string')
         }
       } else {
-        // It's already parsed JSON
-        clientSecret = String(clientSecretData.setting_value)
+        // Already parsed by Supabase client
+        clientSecret = String(rawClientSecret)
+        console.log('✅ Client secret was already parsed')
       }
     } catch (e) {
-      // Fallback: treat as string
-      clientSecret = String(clientSecretData.setting_value)
+      console.error('❌ Error parsing client secret:', e)
+      // Fallback: treat as string and remove quotes manually if present
+      const fallback = String(rawClientSecret).trim()
+      clientSecret = fallback.startsWith('"') && fallback.endsWith('"') 
+        ? fallback.slice(1, -1) 
+        : fallback
+      console.log('⚠️ Used fallback parsing for client secret')
     }
     
     clientId = clientId.trim()
     clientSecret = clientSecret.trim()
     
-    console.log('🔍 Raw client ID type:', typeof clientIdData.setting_value)
-    console.log('🔍 Raw client secret type:', typeof clientSecretData.setting_value)
+    console.log('🔍 Parsed client ID:', clientId)
     console.log('🔍 Parsed client ID length:', clientId.length)
     console.log('🔍 Parsed client secret length:', clientSecret.length)
+    console.log('🔍 Parsed client secret (first 10 chars):', clientSecret.substring(0, 10) + '...')
     
     // Validate credentials format
     if (!clientId || clientId.length < 5) {
