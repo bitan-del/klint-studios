@@ -33,7 +33,14 @@ serve(async (req) => {
     const clientId = Deno.env.get('CANVA_CLIENT_ID')?.trim()
     const clientSecret = Deno.env.get('CANVA_CLIENT_SECRET')?.trim()
 
+    console.log('🔍 Checking environment variables...')
+    console.log('  - CANVA_CLIENT_ID exists:', !!clientId)
+    console.log('  - CANVA_CLIENT_SECRET exists:', !!clientSecret)
+    console.log('  - All env vars:', Object.keys(Deno.env.toObject()).filter(k => k.includes('CANVA')))
+
     if (!clientId || !clientSecret) {
+      console.error('❌ Environment variables not found!')
+      console.error('  - Available env vars:', Object.keys(Deno.env.toObject()).slice(0, 10))
       throw new Error('Canva client ID and secret not configured in Edge Function secrets. Please set CANVA_CLIENT_ID and CANVA_CLIENT_SECRET in Supabase Dashboard → Settings → Edge Functions → Secrets')
     }
 
