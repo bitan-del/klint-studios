@@ -635,7 +635,47 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                             const redirectUri = window.location.hostname === 'localhost' 
                                                                 ? 'https://www.klintstudios.com/canva-callback.html'
                                                                 : `${window.location.origin}/canva-callback.html`;
+                                                            
+                                                            console.log('🚀 Starting Canva OAuth flow...');
                                                             const authUrl = await getCanvaAuthUrl(redirectUri);
+                                                            
+                                                            // Verify storage before redirecting
+                                                            const verifierInSession = sessionStorage.getItem('canva_code_verifier');
+                                                            const verifierInLocal = localStorage.getItem('canva_code_verifier');
+                                                            
+                                                            // Check if verifier exists (handle both JSON and plain string formats)
+                                                            let hasVerifier = false;
+                                                            if (verifierInSession) {
+                                                                try {
+                                                                    const parsed = JSON.parse(verifierInSession);
+                                                                    hasVerifier = !!parsed.verifier;
+                                                                } catch {
+                                                                    hasVerifier = true; // Plain string format
+                                                                }
+                                                            }
+                                                            if (!hasVerifier && verifierInLocal) {
+                                                                try {
+                                                                    const parsed = JSON.parse(verifierInLocal);
+                                                                    hasVerifier = !!parsed.verifier;
+                                                                } catch {
+                                                                    hasVerifier = true; // Plain string format
+                                                                }
+                                                            }
+                                                            
+                                                            if (!hasVerifier) {
+                                                                console.error('❌ Code verifier not stored before redirect!');
+                                                                console.error('  - sessionStorage:', verifierInSession ? 'exists but invalid' : 'null');
+                                                                console.error('  - localStorage:', verifierInLocal ? 'exists but invalid' : 'null');
+                                                                alert('Failed to store authentication data. Please try again.');
+                                                                return;
+                                                            }
+                                                            
+                                                            console.log('✅ Code verifier verified in storage, redirecting to Canva...');
+                                                            console.log('📍 Auth URL:', authUrl);
+                                                            
+                                                            // Small delay to ensure storage is committed
+                                                            await new Promise(resolve => setTimeout(resolve, 100));
+                                                            
                                                             window.location.href = authUrl;
                                                         } catch (error) {
                                                             console.error('Error initiating Canva OAuth:', error);
