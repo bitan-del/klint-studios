@@ -92,9 +92,11 @@ serve(async (req) => {
     console.log('📤 Request body string (first 300 chars):', requestBodyStr.substring(0, 300))
     console.log('📤 Request body contains redirect_uri:', requestBodyStr.includes(normalizedRedirectUri) ? 'YES' : 'NO')
 
-    // Canva token endpoint is /api/oauth/token (not /api/token)
-    const tokenEndpoint = `${CANVA_AUTH_BASE}/oauth/token`
+    // Canva token endpoint - try /api/token first (matches refresh token endpoint)
+    // If this doesn't work, try /api/oauth/token
+    const tokenEndpoint = `${CANVA_AUTH_BASE}/token`
     console.log('📍 Token endpoint URL:', tokenEndpoint)
+    console.log('📍 Note: If 403/404, we may need to try /api/oauth/token instead')
     
     const tokenResponse = await fetch(tokenEndpoint, {
       method: 'POST',
@@ -112,7 +114,18 @@ serve(async (req) => {
       const errorText = await tokenResponse.text()
       console.error('❌ Canva token exchange error:')
       console.error('  - Status:', tokenResponse.status, tokenResponse.statusText)
-      console.error('  - Response (first 500 chars):', errorText.substring(0, 500))
+      console.error('  - Response length:', errorText.length)
+      console.error('  - Response (first 1000 chars):', errorText.substring(0, 1000))
+      console.error('  - Full response:', errorText)
+      
+      // Log what we sent for comparison
+      console.error('📤 What we sent to Canva:')
+      console.error('  - Endpoint:', tokenEndpoint)
+      console.error('  - Redirect URI:', normalizedRedirectUri)
+      console.error('  - Code length:', code.length)
+      console.error('  - Code verifier length:', code_verifier.length)
+      console.error('  - Client ID length:', clientId.length)
+      console.error('  - Request body:', requestBodyStr)
       
       // Try to parse as JSON if possible
       let errorMessage = `Canva token exchange failed: ${tokenResponse.statusText}`
@@ -123,7 +136,7 @@ serve(async (req) => {
         if (errorJson.error) {
           errorMessage = `Canva error: ${errorJson.error}`
           errorDetails = errorJson.error_description || errorJson.message || ''
-          console.error('❌ Canva error details:', {
+          console.error('❌ Canva error details (JSON):', {
             error: errorJson.error,
             error_description: errorJson.error_description,
             error_uri: errorJson.error_uri,
@@ -138,10 +151,11 @@ serve(async (req) => {
         console.error('   2. code_verifier does not match code_challenge')
         console.error('   3. Authorization code is invalid/expired')
         console.error('   4. Client credentials are incorrect')
+        console.error('   5. Token endpoint URL is wrong')
         
         if (errorText.includes('Forbidden') || errorText.includes('403')) {
           errorMessage = 'Canva rejected the request (403 Forbidden). Most likely causes:'
-          errorDetails = '1) Redirect URI does not match exactly what was used in authorization request\n2) Code verifier does not match the code challenge\n3) Authorization code expired or invalid'
+          errorDetails = '1) Redirect URI does not match exactly what was used in authorization request\n2) Code verifier does not match the code challenge\n3) Authorization code expired or invalid\n4) Client credentials incorrect\n5) Token endpoint URL incorrect'
         } else if (errorText.includes('Bad Request') || errorText.includes('400')) {
           errorMessage = 'Canva rejected the request (400 Bad Request). Most likely causes:'
           errorDetails = '1) Redirect URI mismatch - must match EXACTLY (including trailing slashes, http vs https)\n2) Code verifier mismatch\n3) Missing or invalid parameters'
