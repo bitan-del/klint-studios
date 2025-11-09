@@ -32,14 +32,16 @@ let codeVerifier: string | null = null;
 
 /**
  * Generate a cryptographically random code verifier for PKCE
+ * Uses 96 bytes (128 chars) as per Canva docs recommendation for high entropy
  */
 async function generateCodeVerifier(): Promise<string> {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return btoa(String.fromCharCode(...array))
+  const randomBytes = new Uint8Array(96); // 96 bytes = 128 characters base64url
+  window.crypto.getRandomValues(randomBytes);
+  // Base64url encode the random bytes
+  return btoa(String.fromCharCode(...randomBytes))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
-    .replace(/=/g, '');
+    .replace(/=+$/, ''); // Remove trailing padding
 }
 
 /**
@@ -109,7 +111,15 @@ export async function getCanvaAuthUrl(redirectUri: string): Promise<string> {
   
   // According to Canva docs: code_verifier must be stored server-side, not accessible by browser
   // Store verifier ONLY in Edge Function (server-side storage)
-  const sessionId = `canva_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  
+  // Generate high-entropy state as per Canva docs recommendation
+  // State must be a high-entropy random string (96 bytes = 128 chars base64url)
+  const stateBytes = new Uint8Array(96);
+  window.crypto.getRandomValues(stateBytes);
+  const sessionId = btoa(String.fromCharCode(...stateBytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, ''); // Remove trailing padding
   const state = sessionId; // Use session ID as state for CSRF protection
   
   // Store verifier server-side ONLY (as per Canva requirements)

@@ -92,11 +92,11 @@ serve(async (req) => {
     console.log('📤 Request body string (first 300 chars):', requestBodyStr.substring(0, 300))
     console.log('📤 Request body contains redirect_uri:', requestBodyStr.includes(normalizedRedirectUri) ? 'YES' : 'NO')
 
-    // Canva token endpoint - try /api/token first (matches refresh token endpoint)
-    // If this doesn't work, try /api/oauth/token
-    const tokenEndpoint = `${CANVA_AUTH_BASE}/token`
+    // Canva token endpoint - must be /api/oauth/token (matches authorization endpoint pattern)
+    // Authorization endpoint is /api/oauth/authorize, so token endpoint is /api/oauth/token
+    const tokenEndpoint = `${CANVA_AUTH_BASE}/oauth/token`
     console.log('📍 Token endpoint URL:', tokenEndpoint)
-    console.log('📍 Note: If 403/404, we may need to try /api/oauth/token instead')
+    console.log('📍 Matches Canva OAuth endpoint pattern: /api/oauth/token')
     
     const tokenResponse = await fetch(tokenEndpoint, {
       method: 'POST',
