@@ -631,12 +631,12 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                     onClick={async () => {
                                                         try {
                                                             const { getCanvaAuthUrl } = await import('./services/canvaService');
-                                                            // Use production URL for redirect (Canva requires production URLs)
-                                                            const redirectUri = window.location.hostname === 'localhost' 
-                                                                ? 'https://www.klintstudios.com/canva-callback.html'
-                                                                : `${window.location.origin}/canva-callback.html`;
+                                                            // Always use the exact production URL (Canva requires exact match)
+                                                            // This MUST match the redirect URI in CanvaCallback.tsx and Canva Developer Portal
+                                                            const redirectUri = 'https://www.klintstudios.com/canva-callback.html';
                                                             
                                                             console.log('🚀 Starting Canva OAuth flow...');
+                                                            console.log('📍 Using redirect URI:', redirectUri);
                                                             const authUrl = await getCanvaAuthUrl(redirectUri);
                                                             
                                                             // Verify storage before redirecting

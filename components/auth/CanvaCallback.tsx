@@ -54,8 +54,13 @@ export const CanvaCallback: React.FC = () => {
       }
 
       try {
-        // Get redirect URI (should match what you configured in Canva)
-        const redirectUri = `${window.location.origin}/canva-callback.html`;
+        // Get redirect URI (MUST match exactly what was used in authorization request)
+        // Always use the full production URL to ensure consistency
+        const redirectUri = 'https://www.klintstudios.com/canva-callback.html';
+        
+        console.log('🔄 Exchanging code for token...');
+        console.log('📍 Using redirect URI:', redirectUri);
+        console.log('📍 Current origin:', window.location.origin);
         
         // Exchange code for tokens
         await exchangeCodeForToken(code, redirectUri);
