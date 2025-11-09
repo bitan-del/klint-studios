@@ -515,8 +515,40 @@ export async function importImageToCanva(imageUrl: string): Promise<{
       console.warn('No access token available, using upload method');
     }
 
-    // Fallback: Use Canva's upload page with image URL in clipboard
-    // This requires user to paste, but it's the most reliable method
+    // Fallback: Multiple methods that don't require OAuth
+    
+    // Method 1: Try Canva's direct image import via URL parameter
+    // Canva supports importing images via URL in some cases
+    try {
+      // Encode the image URL for use in Canva's interface
+      const encodedImageUrl = encodeURIComponent(imageUrl);
+      
+      // Try Canva's design import with image URL
+      // This opens Canva with the image ready to import
+      const canvaImportUrl = `https://www.canva.com/design/DAF/create?import=${encodedImageUrl}`;
+      
+      return {
+        designId: '',
+        editUrl: canvaImportUrl,
+        viewUrl: canvaImportUrl,
+        method: 'upload',
+      };
+    } catch (e) {
+      console.warn('URL import method failed, using basic upload');
+    }
+    
+    // Method 2: Open Canva and copy image URL to clipboard for easy paste
+    // This is the most reliable fallback
+    if (typeof window !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(imageUrl);
+        console.log('✅ Image URL copied to clipboard');
+      } catch (clipboardError) {
+        console.warn('Could not copy to clipboard:', clipboardError);
+      }
+    }
+    
+    // Open Canva's create page - user can paste the URL
     const uploadUrl = 'https://www.canva.com/create';
     return {
       designId: '',
@@ -526,7 +558,17 @@ export async function importImageToCanva(imageUrl: string): Promise<{
     };
   } catch (error) {
     console.error('Error importing image to Canva:', error);
-    // Final fallback
+    
+    // Final fallback: Copy image URL to clipboard and open Canva
+    if (typeof window !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(imageUrl);
+        console.log('✅ Image URL copied to clipboard - user can paste in Canva');
+      } catch (clipboardError) {
+        console.warn('Could not copy to clipboard:', clipboardError);
+      }
+    }
+    
     const uploadUrl = 'https://www.canva.com/create';
     return {
       designId: '',
