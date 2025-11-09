@@ -55,9 +55,19 @@ serve(async (req) => {
     console.log('🔑 Client credentials loaded from environment variables:')
     console.log('  - Client ID:', clientId)
     console.log('  - Client ID length:', clientId.length)
+    console.log('  - Client ID matches expected (OC-AZpkHPiGh2PH):', clientId === 'OC-AZpkHPiGh2PH')
     console.log('  - Client ID format:', clientId.startsWith('OC-') ? 'Valid (OC- prefix)' : 'Unknown format')
     console.log('  - Client Secret length:', clientSecret.length)
     console.log('  - Client Secret (first 10 chars):', clientSecret.substring(0, 10) + '...')
+    console.log('  - Client Secret (last 10 chars):', '...' + clientSecret.substring(clientSecret.length - 10))
+    
+    // Verify client ID matches what's in database
+    if (clientId !== 'OC-AZpkHPiGh2PH') {
+      console.error('❌ CRITICAL: Client ID mismatch!')
+      console.error('  - Environment variable:', clientId)
+      console.error('  - Expected (from database):', 'OC-AZpkHPiGh2PH')
+      console.error('  - This will cause 403 Forbidden errors!')
+    }
 
     // Log request details (without exposing secrets)
     console.log('🔄 Exchanging code for token with Canva...')
