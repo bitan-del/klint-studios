@@ -92,16 +92,17 @@ serve(async (req) => {
               const matchesRedirect = !redirectUriInData || 
                                      redirectUriInData === redirectUri
               
-              const isRecent = age < 10 * 60 * 1000
+              // Increase to 15 minutes to account for OAuth flow delays
+              const isRecent = age < 15 * 60 * 1000
               
               console.log(`🔍 Checking key: ${item.setting_key}`)
-              console.log(`  - Age: ${Math.round(age / 1000)}s`)
+              console.log(`  - Age: ${Math.round(age / 1000)}s (${Math.round(age / 60000)} minutes)`)
               console.log(`  - Redirect URI in data: ${redirectUriInData || 'none'}`)
               console.log(`  - Request redirect URI: ${redirectUri}`)
               console.log(`  - Matches redirect: ${matchesRedirect}`)
-              console.log(`  - Is recent: ${isRecent}`)
+              console.log(`  - Is recent (< 15 min): ${isRecent}`)
               
-              // Must be less than 10 minutes old
+              // Must be less than 15 minutes old (increased from 10 minutes)
               if (matchesRedirect && isRecent && age < bestAge) {
                 bestMatch = { item, verifierData, age }
                 bestAge = age
@@ -134,14 +135,14 @@ serve(async (req) => {
           } else {
             console.log('❌ No valid verifier found with redirect URI match (checked', allKeys.length, 'keys)')
             
-            // LAST RESORT: Use most recent verifier regardless of redirect URI (if less than 10 min old)
+            // LAST RESORT: Use most recent verifier regardless of redirect URI (if less than 15 min old)
             console.log('🔍 LAST RESORT: Trying most recent verifier regardless of redirect URI...')
             for (const item of allKeys) {
               try {
                 const verifierData = JSON.parse(item.setting_value)
                 if (verifierData.verifier) {
                   const age = now - (verifierData.timestamp || 0)
-                  if (age < 10 * 60 * 1000) {
+                  if (age < 15 * 60 * 1000) {
                     console.log('✅ Using most recent verifier as last resort:', item.setting_key)
                     console.log('📍 Age:', Math.round(age / 1000), 'seconds')
                     
