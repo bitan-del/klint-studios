@@ -7,17 +7,17 @@ import type { StudioMode } from '../../types';
 import { InfoTooltip } from './InfoTooltip';
 
 interface StudioModeSwitcherProps {
-    onShowBrandStudios?: () => void;
+    onShowPixelMuse?: () => void;
 }
 
-export const StudioModeSwitcher: React.FC<StudioModeSwitcherProps> = ({ onShowBrandStudios }) => {
+export const StudioModeSwitcher: React.FC<StudioModeSwitcherProps> = ({ onShowPixelMuse }) => {
     const { studioMode, setStudioMode, t } = useStudio();
     const { user } = useAuth();
     const [isDropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     
-    // Check if user has access to Brand Studios
-    const hasBrandStudiosAccess = user?.plan === 'brand' || user?.role === 'admin' || user?.role === 'super_admin';
+    // Check if user has access to PixelMuse
+    const hasPixelMuseAccess = user?.plan === 'brand' || user?.role === 'admin' || user?.role === 'super_admin';
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -36,7 +36,8 @@ export const StudioModeSwitcher: React.FC<StudioModeSwitcherProps> = ({ onShowBr
         setDropdownOpen(false);
     };
 
-    const isDropdownActive = studioMode === 'design' || studioMode === 'reimagine' || (hasBrandStudiosAccess && onShowBrandStudios);
+    // PixelMuse hidden for now
+    const isDropdownActive = studioMode === 'design' || studioMode === 'reimagine' || (false && hasPixelMuseAccess && onShowPixelMuse);
 
     return (
         <div className="flex-shrink-0 bg-zinc-900 p-1 rounded-full flex items-center gap-1 border border-zinc-800 shadow-inner-soft">
@@ -89,18 +90,19 @@ export const StudioModeSwitcher: React.FC<StudioModeSwitcherProps> = ({ onShowBr
                             <ImageUp size={16} />
                             <span>{t('photo_editor')}</span>
                         </button>
-                        {hasBrandStudiosAccess && onShowBrandStudios && (
+                        {/* PixelMuse feature hidden for now */}
+                        {false && hasPixelMuseAccess && onShowPixelMuse && (
                             <>
                                 <div className="h-px bg-white/10 my-1" />
                                 <button
                                     onClick={() => {
-                                        onShowBrandStudios();
+                                        onShowPixelMuse();
                                         setDropdownOpen(false);
                                     }}
-                                    className="w-full flex items-center gap-3 p-2 text-sm font-medium rounded-md transition-colors text-purple-300 hover:bg-purple-600/20"
+                                    className="w-full flex items-center gap-3 p-2 text-sm font-medium rounded-md transition-colors text-emerald-300 hover:bg-emerald-600/20"
                                 >
                                     <Sparkles size={16} />
-                                    <span>Brand Studios</span>
+                                    <span>PixelMuse</span>
                                 </button>
                             </>
                         )}

@@ -461,6 +461,14 @@ export interface SharedState {
   chatHistory: ChatMessage[];
   isBotReplying: boolean;
   language: 'en' | 'hinglish';
+  // Reference images from chat for Photoshoot
+  chatReferenceImages: string[];
+  // Last image generation context (for follow-up requests)
+  lastImageGenerationContext: {
+    referenceImages: string[];
+    prompt: string;
+    generatedImage?: string;
+  } | null;
   // API Key State
   isApiKeySelectorOpen: boolean;
   hasSelectedApiKey: boolean;
@@ -495,7 +503,9 @@ export interface SharedActions {
   setIsCompletePack: (isComplete: boolean) => void;
   // Chatbot Actions
   toggleChatbot: () => void;
-  askChatbot: (question: string) => Promise<void>;
+  askChatbot: (question: string, images?: string[]) => Promise<void>;
+  addReferenceImages: (images: string[]) => void;
+  resetChat: () => void;
   // Language Actions
   setLanguage: (language: 'en' | 'hinglish') => void;
   t: (key: keyof (typeof translations)['en']) => string;
@@ -534,13 +544,54 @@ const initialSharedState: SharedState = {
     ecommercePack: 'none',
     isSocialMediaPack: false,
     isCompletePack: false,
-    // Chatbot
+    // Chatbot - Load from localStorage if available
     isChatbotOpen: false,
-    chatHistory: [
-        { role: 'model', text: "Hi! I'm your AI Assistant. How can I help you with your photoshoot today? You can ask me things like 'How do I use my own model?' or 'What are scene templates?'" }
-    ],
+    chatHistory: (() => {
+        try {
+            const saved = localStorage.getItem('klint_chat_history');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load chat history from localStorage:', e);
+        }
+        return [
+            { role: 'model', text: "Hi! I'm your AI Assistant. How can I help you with your photoshoot today? You can ask me things like 'How do I use my own model?' or 'What are scene templates?'" }
+        ];
+    })(),
     isBotReplying: false,
     language: 'en',
+    chatReferenceImages: (() => {
+        try {
+            const saved = localStorage.getItem('klint_chat_reference_images');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load chat reference images from localStorage:', e);
+        }
+        return [];
+    })(),
+    lastImageGenerationContext: (() => {
+        try {
+            const saved = localStorage.getItem('klint_last_image_context');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && parsed.referenceImages && parsed.prompt) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load last image generation context from localStorage:', e);
+        }
+        return null;
+    })(),
     // API Key State
     isApiKeySelectorOpen: false,
     hasSelectedApiKey: false,
@@ -1460,25 +1511,239 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
   
   // Chatbot
   toggleChatbot: () => set(state => ({ isChatbotOpen: !state.isChatbotOpen })),
-  askChatbot: async (question) => {
-      set(state => ({ 
-          chatHistory: [...state.chatHistory, { role: 'user', text: question }],
-          isBotReplying: true,
-      }));
+  askChatbot: async (question, images) => {
+      const userMessage: ChatMessage = { 
+          role: 'user', 
+          text: question,
+          ...(images && images.length > 0 && { images })
+      };
+      
+      set(state => {
+          const newHistory = [...state.chatHistory, userMessage];
+          // Save to localStorage
+          try {
+              localStorage.setItem('klint_chat_history', JSON.stringify(newHistory));
+          } catch (e) {
+              console.error('Failed to save chat history to localStorage:', e);
+          }
+          return { 
+              chatHistory: newHistory,
+              isBotReplying: true,
+          };
+      });
 
       try {
-          const response = await geminiService.getChatbotResponse(question, README_CONTENT);
-          set(state => ({
-              chatHistory: [...state.chatHistory, { role: 'model', text: response }],
-          }));
+          const state = get();
+          
+          // Check if this is a follow-up request to improve/modify the last generated image
+          const followUpKeywords = [
+              /(make|make it|do it|try|try again|redo|regenerate).*(better|improved|improve|different|again)/i,
+              /(better|improve|improved|enhance|fix|change|modify|adjust|tweak|redo|regenerate|try again)/i,
+              /(don't like|don't|dislike|not good|not right|wrong|fix this|make it a bit)/i,
+              /(a bit|slightly|more|less|too much|too little)/i
+          ];
+          
+          const isFollowUpRequest = followUpKeywords.some(regex => regex.test(question));
+          const hasLastContext = state.lastImageGenerationContext !== null;
+          
+          // If it's a follow-up request and no new images provided, use stored context
+          // If new images are provided, treat as new request
+          const shouldUseStoredContext = isFollowUpRequest && hasLastContext && (!hasImages || images.length === 0);
+          
+          // Check if this is an image generation request
+          // Detect requests like: "add X to Y", "blend", "combine", "put X in Y", etc.
+          const imageGenerationKeywords = [
+              /add.*to|put.*in|place.*in|blend|combine|merge|mix|insert|include|show.*with|display.*with/i,
+              /edit|modify|change|alter|transform|create.*from|make.*from/i,
+              /generate|create|make.*image|make.*picture/i
+          ];
+          
+          const hasImageKeywords = imageGenerationKeywords.some(regex => regex.test(question));
+          const hasImages = images && images.length > 0;
+          const isImageRequest = hasImages && (hasImageKeywords || question.length < 100); // If images provided and short question, likely image gen
+          
+          // Handle follow-up requests using stored context
+          if (shouldUseStoredContext && state.lastImageGenerationContext) {
+              const context = state.lastImageGenerationContext;
+              console.log('🔄 [CHATBOT] Follow-up request detected, using stored context');
+              console.log('📝 [CHATBOT] Original prompt:', context.prompt);
+              console.log('📸 [CHATBOT] Reference images:', context.referenceImages.length);
+              
+              // Build enhanced prompt combining original with improvement request
+              let improvementPrompt = question.trim();
+              
+              // Remove question marks
+              improvementPrompt = improvementPrompt.replace(/\?/g, '').trim();
+              
+              // Combine with original prompt
+              const combinedPrompt = `${context.prompt}. ${improvementPrompt}. Make sure to maintain the same style and composition from the reference images.`;
+              
+              // Add quality instructions
+              let finalPrompt = combinedPrompt;
+              if (!/professional|high.?quality|detailed|realistic|photorealistic/i.test(finalPrompt)) {
+                  finalPrompt = `${finalPrompt} Professional, high-quality, photorealistic result with perfect blending and composition.`;
+              }
+              
+              console.log('🎨 [CHATBOT] Combined prompt:', finalPrompt);
+              
+              const generatedImage = await geminiService.generateStyledImage(finalPrompt, context.referenceImages);
+              
+              // Update context with new generated image
+              const updatedContext = {
+                  ...context,
+                  prompt: finalPrompt,
+                  generatedImage: generatedImage
+              };
+              
+              const responseMessage: ChatMessage = {
+                  role: 'model',
+                  text: "I've improved the image based on your feedback! Here's the updated result:",
+                  generatedImage: generatedImage
+              };
+              
+              set(state => {
+                  const newHistory = [...state.chatHistory, responseMessage];
+                  // Save to localStorage
+                  try {
+                      localStorage.setItem('klint_chat_history', JSON.stringify(newHistory));
+                      localStorage.setItem('klint_last_image_context', JSON.stringify(updatedContext));
+                  } catch (e) {
+                      console.error('Failed to save chat history to localStorage:', e);
+                  }
+                  return {
+                      chatHistory: newHistory,
+                      lastImageGenerationContext: updatedContext,
+                  };
+              });
+          } else if (isImageRequest && hasImages) {
+              // Generate image using reference images
+              console.log('🎨 [CHATBOT] Detected image generation request with', images.length, 'reference images');
+              console.log('📝 [CHATBOT] Prompt:', question);
+              
+              // Build enhanced prompt for image generation
+              let imagePrompt = question.trim();
+              
+              // Remove question marks and common phrases
+              imagePrompt = imagePrompt.replace(/\?/g, '').trim();
+              
+              // Enhance prompt if it's too short
+              if (imagePrompt.length < 20) {
+                  imagePrompt = `Create a high-quality image: ${imagePrompt}`;
+              }
+              
+              // Add style instructions if not present
+              if (!/professional|high.?quality|detailed|realistic|photorealistic/i.test(imagePrompt)) {
+                  imagePrompt = `${imagePrompt}. Professional, high-quality, photorealistic result with perfect blending and composition.`;
+              }
+              
+              console.log('🎨 [CHATBOT] Enhanced prompt:', imagePrompt);
+              
+              const generatedImage = await geminiService.generateStyledImage(imagePrompt, images);
+              
+              // Store context for future follow-up requests
+              const context = {
+                  referenceImages: images,
+                  prompt: imagePrompt,
+                  generatedImage: generatedImage
+              };
+              
+              const responseMessage: ChatMessage = {
+                  role: 'model',
+                  text: "I've generated the image for you! Here's the result:",
+                  generatedImage: generatedImage
+              };
+              
+              set(state => {
+                  const newHistory = [...state.chatHistory, responseMessage];
+                  // Save to localStorage
+                  try {
+                      localStorage.setItem('klint_chat_history', JSON.stringify(newHistory));
+                      localStorage.setItem('klint_last_image_context', JSON.stringify(context));
+                  } catch (e) {
+                      console.error('Failed to save chat history to localStorage:', e);
+                  }
+                  return {
+                      chatHistory: newHistory,
+                      lastImageGenerationContext: context,
+                  };
+              });
+          } else if (hasImageKeywords && !hasImages) {
+              // Image request but no images provided
+              const response = "I can help you generate or edit images! Please upload one or more reference images and describe what you'd like me to create or modify.";
+              set(state => {
+                  const newHistory = [...state.chatHistory, { role: 'model', text: response }];
+                  try {
+                      localStorage.setItem('klint_chat_history', JSON.stringify(newHistory));
+                  } catch (e) {
+                      console.error('Failed to save chat history to localStorage:', e);
+                  }
+                  return {
+                      chatHistory: newHistory,
+                  };
+              });
+          } else {
+              // Regular text response
+              const response = await geminiService.getChatbotResponse(question, README_CONTENT);
+              set(state => {
+                  const newHistory = [...state.chatHistory, { role: 'model', text: response }];
+                  // Save to localStorage
+                  try {
+                      localStorage.setItem('klint_chat_history', JSON.stringify(newHistory));
+                  } catch (e) {
+                      console.error('Failed to save chat history to localStorage:', e);
+                  }
+                  return {
+                      chatHistory: newHistory,
+                  };
+              });
+          }
       } catch (e) {
           console.error("Chatbot error:", e);
-           set(state => ({
-              chatHistory: [...state.chatHistory, { role: 'model', text: "Sorry, I encountered an error. Please try again." }],
-          }));
+          set(state => {
+              const newHistory = [...state.chatHistory, { role: 'model', text: "Sorry, I encountered an error. Please try again." }];
+              // Save to localStorage
+              try {
+                  localStorage.setItem('klint_chat_history', JSON.stringify(newHistory));
+              } catch (e) {
+                  console.error('Failed to save chat history to localStorage:', e);
+              }
+              return {
+                  chatHistory: newHistory,
+              };
+          });
       } finally {
           set({ isBotReplying: false });
       }
+  },
+  addReferenceImages: (images) => {
+      set(state => {
+          const newImages = [...state.chatReferenceImages, ...images];
+          // Save to localStorage
+          try {
+              localStorage.setItem('klint_chat_reference_images', JSON.stringify(newImages));
+          } catch (e) {
+              console.error('Failed to save chat reference images to localStorage:', e);
+          }
+          return { chatReferenceImages: newImages };
+      });
+  },
+  resetChat: () => {
+      const defaultHistory: ChatMessage[] = [
+          { role: 'model', text: "Hi! I'm your AI Assistant. How can I help you with your photoshoot today? You can ask me things like 'How do I use my own model?' or 'What are scene templates?'" }
+      ];
+      // Clear localStorage
+      try {
+          localStorage.removeItem('klint_chat_history');
+          localStorage.removeItem('klint_chat_reference_images');
+          localStorage.removeItem('klint_last_image_context');
+      } catch (e) {
+          console.error('Failed to clear chat from localStorage:', e);
+      }
+      set({ 
+          chatHistory: defaultHistory,
+          chatReferenceImages: [],
+          lastImageGenerationContext: null
+      });
   },
 
   // Language

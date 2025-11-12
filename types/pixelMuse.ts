@@ -1,8 +1,8 @@
-export interface BrandProfile {
+export interface PixelMuseProfile {
   id: string;
   user_id: string;
-  name: string; // "Nike", "Adidas", etc.
-  client_id?: string; // Agency's client reference (optional)
+  name: string; // Profile name
+  client_id?: string; // Optional client reference
   
   // Learned from reference images
   color_palette: string[]; // ["#000000", "#FFFFFF", "#FF0000"]
@@ -21,7 +21,7 @@ export interface BrandProfile {
     pose_style?: string;
   };
   
-  // Reference images (URLs to uploaded brand assets)
+  // Reference images (URLs to uploaded assets)
   reference_images: string[];
   
   // AI-generated style description
@@ -42,10 +42,27 @@ export interface BrandProfile {
   updated_at: string;
 }
 
-export interface BrandStudioState {
-  profiles: BrandProfile[];
-  selectedProfile: BrandProfile | null;
+export interface PixelMuseGeneration {
+  id: string;
+  profile_id: string;
+  user_id: string;
+  image_url: string;
+  post_copy?: string;
+  prompt: string;
+  aspect_ratio: string;
+  generation_index: number;
+  batch_id: string;
+  created_at: string;
+  is_saved_to_creations: boolean;
+  saved_at?: string;
+  model_name?: string; // e.g., "NANO BANANA"
+}
+
+export interface PixelMuseState {
+  profiles: PixelMuseProfile[];
+  selectedProfile: PixelMuseProfile | null;
   isLoading: boolean;
   error: string | null;
+  pastGenerations: PixelMuseGeneration[];
 }
 

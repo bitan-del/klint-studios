@@ -15,7 +15,7 @@ import { FeatureLockOverlay } from './components/shared/FeatureLockOverlay';
 import { DailyLimitModal } from './components/shared/DailyLimitModal';
 import { Chatbot } from './components/chatbot/Chatbot';
 import { DashboardContainer } from './components/dashboard/DashboardContainer';
-import { BrandStudiosDashboard } from './components/brand/BrandStudiosDashboard';
+import { PixelMuseEditor } from './components/pixelmuse/PixelMuseEditor';
 import { User, PanelLeft, PanelRight, ChevronDown, Globe, Key, X, Shield, Search, CreditCard, DollarSign, Eye, EyeOff, Link2, Loader2, Check, RefreshCw, RotateCcw, Zap, LayoutGrid, Layers, CheckCircle2, Sparkles } from 'lucide-react';
 import { KLogo } from './components/shared/KLogo';
 import { CanvaFeaturesDisplay } from './components/shared/CanvaFeaturesDisplay';
@@ -927,8 +927,8 @@ const AppHeader: React.FC<{
     onSettingsClick: () => void;
     onSwitchToSimple?: () => void;
     studioMode?: string;
-    onShowBrandStudios?: () => void;
-}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple, studioMode, onShowBrandStudios }) => {
+    onShowPixelMuse?: () => void;
+}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple, studioMode, onShowPixelMuse }) => {
     const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
     const { t } = useStudio();
@@ -985,7 +985,7 @@ const AppHeader: React.FC<{
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:left-auto lg:top-auto lg:translate-x-0 lg:translate-y-0 flex items-center gap-4">
                     {/* Desktop Switcher */}
                     <div className="hidden lg:flex justify-center items-center">
-                        <StudioModeSwitcher onShowBrandStudios={onShowBrandStudios} />
+                        <StudioModeSwitcher onShowPixelMuse={onShowPixelMuse} />
                     </div>
                     <div id="generate-button-container">
                         <GenerateButton />
@@ -1033,7 +1033,7 @@ const AppContent: React.FC = () => {
     const [hideFeatureLock, setHideFeatureLock] = useState(false);
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
     const [useSimplifiedUI, setUseSimplifiedUI] = useState(true); // Toggle for new simplified UI
-    const [showBrandStudios, setShowBrandStudios] = useState(false); // Brand Studios view
+    const [showPixelMuse, setShowPixelMuse] = useState(false); // PixelMuse view
 
     // Check subscription status when user logs in
     useEffect(() => {
@@ -1120,12 +1120,14 @@ const AppContent: React.FC = () => {
         );
     }
 
-    // Show Brand Studios if enabled
-    if (showBrandStudios) {
+    // Show PixelMuse if enabled - goes directly to editor
+    if (showPixelMuse) {
         return (
-            <BrandStudiosDashboard
-                onBack={() => setShowBrandStudios(false)}
-            />
+            <div className="min-h-screen bg-zinc-950">
+                <PixelMuseEditor
+                    onBack={() => setShowPixelMuse(false)}
+                />
+            </div>
         );
     }
 
@@ -1136,7 +1138,7 @@ const AppContent: React.FC = () => {
                 onSettingsClick={() => setActiveMobilePanel('settings')}
                 onSwitchToSimple={() => setUseSimplifiedUI(true)}
                 studioMode={studioMode}
-                onShowBrandStudios={() => setShowBrandStudios(true)}
+                onShowPixelMuse={() => setShowPixelMuse(true)}
             />
             <main className="flex-grow flex-1 flex overflow-hidden relative">
                 {/* Feature Lock Overlay - shown when:

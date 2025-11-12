@@ -256,7 +256,7 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({ title, description,
 
 export default function Photoshoot({ onBack }: { onBack: () => void }) {
     console.log('🎬 [PHOTOSHOOT] Component mounted/rendered');
-    const { t } = useStudio();
+    const { t, chatReferenceImages } = useStudio();
     const { user, incrementGenerationsUsed } = useAuth();
     
     console.log('👤 [PHOTOSHOOT] User from useAuth:', {
@@ -461,9 +461,18 @@ Your single most important, critical, and unbreakable task is to perfectly prese
         let imageCounter = 1;
 
         const getImagePosition = () => {
-            const positions = ["first", "second", "third", "fourth"];
+            const positions = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"];
             return positions[imageCounter++];
         };
+
+        // Add reference images from chat (if any)
+        if (chatReferenceImages && chatReferenceImages.length > 0) {
+            const referenceImagesToUse = chatReferenceImages.slice(0, 3); // Limit to 3 to avoid token limits
+            referenceImagesToUse.forEach((refImage) => {
+                imageUrls.push(refImage);
+                promptFragments.push(`Use the style, composition, lighting, and aesthetic from the ${getImagePosition()} reference image as inspiration for the final output.`);
+            });
+        }
 
         if (outfitImage) {
             basePrompt = basePrompt.replace(/, clothing,/g, ',');

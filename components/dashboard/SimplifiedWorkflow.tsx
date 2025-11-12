@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Upload, Wand2, Download, Image as ImageIcon, Sparkles, X, Check, Zap, Loader2, ChevronDown, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Upload, Wand2, Download, Image as ImageIcon, Sparkles, X, Check, Zap, Loader2, ChevronDown, FolderOpen, XCircle, Bot, Send, Download as DownloadIcon } from 'lucide-react';
 import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../context/AuthContext';
 import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 import { storageService } from '../../services/storageService';
 import { ImageLibraryModal } from '../common/ImageLibraryModal';
+import { useStudio } from '../../context/StudioContext';
+import { ChatMessage } from '../../types';
 
 interface SimplifiedWorkflowProps {
     workflowId: string;
@@ -26,6 +28,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     const [prompt, setPrompt] = useState('');
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
     const [uploadedImage2, setUploadedImage2] = useState<string | null>(null); // For dual-upload workflows
+    const [uploadedImages, setUploadedImages] = useState<string[]>([]); // For multiple reference images
     const [isDragging, setIsDragging] = useState(false);
     const [isDragging2, setIsDragging2] = useState(false);
     const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
@@ -41,8 +44,14 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     const [uploadMode, setUploadMode] = useState<'upload' | 'library'>('upload');
     const [uploadMode2, setUploadMode2] = useState<'upload' | 'library'>('upload');
     const { user, incrementGenerationsUsed } = useAuth();
+    const { chatHistory, askChatbot, isBotReplying, addReferenceImages, resetChat } = useStudio();
+    const [chatInput, setChatInput] = useState('');
+    const [selectedChatImages, setSelectedChatImages] = useState<string[]>([]);
+    const chatFileInputRef = useRef<HTMLInputElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
+    const multipleImagesInputRef = useRef<HTMLInputElement>(null);
 
     // Check for gallery image from localStorage on mount
     useEffect(() => {
@@ -224,6 +233,112 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
         if (file) handleFileSelect(file);
     };
 
+    // Handle multiple image uploads for reference images
+    const handleMultipleImagesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        console.log('📸 [REFERENCE] Image select triggered, files:', files?.length || 0);
+        
+        if (files && files.length > 0) {
+            const fileArray = Array.from(files);
+            const loadPromises = fileArray.map((file) => {
+                return new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        if (reader.result) {
+                            console.log('✅ [REFERENCE] Image loaded:', file.name);
+                            resolve(reader.result as string);
+                        } else {
+                            console.error('❌ [REFERENCE] No result for:', file.name);
+                            reject(new Error(`Failed to load ${file.name}`));
+                        }
+                    };
+                    reader.onerror = () => {
+                        console.error('❌ [REFERENCE] Read error for:', file.name);
+                        reject(new Error(`Failed to read ${file.name}`));
+                    };
+                    reader.readAsDataURL(file);
+                });
+            });
+            
+            Promise.all(loadPromises)
+                .then((loadedImages) => {
+                    console.log('✅ [REFERENCE] All images loaded:', loadedImages.length);
+                    setUploadedImages(prev => {
+                        const updated = [...prev, ...loadedImages];
+                        console.log('📸 [REFERENCE] Total reference images:', updated.length);
+                        return updated;
+                    });
+                })
+                .catch((error) => {
+                    console.error('❌ [REFERENCE] Error loading images:', error);
+                    // Still add successfully loaded images
+                    Promise.allSettled(loadPromises)
+                        .then((results) => {
+                            const successful = results
+                                .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+                                .map(r => r.value);
+                            console.log('✅ [REFERENCE] Successfully loaded:', successful.length, 'images');
+                            if (successful.length > 0) {
+                                setUploadedImages(prev => [...prev, ...successful]);
+                            }
+                        });
+                });
+        } else {
+            console.warn('⚠️ [REFERENCE] No files selected');
+        }
+        
+        // Reset input to allow selecting same files again
+        if (multipleImagesInputRef.current) {
+            multipleImagesInputRef.current.value = '';
+        }
+    };
+
+    const removeReferenceImage = (index: number) => {
+        setUploadedImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Chatbot handlers
+    const handleChatImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files) {
+            const newImages: string[] = [];
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const dataUrl = reader.result as string;
+                    newImages.push(dataUrl);
+                    if (newImages.length === files.length) {
+                        setSelectedChatImages(prev => [...prev, ...newImages]);
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        if (chatFileInputRef.current) {
+            chatFileInputRef.current.value = '';
+        }
+    };
+
+    const removeChatImage = (index: number) => {
+        setSelectedChatImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleChatSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (chatInput.trim() || selectedChatImages.length > 0) {
+            if (selectedChatImages.length > 0 && addReferenceImages) {
+                addReferenceImages(selectedChatImages);
+            }
+            askChatbot(chatInput, selectedChatImages);
+            setChatInput('');
+            setSelectedChatImages([]);
+        }
+    };
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatHistory, isBotReplying]);
+
     const handleGenerate = async () => {
         // For upscale, require an uploaded image
         if (workflowId === 'upscale' && !uploadedImage) {
@@ -278,12 +393,20 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 // Standard generation for all other workflows
                 const imagePromises = Array.from({ length: config.singleOutput ? 1 : imageCount }).map(async (_, index) => {
                     try {
-                        const imageB64 = await geminiService.generateSimplifiedPhotoshoot(
-                            prompt,
-                            aspectRatio,
-                            uploadedImage // Pass the uploaded image (can be null)
-                        );
-                        return imageB64;
+                        // If reference images are provided, use generateStyledImage
+                        if (uploadedImages.length > 0) {
+                            const allImages = [uploadedImage, ...uploadedImages].filter(Boolean) as string[];
+                            const imageB64 = await geminiService.generateStyledImage(prompt, allImages);
+                            return imageB64;
+                        } else {
+                            // Otherwise use standard generation
+                            const imageB64 = await geminiService.generateSimplifiedPhotoshoot(
+                                prompt,
+                                aspectRatio,
+                                uploadedImage // Pass the uploaded image (can be null)
+                            );
+                            return imageB64;
+                        }
                     } catch (error) {
                         console.error(`Failed to generate image ${index + 1}:`, error);
                         return null;
@@ -736,6 +859,64 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                             />
                         </div>
 
+                        {/* Multiple Reference Images */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <label className="text-sm font-medium text-zinc-300">Reference Images (Optional)</label>
+                                {uploadedImages.length > 0 && (
+                                    <span className="text-xs text-zinc-500">{uploadedImages.length} added</span>
+                                )}
+                            </div>
+                            
+                            <input
+                                ref={multipleImagesInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleMultipleImagesSelect}
+                                onClick={(e) => {
+                                    console.log('📸 [REFERENCE] File input clicked');
+                                }}
+                                className="hidden"
+                                id="multiple-reference-upload"
+                            />
+                            
+                            {uploadedImages.length > 0 && (
+                                <div className="grid grid-cols-3 gap-2 mb-2">
+                                    {uploadedImages.map((img, idx) => (
+                                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-700 bg-zinc-800/50">
+                                            <img src={img} alt={`Reference ${idx + 1}`} className="w-full h-full object-cover" />
+                                            <button
+                                                onClick={() => removeReferenceImage(idx)}
+                                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                                            >
+                                                <X className="w-3 h-3 text-white" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            
+                            <label
+                                htmlFor="multiple-reference-upload"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log('📸 [REFERENCE] Label clicked, triggering file input');
+                                    multipleImagesInputRef.current?.click();
+                                }}
+                                className="block w-full rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all duration-300 cursor-pointer p-4 text-center"
+                            >
+                                <div className="flex flex-col items-center gap-2">
+                                    <ImageIcon className="w-6 h-6 text-zinc-400" />
+                                    <span className="text-sm text-zinc-300">
+                                        {uploadedImages.length > 0 ? 'Add More Reference Images' : 'Add Reference Images'}
+                                    </span>
+                                    <span className="text-xs text-zinc-500">Upload multiple images for style reference</span>
+                                </div>
+                            </label>
+                        </div>
+
                         {/* Generate Button */}
                         <button 
                             onClick={handleGenerate}
@@ -798,26 +979,133 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                             </div>
                         </div>
 
-                        {/* Tips */}
-                        <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-6">
-                            <h4 className="text-sm font-semibold mb-3 text-zinc-300 flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-emerald-400" />
-                                Pro Tips
-                            </h4>
-                            <ul className="space-y-3 text-xs text-zinc-400">
-                                <li className="flex gap-2">
-                                    <span className="text-emerald-400">→</span>
-                                    <span>Use high-resolution images for best results</span>
-                                </li>
-                                <li className="flex gap-2">
-                                    <span className="text-emerald-400">→</span>
-                                    <span>Be specific about lighting and atmosphere</span>
-                                </li>
-                                <li className="flex gap-2">
-                                    <span className="text-emerald-400">→</span>
-                                    <span>Experiment with different presets</span>
-                                </li>
-                            </ul>
+                        {/* Integrated Chatbot */}
+                        <div className="rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col h-[500px] max-h-[500px]">
+                            <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-zinc-800">
+                                <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                                    <Bot className="w-4 h-4 text-emerald-400" />
+                                    AI Assistant
+                                </h4>
+                                {chatHistory.length > 1 && (
+                                    <button 
+                                        onClick={resetChat}
+                                        className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                                        title="Reset chat"
+                                    >
+                                        Reset
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {/* Messages */}
+                            <div className="flex-grow p-4 space-y-3 overflow-y-auto" ref={messagesEndRef}>
+                                {chatHistory.map((msg, index) => (
+                                    <div key={index} className={`flex items-start gap-2 ${msg.role === 'model' ? '' : 'justify-end'}`}>
+                                        {msg.role === 'model' && (
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                                                <Bot size={14} className="text-emerald-300" />
+                                            </div>
+                                        )}
+                                        <div className={`max-w-[80%] rounded-lg px-3 py-2 text-xs ${msg.role === 'model' ? 'bg-zinc-800 rounded-tl-none text-zinc-200' : 'bg-emerald-600 text-white rounded-br-none'}`}>
+                                            {msg.images && msg.images.length > 0 && (
+                                                <div className="mb-1 flex flex-wrap gap-1">
+                                                    {msg.images.map((img, idx) => (
+                                                        <div key={idx} className="w-10 h-10 rounded overflow-hidden border border-white/20">
+                                                            <img src={img} alt={`Ref ${idx + 1}`} className="w-full h-full object-cover" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {msg.generatedImage && (
+                                                <div className="mb-1 rounded overflow-hidden border border-emerald-500/50 relative group">
+                                                    <img src={msg.generatedImage} alt="Generated" className="w-full h-auto max-h-48 object-contain" />
+                                                    <button
+                                                        onClick={() => {
+                                                            const link = document.createElement('a');
+                                                            link.href = msg.generatedImage!;
+                                                            link.download = `klint-generated-${Date.now()}.png`;
+                                                            link.click();
+                                                        }}
+                                                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center hover:bg-emerald-600 transition-colors opacity-0 group-hover:opacity-100"
+                                                        title="Download image"
+                                                    >
+                                                        <DownloadIcon size={12} className="text-white" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                                {isBotReplying && (
+                                    <div className="flex items-start gap-2">
+                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                                            <Bot size={14} className="text-emerald-300" />
+                                        </div>
+                                        <div className="max-w-[80%] rounded-lg px-3 py-2 bg-zinc-800 rounded-tl-none flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay: '0s'}} />
+                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}} />
+                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}} />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Input */}
+                            <div className="flex-shrink-0 p-4 border-t border-zinc-800">
+                                {selectedChatImages.length > 0 && (
+                                    <div className="mb-2 flex flex-wrap gap-1 max-h-16 overflow-y-auto">
+                                        {selectedChatImages.map((img, idx) => (
+                                            <div key={idx} className="relative w-10 h-10 rounded overflow-hidden border border-emerald-500/50 group">
+                                                <img src={img} alt={`Selected ${idx + 1}`} className="w-full h-full object-cover" />
+                                                <button
+                                                    onClick={() => removeChatImage(idx)}
+                                                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                                                >
+                                                    <XCircle size={12} className="text-white" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <form onSubmit={handleChatSubmit} className="relative">
+                                    <input
+                                        ref={chatFileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleChatImageSelect}
+                                        className="hidden"
+                                        id="workflow-chat-image-upload"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={chatInput}
+                                        onChange={(e) => setChatInput(e.target.value)}
+                                        placeholder="Ask a question..."
+                                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg py-2 pl-3 pr-20 text-xs text-zinc-200 placeholder:text-zinc-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                    />
+                                    <label
+                                        htmlFor="workflow-chat-image-upload"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            chatFileInputRef.current?.click();
+                                        }}
+                                        className="absolute right-10 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded transition-colors cursor-pointer"
+                                        title="Upload images"
+                                    >
+                                        <ImageIcon size={14} />
+                                    </label>
+                                    <button
+                                        type="submit"
+                                        className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors disabled:bg-zinc-600"
+                                        disabled={(!chatInput.trim() && selectedChatImages.length === 0) || isBotReplying}
+                                    >
+                                        <Send size={14} />
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>

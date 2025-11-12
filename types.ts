@@ -378,6 +378,8 @@ export interface ReimagineState {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+  images?: string[]; // Array of image data URLs for reference images
+  generatedImage?: string; // Generated image data URL (for model responses)
 }
 
 // FIX: Add missing Video types
