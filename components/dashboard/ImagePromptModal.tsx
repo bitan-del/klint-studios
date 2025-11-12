@@ -23,9 +23,9 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ isOpen, onCl
     
     // Generate a random username based on imageId for consistency
     const randomUsernames = [
-        'AlexCreative', 'MayaDesigns', 'SamVisuals', 'JordanArts', 'TaylorStudio',
-        'CaseyPixels', 'RileyShots', 'QuinnLens', 'MorganFrame', 'AveryCapture',
-        'BlakeFocus', 'CameronView', 'DakotaFrame', 'EmeryLens', 'FinleyShots'
+        'AlexCreative', 'MayaDesigns', 'Bitan', 'Aishwarya', 'TaylorStudio',
+        'CaseyPixels', 'Lakshay', 'QuinnLens', 'MorganFrame', 'AveryCapture',
+        'BlakeFocus', 'CameronView', 'Mohit', 'EmeryLens', 'FinleyShots'
     ];
     const randomUsername = randomUsernames[imageId % randomUsernames.length];
 

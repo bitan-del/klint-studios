@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Nano Banana Image Generator",
+  "description": "An application that allows users to generate images using text prompts with the Gemini 2.5 Flash Image model, inspired by the Nano Banana UI.",
+  "requestFramePermissions": []
+}

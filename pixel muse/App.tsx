@@ -1,89 +1,17 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { ImageGrid } from './ImageGrid';
-import { PromptBar } from './PromptBar';
-import { Header } from './Header';
-import { ImageEditor } from './ImageEditor';
-import { geminiService } from '../../services/geminiService';
-import type { AspectRatio } from '../../types';
+import { ImageGrid } from './components/ImageGrid';
+import { PromptBar } from './components/PromptBar';
+import { Header } from './components/Header';
+import { ImageEditor } from './components/ImageEditor';
+import { generateImage, enhancePrompt } from './services/geminiService';
 
-interface PixelMuseEditorProps {
-  onBack?: () => void;
-}
-
-// Helper function to adapt the new generateImage signature to use existing geminiService
-const generateImage = async (
-  prompt: string,
-  images: string[] = [],
-  imageCount: number,
-  aspectRatio: string
-): Promise<string[]> => {
-  try {
-    if (images.length > 0) {
-      // Image-to-image generation using generateStyledImage
-      const generationPromises = Array(imageCount)
-        .fill(0)
-        .map(async () => {
-          const result = await geminiService.generateStyledImage(prompt || 'Generate an image based on the reference images', images);
-          // Extract base64 from data URL
-          const base64Data = result.includes(',') ? result.split(',')[1] : result;
-          return base64Data;
-        });
-      
-      return await Promise.all(generationPromises);
-    } else {
-      // Text-to-image generation using generateWithImagen
-      if (!prompt) {
-        throw new Error('A prompt is required to generate an image.');
-      }
-      
-      const generationPromises = Array(imageCount)
-        .fill(0)
-        .map(async () => {
-          const result = await geminiService.generateWithImagen(prompt, aspectRatio as AspectRatio['value']);
-          // Extract base64 from data URL
-          const base64Data = result.includes(',') ? result.split(',')[1] : result;
-          return base64Data;
-        });
-      
-      return await Promise.all(generationPromises);
-    }
-  } catch (error) {
-    console.error("Error generating image:", error);
-    let errorMessage = "Failed to generate image.";
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-    throw new Error(errorMessage);
-  }
-};
-
-// Helper function to enhance prompt using geminiService
-const enhancePrompt = async (prompt: string): Promise<string> => {
-  try {
-    // Use the chatbot response to enhance the prompt
-    const response = await geminiService.getChatbotResponse(
-      `Enhance this image generation prompt to be more descriptive, vivid, and detailed for a text-to-image AI. Return ONLY the enhanced prompt, without any conversational preamble, labels, or explanation. Original prompt: "${prompt}"`,
-      ''
-    );
-    
-    // Clean up potential markdown or quotes
-    return response.trim().replace(/^"|"$/g, '').replace(/`/g, '');
-  } catch (error) {
-    console.error("Error enhancing prompt:", error);
-    let errorMessage = "Failed to enhance prompt.";
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-    throw new Error(errorMessage);
-  }
-};
-
-export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
+const App: React.FC = () => {
   const [prompt, setPrompt] = useState<string>('');
   const [inputImages, setInputImages] = useState<string[]>([]);
   const [images, setImages] = useState<string[]>(() => {
     try {
-      const storedImages = localStorage.getItem('pixelmuse_generatedImages');
+      const storedImages = localStorage.getItem('generatedImages');
+      // FIX: Add validation for the parsed data from localStorage.
       if (storedImages) {
         const parsed = JSON.parse(storedImages);
         if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
@@ -105,8 +33,9 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
 
   useEffect(() => {
     try {
-      localStorage.setItem('pixelmuse_generatedImages', JSON.stringify(images));
-    } catch (error) {
+      localStorage.setItem('generatedImages', JSON.stringify(images));
+    } catch (error)
+ {
       console.error("Failed to save images to localStorage", error);
     }
   }, [images]);
@@ -138,8 +67,8 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       const enhanced = await enhancePrompt(prompt);
       setPrompt(enhanced);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred while enhancing prompt.');
-      console.error(err);
+       setError(err instanceof Error ? err.message : 'An unknown error occurred while enhancing prompt.');
+       console.error(err);
     } finally {
       setIsEnhancing(false);
     }
@@ -149,6 +78,9 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     setImages(prevImages => prevImages.filter((_, index) => index !== indexToDelete));
   }, []);
 
+  // FIX: Refactored to use Promise.all for robust async handling of multiple file uploads.
+  // This also fixes a potential TypeScript type inference issue on `file` which could lead to
+  // the "Argument of type 'unknown' is not assignable to parameter of type 'Blob'" error.
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const files = Array.from(event.target.files);
@@ -199,30 +131,21 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     setEditingImage(null); // Close editor on generation start
 
     try {
-      // We generate a single image from the editor, now respecting the selected aspect ratio
-      const resolvedImages = await generateImage(editPrompt, [editedImage], 1, aspectRatio);
-      const newImages = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
-      setImages(prevImages => [...newImages, ...prevImages]);
+        // We generate a single image from the editor, now respecting the selected aspect ratio
+        const resolvedImages = await generateImage(editPrompt, [editedImage], 1, aspectRatio);
+        const newImages = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
+        setImages(prevImages => [...newImages, ...prevImages]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred during edit generation.');
-      console.error(err);
+        setError(err instanceof Error ? err.message : 'An unknown error occurred during edit generation.');
+        console.error(err);
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
   }, [aspectRatio]);
 
+
   return (
     <div className="bg-black min-h-screen text-white font-sans flex flex-col">
-      {onBack && (
-        <div className="absolute top-4 left-4 z-10">
-          <button
-            onClick={onBack}
-            className="px-4 py-2 bg-[#1e1f20] hover:bg-[#2c2d2f] rounded-lg text-gray-300 transition-colors"
-          >
-            ← Back
-          </button>
-        </div>
-      )}
       <Header />
       <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
         <ImageGrid 
@@ -260,3 +183,5 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     </div>
   );
 };
+
+export default App;
