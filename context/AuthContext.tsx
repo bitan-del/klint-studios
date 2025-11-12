@@ -470,8 +470,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Permission check
   const hasPermission = (feature: Feature): boolean => {
-    if (!user) return false;
-    return checkPermission(user.plan, feature);
+      if (!user) return false;
+      return checkPermission(user.plan, feature);
   };
   
   // Update user plan (admin only)
@@ -484,11 +484,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const success = await databaseService.updateUserPlan(userId, plan);
     if (success) {
       // Update local state in users array
-      setUsers(currentUsers => 
-        currentUsers.map(u => 
-          u.id === userId ? { ...u, plan } : u
-        )
-      );
+    setUsers(currentUsers => 
+      currentUsers.map(u => 
+        u.id === userId ? { ...u, plan } : u
+      )
+    );
       
       // If admin is changing their own plan, update the user object too
       if (user.id === userId) {
@@ -583,7 +583,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       // Update local state
-      setPaymentSettings(current => ({ ...current, [gateway]: settings }));
+    setPaymentSettings(current => ({ ...current, [gateway]: settings }));
     } catch (error) {
       console.error(`❌ Failed to save ${gateway} settings to database:`, error);
     }
@@ -609,7 +609,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('✅ Plan pricing saved to database');
       
       // Update local state
-      setPlanPrices(prices);
+    setPlanPrices(prices);
     } catch (error) {
       console.error('❌ Failed to save plan pricing to database:', error);
     }

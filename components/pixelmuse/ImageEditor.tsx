@@ -29,12 +29,15 @@ interface InteractionState {
   isPanning: boolean;
   panStart: { x: number; y: number }; // In screen space
   shiftKey: boolean;
+  drawingLayer?: Layer; // Store the drawing layer reference for immediate use
+  isSelecting: boolean; // For marquee selection box
+  selectionBox?: { startX: number; startY: number; endX: number; endY: number }; // Selection box coordinates
 }
 
 interface ImageEditorProps {
   imageSrc: string;
   onClose: () => void;
-  onGenerate: (prompt: string, editedImage: string) => void;
+  onGenerate: (prompt: string, editedImage: string, aspectRatio?: string) => void;
   aspectRatio: string;
 }
 
@@ -102,11 +105,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
   const [activeTool, setActiveTool] = useState<Tool>('select');
   const [layers, setLayers] = useState<Layer[]>([]);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
+  // Multi-selection support - track selected layer IDs
+  const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>([]);
+  // Store the final selection box area for generation
+  const [finalSelectionBox, setFinalSelectionBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  
+  // Use a ref to always have the latest layers for the render loop
+  const layersRef = useRef<Layer[]>([]);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textInputRef = useRef<HTMLTextAreaElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
   
   const [viewState, setViewState] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
@@ -122,6 +132,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
     isPanning: false,
     panStart: { x: 0, y: 0 },
     shiftKey: false,
+    drawingLayer: undefined,
+    isSelecting: false,
+    selectionBox: undefined,
   });
 
   const [aspectRatio, setAspectRatio] = useState(initialAspectRatio);
@@ -132,6 +145,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
   const [textInputState, setTextInputState] = useState({ visible: false, x: 0, y: 0, worldX: 0, worldY: 0, value: '' });
   const [textColor, setTextColor] = useState<string>('#FFFFFF');
   const [isLayersPanelVisible, setIsLayersPanelVisible] = useState(false);
+  // Track text annotations for contextual understanding
+  const [textAnnotations, setTextAnnotations] = useState<string[]>([]);
+  // Flag to prevent canvas clicks from closing text input
+  const textInputSubmittingRef = useRef(false);
   
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [generatePreview, setGeneratePreview] = useState<string | null>(null);
@@ -140,7 +157,13 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
   // Effect to focus and manage the text input when it becomes visible.
   useEffect(() => {
     if (textInputState.visible && textInputRef.current) {
-      textInputRef.current.focus();
+      // Use setTimeout to ensure the input is rendered before focusing
+      setTimeout(() => {
+        if (textInputRef.current) {
+          textInputRef.current.focus();
+          textInputRef.current.select(); // Select any existing text
+        }
+      }, 10);
     }
   }, [textInputState.visible]);
 
@@ -156,9 +179,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
   }, [viewState]);
 
   const getActiveDrawingLayer = useCallback(() => {
-    const activeLayer = layers.find(l => l.id === activeLayerId);
+    // Use ref to get latest layers
+    const activeLayer = layersRef.current.find(l => l.id === activeLayerId);
     return (activeLayer && activeLayer.type === 'drawing') ? activeLayer : null;
-  }, [layers, activeLayerId]);
+  }, [activeLayerId]);
 
     const getHandles = useCallback((layer: Layer): Record<Handle, { x: number; y: number }> => {
         const corners = getLayerCorners(layer);
@@ -189,8 +213,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
         ctx.translate(viewState.pan.x, viewState.pan.y);
         ctx.scale(viewState.zoom, viewState.zoom);
 
-        // Draw layers from bottom to top
-        const layersToRender = [...layers];
+        // Use the ref to get the latest layers (always up-to-date)
+        // Sort layers so drawing layers (arrows, text, etc.) render on top of image layers
+        const layersToRender = [...layersRef.current].sort((a, b) => {
+            // Background layer always at bottom
+            if (a.id === 'layer_bg') return -1;
+            if (b.id === 'layer_bg') return 1;
+            // Drawing layers render on top of image layers
+            if (a.type === 'drawing' && b.type === 'image') return 1;
+            if (a.type === 'image' && b.type === 'drawing') return -1;
+            // Keep original order for same type
+            return 0;
+        });
         layersToRender.forEach(layer => {
             if (!layer.visible) return;
             ctx.save();
@@ -200,45 +234,101 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
             ctx.restore();
         });
         
-        // Draw transform handles for active image layer
-        const activeLayer = layers.find(l => l.id === activeLayerId);
-        if (activeLayer && activeLayer.type === 'image' && activeTool === 'select') {
-            const handles = getHandles(activeLayer);
-            const handleSizeOnCanvas = HANDLE_SIZE / viewState.zoom;
-            ctx.save();
-
-            // Draw bounding box
-            ctx.beginPath();
-            ctx.moveTo(handles.tl.x, handles.tl.y);
-            ctx.lineTo(handles.tr.x, handles.tr.y);
-            ctx.lineTo(handles.br.x, handles.br.y);
-            ctx.lineTo(handles.bl.x, handles.bl.y);
-            ctx.closePath();
-            ctx.strokeStyle = '#a2ff00';
-            ctx.lineWidth = 1.5 / viewState.zoom;
-            ctx.stroke();
-
-            // Draw rotation line and handle
-            ctx.beginPath();
-            ctx.moveTo(handles.tm.x, handles.tm.y);
-            ctx.lineTo(handles.rotate.x, handles.rotate.y);
-            ctx.strokeStyle = '#a2ff00';
-            ctx.stroke();
-
-            Object.values(handles).forEach((handle: {x: number; y: number}) => {
-                ctx.fillStyle = '#a2ff00';
-                ctx.strokeStyle = '#1a1a1a'
-                ctx.lineWidth = 2 / viewState.zoom;
-                ctx.fillRect(handle.x - handleSizeOnCanvas / 2, handle.y - handleSizeOnCanvas / 2, handleSizeOnCanvas, handleSizeOnCanvas);
-                ctx.strokeRect(handle.x - handleSizeOnCanvas / 2, handle.y - handleSizeOnCanvas / 2, handleSizeOnCanvas, handleSizeOnCanvas);
+        // Draw selection boxes for selected layers
+        if (activeTool === 'select') {
+            // Draw bounding boxes for all selected layers (images, drawings, etc.)
+            selectedLayerIds.forEach(layerId => {
+                const selectedLayer = layersToRender.find(l => l.id === layerId);
+                if (selectedLayer && selectedLayer.visible) {
+                    ctx.save();
+                    
+                    if (selectedLayer.type === 'image') {
+                        const handles = getHandles(selectedLayer);
+                        // Draw bounding box
+                        ctx.beginPath();
+                        ctx.moveTo(handles.tl.x, handles.tl.y);
+                        ctx.lineTo(handles.tr.x, handles.tr.y);
+                        ctx.lineTo(handles.br.x, handles.br.y);
+                        ctx.lineTo(handles.bl.x, handles.bl.y);
+                        ctx.closePath();
+                        ctx.strokeStyle = '#10b981';
+                        ctx.lineWidth = 1.5 / viewState.zoom;
+                        ctx.stroke();
+                    } else if (selectedLayer.type === 'drawing') {
+                        // Draw bounding box for drawing layers
+                        ctx.strokeStyle = '#10b981';
+                        ctx.lineWidth = 1.5 / viewState.zoom;
+                        ctx.setLineDash([5, 5]);
+                        ctx.strokeRect(selectedLayer.x, selectedLayer.y, selectedLayer.width, selectedLayer.height);
+                        ctx.setLineDash([]);
+                    }
+                    
+                    ctx.restore();
+                }
             });
+            
+            // Draw selection box (marquee) if actively selecting
+            if (interactionState.current.isSelecting && interactionState.current.selectionBox) {
+                const box = interactionState.current.selectionBox;
+                ctx.save();
+                ctx.strokeStyle = '#10b981';
+                ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
+                ctx.lineWidth = 2 / viewState.zoom;
+                ctx.setLineDash([5, 5]);
+                const x = Math.min(box.startX, box.endX);
+                const y = Math.min(box.startY, box.endY);
+                const width = Math.abs(box.endX - box.startX);
+                const height = Math.abs(box.endY - box.startY);
+                ctx.fillRect(x, y, width, height);
+                ctx.strokeRect(x, y, width, height);
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+            
+            // Draw transform handles for active image layer
+            const activeLayer = layersToRender.find(l => l.id === activeLayerId);
+            if (activeLayer && activeLayer.type === 'image') {
+                const handles = getHandles(activeLayer);
+                const handleSizeOnCanvas = HANDLE_SIZE / viewState.zoom;
+                ctx.save();
 
-            ctx.restore();
+                // Draw bounding box (if not already drawn above)
+                if (!selectedLayerIds.includes(activeLayer.id)) {
+                    ctx.beginPath();
+                    ctx.moveTo(handles.tl.x, handles.tl.y);
+                    ctx.lineTo(handles.tr.x, handles.tr.y);
+                    ctx.lineTo(handles.br.x, handles.br.y);
+                    ctx.lineTo(handles.bl.x, handles.bl.y);
+                    ctx.closePath();
+                    ctx.strokeStyle = '#10b981';
+                    ctx.lineWidth = 1.5 / viewState.zoom;
+                    ctx.stroke();
+                }
+
+                // Draw rotation line and handle
+                ctx.beginPath();
+                ctx.moveTo(handles.tm.x, handles.tm.y);
+                ctx.lineTo(handles.rotate.x, handles.rotate.y);
+                ctx.strokeStyle = '#10b981';
+                ctx.stroke();
+
+                Object.values(handles).forEach((handle: {x: number; y: number}) => {
+                    ctx.fillStyle = '#10b981';
+                    ctx.strokeStyle = '#1a1a1a'
+                    ctx.lineWidth = 2 / viewState.zoom;
+                    ctx.fillRect(handle.x - handleSizeOnCanvas / 2, handle.y - handleSizeOnCanvas / 2, handleSizeOnCanvas, handleSizeOnCanvas);
+                    ctx.strokeRect(handle.x - handleSizeOnCanvas / 2, handle.y - handleSizeOnCanvas / 2, handleSizeOnCanvas, handleSizeOnCanvas);
+                });
+
+                ctx.restore();
+            }
         }
 
         // Draw temporary user interactions (drawing, shapes)
-        const { isDown, tool, startPoint, currentPoint, path } = interactionState.current;
-        if (isDown && getActiveDrawingLayer()) {
+        const { isDown, tool, startPoint, currentPoint, path, drawingLayer } = interactionState.current;
+        // Use stored drawing layer or get active one
+        const previewDrawingLayer = drawingLayer || getActiveDrawingLayer();
+        if (isDown && previewDrawingLayer) {
             ctx.strokeStyle = textColor;
             ctx.lineWidth = (tool === 'eraser' ? 30 : 5) / viewState.zoom;
             ctx.lineCap = 'round';
@@ -269,7 +359,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
             }
         }
         ctx.restore();
-    }, [layers, activeLayerId, activeTool, getHandles, viewState, getActiveDrawingLayer, textColor]);
+    }, [activeLayerId, activeTool, selectedLayerIds, getHandles, viewState, getActiveDrawingLayer, textColor]);
   
     useEffect(() => {
         let animationFrameId: number;
@@ -299,7 +389,11 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
       y: centerOfView.y - newHeight / 2,
       width: newWidth, height: newHeight, rotation: 0, data: image,
     };
-    setLayers(prev => [...prev, newLayer]);
+    setLayers(prev => {
+      const updated = [...prev, newLayer];
+      layersRef.current = updated;
+      return updated;
+    });
     setActiveLayerId(layerId);
     setActiveTool('select');
   }, [screenToCanvas]);
@@ -308,10 +402,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const centerOfView = screenToCanvas({ x: canvas.getBoundingClientRect().left + canvas.width / 2, y: canvas.getBoundingClientRect().top + canvas.height / 2 });
-
+    // Create a drawing layer that covers the entire infinite canvas
+    // Use a very large size so it covers all possible drawing areas
     const newDrawingCanvas = document.createElement('canvas');
-    const layerSize = 1024;
+    const layerSize = 10000; // Large enough to cover entire canvas
     newDrawingCanvas.width = layerSize;
     newDrawingCanvas.height = layerSize;
 
@@ -321,17 +415,22 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
         type: 'drawing',
         name: `Drawing ${layers.filter(l => l.type === 'drawing').length + 1}`,
         visible: true,
-        x: centerOfView.x - layerSize / 2,
-        y: centerOfView.y - layerSize / 2,
+        // Center the drawing layer at origin (0,0) so it covers the entire canvas
+        x: -layerSize / 2,
+        y: -layerSize / 2,
         width: layerSize,
         height: layerSize,
         rotation: 0,
         data: newDrawingCanvas,
     };
-    setLayers(prev => [...prev, newLayer]);
+    setLayers(prev => {
+      const updated = [...prev, newLayer];
+      layersRef.current = updated;
+      return updated;
+    });
     setActiveLayerId(layerId);
     return newLayer;
-  }, [layers, screenToCanvas]);
+  }, [screenToCanvas]);
 
     const setupCanvas = useCallback(() => {
         const container = containerRef.current;
@@ -382,7 +481,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
             (backgroundLayer.data as HTMLCanvasElement).width = backgroundLayer.width;
             (backgroundLayer.data as HTMLCanvasElement).height = backgroundLayer.height;
 
-            setLayers([backgroundLayer, imageLayer]);
+            const initialLayers = [backgroundLayer, imageLayer];
+            layersRef.current = initialLayers;
+            setLayers(initialLayers);
             setActiveLayerId(imageLayer.id);
             setActiveTool('select');
             
@@ -430,7 +531,13 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
   }, [setupCanvas, screenToCanvas, viewState.zoom]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (textInputState.visible) return;
+    // Prevent canvas interaction when text input is visible
+    // The backdrop will handle closing the text input
+    if (textInputState.visible) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const canvasPos = screenToCanvas({x: e.clientX, y: e.clientY});
     interactionState.current = {
       ...interactionState.current,
@@ -442,6 +549,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
     };
 
     if (activeTool === 'select') {
+        // First check if clicking on transform handles
         const activeLayer = layers.find(l => l.id === activeLayerId);
         if (activeLayer?.type === 'image') {
             const handles = getHandles(activeLayer);
@@ -456,9 +564,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
             }
         }
         
+        // Find which layer was clicked (check all layers from top to bottom)
+        // Use layersRef to get the latest layers
         let clickedLayer: Layer | null = null;
-        for (let i = layers.length - 1; i >= 0; i--) {
-            const layer = layers[i];
+        const currentLayers = layersRef.current.length > 0 ? layersRef.current : layers;
+        for (let i = currentLayers.length - 1; i >= 0; i--) {
+            const layer = currentLayers[i];
             if (layer.id !== 'layer_bg' && layer.type === 'image' && layer.visible) {
                  const centerX = layer.x + layer.width / 2;
                  const centerY = layer.y + layer.height / 2;
@@ -469,35 +580,99 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                  }
             }
         }
+        
         if (clickedLayer) {
-            setActiveLayerId(clickedLayer.id);
+            // Multi-selection: Shift+click adds to selection, regular click replaces selection
+            if (e.shiftKey) {
+                // Add to selection if not already selected
+                setSelectedLayerIds(prev => {
+                    const isAlreadySelected = prev.includes(clickedLayer!.id);
+                    if (isAlreadySelected) {
+                        // Remove if already selected (toggle off)
+                        const newSelection = prev.filter(id => id !== clickedLayer!.id);
+                        // If we removed the active layer, set a new active layer
+                        if (newSelection.length > 0 && activeLayerId === clickedLayer!.id) {
+                            setActiveLayerId(newSelection[newSelection.length - 1]);
+                        } else if (newSelection.length === 0) {
+                            setActiveLayerId(null);
+                        }
+                        return newSelection;
+                    } else {
+                        // Add to selection (max 3 layers)
+                        const newSelection = [...prev, clickedLayer!.id];
+                        const finalSelection = newSelection.slice(-3); // Keep only last 3
+                        setActiveLayerId(clickedLayer!.id);
+                        return finalSelection;
+                    }
+                });
+            } else {
+                // Single selection - replace current selection
+                setSelectedLayerIds([clickedLayer.id]);
+                setActiveLayerId(clickedLayer.id);
+                // Clear selection box when clicking directly on an element
+                setFinalSelectionBox(null);
+            }
             interactionState.current.targetLayerId = clickedLayer.id;
             interactionState.current.originalLayerState = { ...clickedLayer };
         } else {
-            const canvas = canvasRef.current;
-            if(!canvas) return;
-            const rect = canvas.getBoundingClientRect();
-            interactionState.current.isPanning = true;
-            interactionState.current.panStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            // Clicked on empty space - start selection box (marquee selection)
+            if (!e.shiftKey) {
+                // Start selection box
+                interactionState.current.isSelecting = true;
+                interactionState.current.selectionBox = {
+                    startX: canvasPos.x,
+                    startY: canvasPos.y,
+                    endX: canvasPos.x,
+                    endY: canvasPos.y
+                };
+            } else {
+                // Shift+click on empty space - keep current selection and allow panning
+                const canvas = canvasRef.current;
+                if(!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                interactionState.current.isPanning = true;
+                interactionState.current.panStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            }
         }
     } else if (activeTool === 'text') {
-        if (getActiveDrawingLayer()) {
-            setTextInputState({ visible: true, x: e.clientX, y: e.clientY, worldX: canvasPos.x, worldY: canvasPos.y, value: '' });
-        } else {
-             alert("Please select or create a drawing layer to add text.");
+        // Auto-create drawing layer if needed for text
+        let drawingLayer = getActiveDrawingLayer();
+        if (!drawingLayer) {
+            const newLayer = addDrawingLayer();
+            setActiveLayerId(newLayer.id);
+            drawingLayer = newLayer;
+        }
+        if (drawingLayer) {
+            // Store the layer reference for immediate use
+            interactionState.current.drawingLayer = drawingLayer;
+            // Get container-relative coordinates for text input positioning
+            const container = containerRef.current;
+            if (container) {
+                const rect = container.getBoundingClientRect();
+                const containerX = e.clientX - rect.left;
+                const containerY = e.clientY - rect.top;
+                setTextInputState({ visible: true, x: containerX, y: containerY, worldX: canvasPos.x, worldY: canvasPos.y, value: '' });
+            } else {
+                setTextInputState({ visible: true, x: e.clientX, y: e.clientY, worldX: canvasPos.x, worldY: canvasPos.y, value: '' });
+            }
         }
     } else {
-        if (getActiveDrawingLayer()) {
-             if (activeTool === 'pencil' || activeTool === 'eraser') {
-                 interactionState.current.path = [canvasPos];
-             }
-        } else if (activeTool !== 'rect' && activeTool !== 'arrow') {
-          // Auto-create a layer if needed for drawing tools
-          const newLayer = addDrawingLayer();
-          setActiveLayerId(newLayer.id);
-           if (activeTool === 'pencil' || activeTool === 'eraser') {
-               interactionState.current.path = [canvasPos];
-           }
+        // For all drawing tools (pencil, eraser, rect, arrow)
+        let drawingLayer = getActiveDrawingLayer();
+        if (!drawingLayer) {
+            // Auto-create a layer if needed
+            const newLayer = addDrawingLayer();
+            setActiveLayerId(newLayer.id);
+            drawingLayer = newLayer;
+        }
+        if (drawingLayer) {
+            // Store the layer reference for immediate use in handleMouseUp
+            interactionState.current.drawingLayer = drawingLayer;
+            if (activeTool === 'pencil' || activeTool === 'eraser') {
+                interactionState.current.path = [canvasPos];
+            }
+            // For rect and arrow, we just need to ensure the layer exists
+            // The drawing will happen in handleMouseUp
         }
     }
   };
@@ -507,7 +682,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
         if (!interactionState.current.isDown) return;
         
         const canvasPos = screenToCanvas({x: e.clientX, y: e.clientY});
-        const { tool, targetLayerId, startPoint, originalLayerState, transformHandle, isPanning } = interactionState.current;
+        const { tool, targetLayerId, startPoint, originalLayerState, transformHandle, isPanning, isSelecting } = interactionState.current;
         
         if (isPanning) {
             const canvas = canvasRef.current;
@@ -519,6 +694,13 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
             setViewState(prev => ({ ...prev, pan: { x: prev.pan.x + dx, y: prev.pan.y + dy } }));
             interactionState.current.panStart = screenPos;
             return;
+        }
+        
+        // Update selection box if actively selecting
+        if (isSelecting && interactionState.current.selectionBox) {
+            interactionState.current.selectionBox.endX = canvasPos.x;
+            interactionState.current.selectionBox.endY = canvasPos.y;
+            return; // Don't process other interactions while selecting
         }
 
         interactionState.current.currentPoint = canvasPos;
@@ -536,7 +718,11 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                     const startAngle = Math.atan2(startPoint.y - centerY, startPoint.x - centerX);
                     const currentAngle = Math.atan2(canvasPos.y - centerY, canvasPos.x - centerX);
                     const angleDiff = (currentAngle - startAngle) * 180 / Math.PI;
-                    setLayers(ls => ls.map(l => l.id === targetLayerId ? { ...l, rotation: original.rotation + angleDiff } : l));
+                    setLayers(ls => {
+                      const updated = ls.map(l => l.id === targetLayerId ? { ...l, rotation: original.rotation + angleDiff } : l);
+                      layersRef.current = updated;
+                      return updated;
+                    });
                 } else {
                     const angleRad = original.rotation * Math.PI / 180;
                     const cos = Math.cos(angleRad);
@@ -569,20 +755,36 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                     if (transformHandle.includes('t')) newX += dh * sin;
                     if (transformHandle.includes('l')) newY -= dw * sin;
 
-                    setLayers(ls => ls.map(l => l.id === targetLayerId ? { ...l, width: Math.max(10, newWidth), height: Math.max(10, newHeight), x: newX, y: newY } : l));
+                    setLayers(ls => {
+                      const updated = ls.map(l => l.id === targetLayerId ? { ...l, width: Math.max(10, newWidth), height: Math.max(10, newHeight), x: newX, y: newY } : l);
+                      layersRef.current = updated;
+                      return updated;
+                    });
                 }
             } else {
-                 setLayers(ls => ls.map(l => l.id === targetLayerId ? { ...l, x: originalLayerState.x + dx, y: originalLayerState.y + dy } : l));
+                 setLayers(ls => {
+                   const updated = ls.map(l => l.id === targetLayerId ? { ...l, x: originalLayerState.x + dx, y: originalLayerState.y + dy } : l);
+                   layersRef.current = updated;
+                   return updated;
+                 });
             }
-        } else if (getActiveDrawingLayer() && (tool === 'pencil' || tool === 'eraser')) {
-            interactionState.current.path?.push(canvasPos);
+        } else {
+            // For drawing tools, use stored drawing layer or get active one
+            const drawingLayer = interactionState.current.drawingLayer || getActiveDrawingLayer();
+            if (drawingLayer) {
+                if (tool === 'pencil' || tool === 'eraser') {
+                    interactionState.current.path?.push(canvasPos);
+                }
+                // For rect and arrow, currentPoint is already updated above, which triggers the preview in drawAllLayers
+            }
         }
     };
     const handleMouseUp = () => {
         if (!interactionState.current.isDown) return;
-        const { tool, startPoint, currentPoint, path } = interactionState.current;
+        const { tool, startPoint, currentPoint, path, drawingLayer } = interactionState.current;
 
-        const activeDrawingLayer = getActiveDrawingLayer();
+        // Use the stored drawing layer if available, otherwise try to get active layer
+        const activeDrawingLayer = drawingLayer || getActiveDrawingLayer();
         if (activeDrawingLayer) {
             const ctx = (activeDrawingLayer.data as HTMLCanvasElement).getContext('2d');
             if (ctx) {
@@ -599,18 +801,27 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                 if (tool === 'rect') {
                     ctx.strokeRect(localStart.x, localStart.y, localCurrent.x - localStart.x, localCurrent.y - localStart.y);
                 } else if (tool === 'arrow') {
-                    // FIX: Use a single, valid path to draw the arrow correctly.
-                    const headlen = 15;
+                    // Draw arrow with proper head
+                    const headlen = 20;
                     const dx = localCurrent.x - localStart.x;
                     const dy = localCurrent.y - localStart.y;
-                    const angle = Math.atan2(dy, dx);
-                    ctx.beginPath();
-                    ctx.moveTo(localStart.x, localStart.y);
-                    ctx.lineTo(localCurrent.x, localCurrent.y);
-                    ctx.lineTo(localCurrent.x - headlen * Math.cos(angle - Math.PI / 6), localCurrent.y - headlen * Math.sin(angle - Math.PI / 6));
-                    ctx.moveTo(localCurrent.x, localCurrent.y);
-                    ctx.lineTo(localCurrent.x - headlen * Math.cos(angle + Math.PI / 6), localCurrent.y - headlen * Math.sin(angle + Math.PI / 6));
-                    ctx.stroke();
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Only draw if there's a meaningful distance
+                    if (distance > 5) {
+                        const angle = Math.atan2(dy, dx);
+                        ctx.beginPath();
+                        // Draw the main line
+                        ctx.moveTo(localStart.x, localStart.y);
+                        ctx.lineTo(localCurrent.x, localCurrent.y);
+                        // Draw arrow head - left side
+                        ctx.moveTo(localCurrent.x, localCurrent.y);
+                        ctx.lineTo(localCurrent.x - headlen * Math.cos(angle - Math.PI / 6), localCurrent.y - headlen * Math.sin(angle - Math.PI / 6));
+                        // Draw arrow head - right side
+                        ctx.moveTo(localCurrent.x, localCurrent.y);
+                        ctx.lineTo(localCurrent.x - headlen * Math.cos(angle + Math.PI / 6), localCurrent.y - headlen * Math.sin(angle + Math.PI / 6));
+                        ctx.stroke();
+                    }
                 } else if ((tool === 'pencil' || tool === 'eraser') && path && path.length > 0) {
                     ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
                     ctx.beginPath();
@@ -622,19 +833,126 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                     ctx.stroke();
                 }
                 ctx.restore();
+                
+                // Update the layers state and ref to ensure the drawing persists
+                // The canvas element has been modified, so we need to update the state
+                setLayers(prevLayers => {
+                    // Check if the layer still exists in the current state
+                    const currentLayer = prevLayers.find(l => l.id === activeDrawingLayer.id);
+                    if (!currentLayer) {
+                        // Layer was removed, don't update
+                        return prevLayers;
+                    }
+                    
+                    // Create a new array with updated layer reference
+                    // The canvas element in layer.data contains the drawing, preserve it
+                    const updated = prevLayers.map(layer => {
+                        if (layer.id === activeDrawingLayer.id) {
+                            // Return a new object reference, but keep the same canvas element
+                            // The canvas element has the drawing, so we preserve it
+                            return { ...layer, data: activeDrawingLayer.data };
+                        }
+                        return layer;
+                    });
+                    
+                    // Update the ref immediately so the render loop sees the changes
+                    layersRef.current = updated;
+                    return updated;
+                });
             }
         }
         
-        interactionState.current = { ...interactionState.current, isDown: false, targetLayerId: null, originalLayerState: null, path: [], transformHandle: undefined, isPanning: false };
+        // Handle selection box completion
+        if (interactionState.current.isSelecting && interactionState.current.selectionBox) {
+            const box = interactionState.current.selectionBox;
+            const selectionRect = {
+                x: Math.min(box.startX, box.endX),
+                y: Math.min(box.startY, box.endY),
+                width: Math.abs(box.endX - box.startX),
+                height: Math.abs(box.endY - box.startY)
+            };
+            
+            // Store the final selection box area for generation
+            setFinalSelectionBox(selectionRect);
+            
+            // Find all layers that intersect with the selection box
+            const currentLayers = layersRef.current.length > 0 ? layersRef.current : layers;
+            const selectedIds: string[] = [];
+            
+            currentLayers.forEach(layer => {
+                if (layer.id === 'layer_bg' || !layer.visible) return;
+                
+                let intersects = false;
+                
+                if (layer.type === 'image') {
+                    // Check if image layer intersects with selection box
+                    const corners = getLayerCorners(layer);
+                    const layerBounds = {
+                        minX: Math.min(...Object.values(corners).map(c => c.x)),
+                        minY: Math.min(...Object.values(corners).map(c => c.y)),
+                        maxX: Math.max(...Object.values(corners).map(c => c.x)),
+                        maxY: Math.max(...Object.values(corners).map(c => c.y))
+                    };
+                    
+                    intersects = !(
+                        layerBounds.maxX < selectionRect.x ||
+                        layerBounds.minX > selectionRect.x + selectionRect.width ||
+                        layerBounds.maxY < selectionRect.y ||
+                        layerBounds.minY > selectionRect.y + selectionRect.height
+                    );
+                } else if (layer.type === 'drawing') {
+                    // Check if drawing layer intersects with selection box
+                    intersects = !(
+                        layer.x + layer.width < selectionRect.x ||
+                        layer.x > selectionRect.x + selectionRect.width ||
+                        layer.y + layer.height < selectionRect.y ||
+                        layer.y > selectionRect.y + selectionRect.height
+                    );
+                }
+                
+                if (intersects) {
+                    selectedIds.push(layer.id);
+                }
+            });
+            
+            // Update selection (limit to 3 for generation, but allow more for display)
+            if (selectedIds.length > 0) {
+                setSelectedLayerIds(selectedIds.slice(0, 3)); // Limit to 3 for generation
+                if (selectedIds.length > 0) {
+                    setActiveLayerId(selectedIds[0]);
+                }
+            } else {
+                // If nothing selected, clear selection
+                setSelectedLayerIds([]);
+                setActiveLayerId(null);
+                setFinalSelectionBox(null);
+            }
+        }
+        
+        interactionState.current = { 
+            ...interactionState.current, 
+            isDown: false, 
+            targetLayerId: null, 
+            originalLayerState: null, 
+            path: [], 
+            transformHandle: undefined, 
+            isPanning: false, 
+            drawingLayer: undefined,
+            isSelecting: false,
+            selectionBox: undefined
+        };
     };
 
     // FIX: Refactored to use controlled state, preventing unexpected closing.
     const handleTextSubmit = () => {
-        if (!textInputState.visible) return;
+        if (!textInputState.visible || textInputSubmittingRef.current) return;
+        
+        textInputSubmittingRef.current = true;
 
         const { worldX, worldY, value } = textInputState;
         const textValue = value.trim();
-        const activeDrawingLayer = getActiveDrawingLayer();
+        // Use stored drawing layer from interaction state if available, otherwise get active one
+        const activeDrawingLayer = interactionState.current.drawingLayer || getActiveDrawingLayer();
         
         if (activeDrawingLayer && textValue) {
             const dCtx = (activeDrawingLayer.data as HTMLCanvasElement).getContext('2d');
@@ -648,10 +966,30 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                 dCtx.textBaseline = 'top';
                 dCtx.fillText(textValue, localPos.x, localPos.y);
                 dCtx.restore();
+                
+                // Track text annotation for contextual understanding
+                setTextAnnotations(prev => [...prev, textValue]);
+                
+                // Force a re-render by updating the layers state
+                // This ensures the canvas re-draws with the new text
+                setLayers(prevLayers => {
+                    const updatedLayers = prevLayers.map(layer => {
+                        if (layer.id === activeDrawingLayer.id) {
+                            // Return a new object reference to trigger re-render
+                            return { ...layer };
+                        }
+                        return layer;
+                    });
+                    layersRef.current = updatedLayers;
+                    return updatedLayers;
+                });
             }
         }
         
         setTextInputState({ visible: false, x: 0, y: 0, worldX: 0, worldY: 0, value: '' });
+        setTimeout(() => {
+            textInputSubmittingRef.current = false;
+        }, 100);
     }
   
   const handleAddImageClick = () => { fileInputRef.current?.click(); };
@@ -668,28 +1006,66 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
   };
 
     const handleGenerate = () => {
-        if (layers.length === 0) return;
-
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        // Use selected layers if available (2-3 elements), otherwise use all visible layers
+        const currentLayers = layersRef.current.length > 0 ? layersRef.current : layers;
+        const layersToGenerate = selectedLayerIds.length >= 2 
+            ? currentLayers.filter(l => selectedLayerIds.includes(l.id) && l.visible && l.id !== 'layer_bg')
+            : currentLayers.filter(l => l.visible && l.id !== 'layer_bg');
         
-        layers.forEach(layer => {
-            if (!layer.visible || layer.id === 'layer_bg') return;
-            const corners = getLayerCorners(layer);
-            Object.values(corners).forEach(corner => {
-                minX = Math.min(minX, corner.x);
-                minY = Math.min(minY, corner.y);
-                maxX = Math.max(maxX, corner.x);
-                maxY = Math.max(maxY, corner.y);
-            });
-        });
-
-        if (!isFinite(minX)) {
-        alert("No visible content to generate from. Please add or show a layer.");
-        return; 
+        if (layersToGenerate.length === 0) {
+            if (selectedLayerIds.length > 0 && selectedLayerIds.length < 2) {
+                alert("Please select 2-3 elements to generate. Drag a selection box around elements to select them.");
+            } else {
+                alert("No visible content to generate from. Please add or show a layer.");
+            }
+            return;
         }
 
-        const contentWidth = Math.round(maxX - minX);
-        const contentHeight = Math.round(maxY - minY);
+        // Use the selection box area if available (from marquee selection), otherwise calculate bounding box
+        let minX: number, minY: number, contentWidth: number, contentHeight: number;
+        
+        if (finalSelectionBox && selectedLayerIds.length >= 2) {
+            // Use the exact selection box area that was dragged
+            minX = finalSelectionBox.x;
+            minY = finalSelectionBox.y;
+            contentWidth = Math.round(finalSelectionBox.width);
+            contentHeight = Math.round(finalSelectionBox.height);
+        } else {
+            // Calculate bounding box of selected layers (fallback for single clicks)
+            let maxX = -Infinity, maxY = -Infinity;
+            minX = Infinity;
+            minY = Infinity;
+            
+            layersToGenerate.forEach(layer => {
+                if (layer.type === 'image') {
+                    const corners = getLayerCorners(layer);
+                    Object.values(corners).forEach(corner => {
+                        minX = Math.min(minX, corner.x);
+                        minY = Math.min(minY, corner.y);
+                        maxX = Math.max(maxX, corner.x);
+                        maxY = Math.max(maxY, corner.y);
+                    });
+                } else if (layer.type === 'drawing') {
+                    // For drawing layers, use their bounds
+                    minX = Math.min(minX, layer.x);
+                    minY = Math.min(minY, layer.y);
+                    maxX = Math.max(maxX, layer.x + layer.width);
+                    maxY = Math.max(maxY, layer.y + layer.height);
+                }
+            });
+
+            if (!isFinite(minX)) {
+                alert("No visible content to generate from. Please add or show a layer.");
+                return; 
+            }
+
+            // Add padding around the selection for better context
+            const padding = 50;
+            contentWidth = Math.round(maxX - minX + padding * 2);
+            contentHeight = Math.round(maxY - minY + padding * 2);
+            minX -= padding;
+            minY -= padding;
+        }
         
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = contentWidth;
@@ -697,18 +1073,50 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
         const tempCtx = tempCanvas.getContext('2d');
         if (!tempCtx) return;
 
+        // White background
         tempCtx.fillStyle = '#FFFFFF';
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
         
-        layers.forEach(layer => {
-            if (!layer.visible || layer.id === 'layer_bg') return;
-            tempCtx.save();
-            tempCtx.translate(
-                (layer.x - minX) + layer.width / 2,
-                (layer.y - minY) + layer.height / 2
+        // Draw layers that fall within the selection area
+        // IMPORTANT: Include ALL drawing layers (text, arrows) that intersect with the selection area, not just selected ones
+        const allDrawingLayers = currentLayers.filter(l => l.type === 'drawing' && l.visible && l.id !== 'layer_bg');
+        const drawingLayersInArea = allDrawingLayers.filter(layer => {
+            // Check if drawing layer intersects with selection area
+            return !(
+                layer.x + layer.width < minX ||
+                layer.x > minX + contentWidth ||
+                layer.y + layer.height < minY ||
+                layer.y > minY + contentHeight
             );
-            tempCtx.rotate(layer.rotation * Math.PI / 180);
-            tempCtx.drawImage(layer.data, -layer.width/2, -layer.height/2, layer.width, layer.height);
+        });
+        
+        // Combine selected layers with drawing layers in the area
+        const allLayersToDraw = [...layersToGenerate, ...drawingLayersInArea.filter(l => !layersToGenerate.includes(l))];
+        
+        // Sort layers so drawing layers render on top
+        const sortedLayers = [...allLayersToDraw].sort((a, b) => {
+            if (a.type === 'drawing' && b.type === 'image') return 1;
+            if (a.type === 'image' && b.type === 'drawing') return -1;
+            return 0;
+        });
+        
+        sortedLayers.forEach(layer => {
+            tempCtx.save();
+            if (layer.type === 'image') {
+                tempCtx.translate(
+                    (layer.x - minX) + layer.width / 2,
+                    (layer.y - minY) + layer.height / 2
+                );
+                tempCtx.rotate(layer.rotation * Math.PI / 180);
+                tempCtx.drawImage(layer.data, -layer.width/2, -layer.height/2, layer.width, layer.height);
+            } else if (layer.type === 'drawing') {
+                // For drawing layers, draw them at their relative position
+                tempCtx.translate(
+                    (layer.x - minX),
+                    (layer.y - minY)
+                );
+                tempCtx.drawImage(layer.data, 0, 0);
+            }
             tempCtx.restore();
         });
         
@@ -723,13 +1131,24 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
             alert("Please enter a prompt to describe your desired changes.");
             return;
         }
-        onGenerate(generatePrompt, generatePreview);
+        
+        // For image editing from canvas: use the user's prompt directly
+        // The generateImage function will handle the Gemini Vision analysis
+        // Just pass the simple prompt - the backend will analyze annotations properly
+        const contextualPrompt = textAnnotations.length > 0 
+            ? `${generatePrompt}. Image contains text annotations: ${textAnnotations.join(', ')}`
+            : generatePrompt;
+        
+        // Pass the current aspect ratio from the editor to the generation function
+        onGenerate(contextualPrompt, generatePreview, aspectRatio);
         setIsGenerateModalOpen(false);
     };
   
   const selectTool = (tool: Tool) => {
       setActiveTool(tool);
       if (tool !== 'select') {
+         // Clear selection when switching away from select tool
+         setSelectedLayerIds([]);
          const active = getActiveDrawingLayer();
          if (!active) {
             const hasDrawingLayer = layers.some(l => l.type === 'drawing' && l.id !== 'layer_bg');
@@ -763,11 +1182,15 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
     setLayers(prevLayers => {
         const sourceIndex = prevLayers.findIndex(l => l.id === sourceLayerId);
         const targetIndex = prevLayers.findIndex(l => l.id === targetLayerId);
-        if (sourceIndex === -1 || targetIndex === -1) return prevLayers;
+        if (sourceIndex === -1 || targetIndex === -1) {
+          layersRef.current = prevLayers;
+          return prevLayers;
+        }
 
         const newLayers = [...prevLayers];
         const [removed] = newLayers.splice(sourceIndex, 1);
         newLayers.splice(targetIndex, 0, removed);
+        layersRef.current = newLayers;
         return newLayers;
     });
     setDraggedLayerId(null);
@@ -819,7 +1242,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                                 value={generatePrompt}
                                 onChange={(e) => setGeneratePrompt(e.target.value)}
                                 placeholder="A majestic castle in the background..."
-                                className="w-full flex-grow bg-[#2c2d2f] text-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-[#a2ff00] resize-none"
+                                className="w-full flex-grow bg-[#2c2d2f] text-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
                                 rows={8}
                                 autoFocus
                             />
@@ -827,7 +1250,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                     </div>
                     <div className="flex justify-end space-x-3 pt-2">
                         <button onClick={() => setIsGenerateModalOpen(false)} className="px-4 py-2 bg-[#2c2d2f] rounded-lg hover:bg-[#3a3b3d] text-gray-200 font-medium">Cancel</button>
-                        <button onClick={handleConfirmGenerate} className="px-6 py-2 bg-[#a2ff00] text-black font-semibold rounded-lg hover:scale-105 transition-transform">Generate</button>
+                        <button onClick={handleConfirmGenerate} className="px-6 py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-lg hover:scale-105 transition-all">Generate</button>
                     </div>
                 </div>
             </div>
@@ -856,7 +1279,14 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                             </div>
                             <span className="text-xs text-gray-200 flex-grow truncate">{layer.name}</span>
                             {layer.id !== 'layer_bg' && 
-                                <button onClick={(e) => { e.stopPropagation(); setLayers(ls => ls.filter(l => l.id !== layer.id)); }} className="p-1.5 text-gray-400 hover:text-white hover:bg-red-500/50 rounded-full flex-shrink-0"><DeleteIcon /></button>
+                                <button onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setLayers(ls => {
+                                    const updated = ls.filter(l => l.id !== layer.id);
+                                    layersRef.current = updated;
+                                    return updated;
+                                  });
+                                }} className="p-1.5 text-gray-400 hover:text-white hover:bg-red-500/50 rounded-full flex-shrink-0"><DeleteIcon /></button>
                             }
                         </div>
                     ))}
@@ -869,26 +1299,83 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
         )}
 
         {textInputState.visible && (
-            <div style={{ position: 'fixed', left: `${textInputState.x}px`, top: `${textInputState.y}px`, zIndex: 100, transform: 'translate(-50%, -50%)' }}>
-                <textarea
-                    ref={textInputRef}
-                    value={textInputState.value}
-                    onChange={(e) => setTextInputState(s => ({ ...s, value: e.target.value }))}
-                    onBlur={handleTextSubmit}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleTextSubmit();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setTextInputState(s => ({ ...s, visible: false, value: '' })); // Cancel
-                      }
+            <>
+                {/* Backdrop to capture clicks outside - transparent but captures events */}
+                <div 
+                    className="fixed inset-0 z-[9999]"
+                    style={{ backgroundColor: 'transparent', pointerEvents: 'auto' }}
+                    onMouseDown={(e) => {
+                        // Only handle if clicking directly on backdrop (not input container)
+                        const target = e.target as HTMLElement;
+                        if (target === e.currentTarget || !target.closest('.text-input-container')) {
+                            e.stopPropagation();
+                            // Don't preventDefault - let the input handle its own events
+                            // Submit text if it has content, otherwise just close
+                            setTimeout(() => {
+                                if (textInputState.value.trim()) {
+                                    handleTextSubmit();
+                                } else {
+                                    setTextInputState({ visible: false, x: 0, y: 0, worldX: 0, worldY: 0, value: '' });
+                                }
+                            }, 100);
+                        }
                     }}
-                    className="bg-black text-white p-2 border border-gray-500 rounded-md shadow-lg outline-none resize-none"
-                    rows={1}
-                    style={{ minWidth: '100px', minHeight: '40px' }}
                 />
-            </div>
+                <div 
+                    className="fixed pointer-events-auto text-input-container"
+                    style={{ 
+                        left: `${textInputState.x}px`, 
+                        top: `${textInputState.y}px`, 
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 10000
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                    }}
+                    onMouseDown={(e) => {
+                        e.stopPropagation();
+                    }}
+                >
+                    <input
+                        ref={textInputRef}
+                        type="text"
+                        value={textInputState.value}
+                        onChange={(e) => {
+                            setTextInputState(s => ({ ...s, value: e.target.value }));
+                        }}
+                        onBlur={(e) => {
+                            // Don't auto-submit on blur - let backdrop handle it
+                            // This prevents double submission
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            // Submit immediately
+                            if (textInputState.value.trim()) {
+                                handleTextSubmit();
+                            } else {
+                                setTextInputState({ visible: false, x: 0, y: 0, worldX: 0, worldY: 0, value: '' });
+                            }
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setTextInputState({ visible: false, x: 0, y: 0, worldX: 0, worldY: 0, value: '' });
+                          }
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                        }}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                        }}
+                        className="bg-black text-white px-3 py-2 border-2 border-emerald-500 rounded-md shadow-lg outline-none focus:ring-2 focus:ring-emerald-400 text-lg"
+                        style={{ minWidth: '200px', minHeight: '44px' }}
+                        placeholder="Type text and press Enter"
+                        autoFocus
+                    />
+                </div>
+            </>
         )}
         <input type="file" ref={fileInputRef} onChange={handleImageFileChange} accept="image/*" className="hidden"/>
       </div>
@@ -928,12 +1415,29 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageSrc: initialImage
                 </button>
             </div>
             
-            <button
-                onClick={handleGenerate}
-                className="px-8 py-4 bg-[#a2ff00] text-black font-semibold rounded-lg flex items-center space-x-2 transition-transform duration-200 ease-in-out hover:scale-105"
-            >
-                <span>Generate</span>
-            </button>
+            {/* Show generate button when 2-3 elements are selected, or always show for full canvas generation */}
+            {(selectedLayerIds.length >= 2 && selectedLayerIds.length <= 3) || selectedLayerIds.length === 0 ? (
+                <button
+                    onClick={handleGenerate}
+                    className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-lg flex items-center space-x-2 transition-all duration-200 ease-in-out hover:scale-105"
+                    title={selectedLayerIds.length >= 2 ? `Generating from ${selectedLayerIds.length} selected elements` : "Generate from entire canvas"}
+                >
+                    <span>Generate</span>
+                    {selectedLayerIds.length >= 2 && (
+                        <span className="text-xs bg-emerald-600 px-2 py-0.5 rounded">({selectedLayerIds.length} selected)</span>
+                    )}
+                </button>
+            ) : (
+                <div className="px-4 py-2 text-sm text-gray-400" title="Drag a selection box around elements to select them">
+                    Select 2-3 elements (Drag selection box)
+                </div>
+            )}
+            {/* Show selection count indicator */}
+            {selectedLayerIds.length > 0 && selectedLayerIds.length < 2 && (
+                <div className="px-3 py-1 text-xs text-gray-300 bg-gray-800/50 rounded">
+                    {selectedLayerIds.length} selected - Drag selection box to add more
+                </div>
+            )}
 
             <div className="flex items-center space-x-1 p-1 bg-black/20 rounded-lg relative">
                 <button onClick={() => setIsAspectOpen(o => !o)} className="flex items-center space-x-2 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-md" aria-label="Aspect Ratio">

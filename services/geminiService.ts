@@ -1302,7 +1302,8 @@ Do NOT change any part of the image outside the masked area.`
     try {
       const parts: any[] = [];
 
-      // Add reference images
+      // For image editing, send image FIRST then prompt (like Gemini UI)
+      // This allows Gemini to see the image with annotations first, then read instructions
       for (const imageDataUrl of referenceImages) {
         const { mimeType, data } = parseDataUrl(imageDataUrl);
         parts.push({
@@ -1310,7 +1311,7 @@ Do NOT change any part of the image outside the masked area.`
         });
       }
 
-      // Add text prompt
+      // Add text prompt AFTER images so Gemini sees annotations first
       parts.push({ text: prompt });
 
       console.log('🎨 Generating styled image with prompt and reference images...');

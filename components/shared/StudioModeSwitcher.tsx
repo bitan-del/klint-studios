@@ -16,8 +16,8 @@ export const StudioModeSwitcher: React.FC<StudioModeSwitcherProps> = ({ onShowPi
     const [isDropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     
-    // Check if user has access to PixelMuse
-    const hasPixelMuseAccess = user?.plan === 'brand' || user?.role === 'admin' || user?.role === 'super_admin';
+    // Check if user has access to PixelMuse (currently available to all users)
+    const hasPixelMuseAccess = true; // user?.plan === 'brand' || user?.role === 'admin' || user?.role === 'super_admin';
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -36,8 +36,8 @@ export const StudioModeSwitcher: React.FC<StudioModeSwitcherProps> = ({ onShowPi
         setDropdownOpen(false);
     };
 
-    // PixelMuse hidden for now
-    const isDropdownActive = studioMode === 'design' || studioMode === 'reimagine' || (false && hasPixelMuseAccess && onShowPixelMuse);
+    // PixelMuse is now visible
+    const isDropdownActive = studioMode === 'design' || studioMode === 'reimagine' || (hasPixelMuseAccess && onShowPixelMuse);
 
     return (
         <div className="flex-shrink-0 bg-zinc-900 p-1 rounded-full flex items-center gap-1 border border-zinc-800 shadow-inner-soft">
@@ -90,8 +90,8 @@ export const StudioModeSwitcher: React.FC<StudioModeSwitcherProps> = ({ onShowPi
                             <ImageUp size={16} />
                             <span>{t('photo_editor')}</span>
                         </button>
-                        {/* PixelMuse feature hidden for now */}
-                        {false && hasPixelMuseAccess && onShowPixelMuse && (
+                        {/* PixelMuse feature */}
+                        {hasPixelMuseAccess && onShowPixelMuse && (
                             <>
                                 <div className="h-px bg-white/10 my-1" />
                                 <button
