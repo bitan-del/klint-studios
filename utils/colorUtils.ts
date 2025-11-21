@@ -86,12 +86,14 @@ export const withRetry = async <T>(
     try {
       return await asyncFn();
     } catch (error: any) {
-      // Common ways APIs signal rate limiting
-      const isRateLimitError =
+      // Common ways APIs signal rate limiting or service unavailability
+      const isRetryableError =
         error.status === 429 ||
-        (error.message && /rate limit|resource has been exhausted|too many requests/i.test(error.message));
+        error.status === 503 ||
+        error.code === 503 ||
+        (error.message && /rate limit|resource has been exhausted|too many requests|overloaded|service unavailable|unavailable/i.test(error.message));
 
-      if (isRateLimitError && attempt < maxRetries) {
+      if (isRetryableError && attempt < maxRetries) {
         attempt++;
         // Exponential backoff with a random jitter to prevent thundering herd
         const delay = initialDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;

@@ -522,14 +522,32 @@ User's Input: "${prompt}"
 
 Rewrite the user's input into a professional, high-quality prompt. Return ONLY the rewritten prompt text. Do not add any conversational filler or explanations.`;
 
+    // Use retry logic for service unavailability errors
+    const { withRetry } = await import('../utils/colorUtils');
+    
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: fullPrompt,
-        });
-        return response.text.trim();
-    } catch (error) {
+        return await withRetry(
+            async () => {
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: fullPrompt,
+                });
+                return response.text.trim();
+            },
+            {
+                maxRetries: 3,
+                initialDelay: 2000,
+                onRetry: (attempt, delay) => {
+                    console.log(`⚠️ Gemini API overloaded. Retrying in ${Math.ceil(delay / 1000)}s... (Attempt ${attempt}/3)`);
+                }
+            }
+        );
+    } catch (error: any) {
         console.error("Error optimizing prompt with Gemini:", error);
+        // If it's a 503 error, provide a more user-friendly message
+        if (error.status === 503 || error.code === 503 || (error.message && /overloaded|service unavailable/i.test(error.message))) {
+            throw new Error("Gemini API is currently overloaded. Please try again in a few moments.");
+        }
         throw error;
     }
   },
@@ -938,6 +956,9 @@ Return ONLY a JSON array of 4 objects.`;
     const ai = await getAI();
     if (!ai) return mockGenerateImage(baseParts, aspectRatio, numberOfImages, negativePrompt, onImageGenerated);
 
+    // Import retry utility
+    const { withRetry } = await import('../utils/colorUtils');
+
     try {
       for (let i = 0; i < numberOfImages; i++) {
         // Deep copy parts to avoid mutation across loop iterations
@@ -958,13 +979,24 @@ Return ONLY a JSON array of 4 objects.`;
         }
         
         try {
-            const response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash-image',
-              contents: { parts },
-              config: {
-                responseModalities: [Modality.IMAGE],
-              },
-            });
+            const response = await withRetry(
+                async () => {
+                    return await ai.models.generateContent({
+                        model: 'gemini-2.5-flash-image',
+                        contents: { parts },
+                        config: {
+                            responseModalities: [Modality.IMAGE],
+                        },
+                    });
+                },
+                {
+                    maxRetries: 3,
+                    initialDelay: 2000,
+                    onRetry: (attempt, delay) => {
+                        console.log(`⚠️ Gemini API overloaded for image ${i + 1}/${numberOfImages}. Retrying in ${Math.ceil(delay / 1000)}s... (Attempt ${attempt}/3)`);
+                    }
+                }
+            );
             
             let imageFound = false;
             if (response.candidates && response.candidates.length > 0) {
@@ -983,8 +1015,12 @@ Return ONLY a JSON array of 4 objects.`;
                 console.warn("No image found in a Gemini response for index " + i, response);
                 // The UI will show a placeholder for the failed image.
             }
-        } catch(error) {
+        } catch(error: any) {
             console.error(`Error generating image at index ${i}:`, error);
+            // If it's a 503 error, log a user-friendly message
+            if (error.status === 503 || error.code === 503 || (error.message && /overloaded|service unavailable/i.test(error.message))) {
+                console.error(`⚠️ Gemini API is overloaded. Skipping image ${i + 1}/${numberOfImages}. Please try again later.`);
+            }
             // Continue to the next image even if one fails.
         }
       }

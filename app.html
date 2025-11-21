@@ -11,7 +11,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/styles.css">
     <script>
-      tailwind.config = {
+      // Wait for Tailwind to be available before setting config
+      (function() {
+        function configureTailwind() {
+          if (typeof tailwind !== 'undefined') {
+            tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
@@ -109,7 +113,14 @@
             },
           },
         },
-      }
+      };
+          } else {
+            // Retry after a short delay if Tailwind isn't ready yet
+            setTimeout(configureTailwind, 50);
+          }
+        }
+        configureTailwind();
+      })();
     </script>
   <script type="importmap">
 {
@@ -128,7 +139,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 <script>
       // Handle OAuth redirects early before React loads
       (function() {

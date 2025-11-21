@@ -37,7 +37,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     const [generatedImages, setGeneratedImages] = useState<string[]>([]);
     const [aspectRatio, setAspectRatio] = useState<AspectRatioType>('3:4');
     const [showAspectRatioDropdown, setShowAspectRatioDropdown] = useState(false);
-    const [imageCount, setImageCount] = useState(4);
+    const [imageCount, setImageCount] = useState(1);
     const [showImageCountDropdown, setShowImageCountDropdown] = useState(false);
     const [showLibraryModal, setShowLibraryModal] = useState(false);
     const [showLibraryModal2, setShowLibraryModal2] = useState(false);
@@ -57,7 +57,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     useEffect(() => {
         const galleryImage = localStorage.getItem('gallery_image_for_feature');
         const galleryFeature = localStorage.getItem('gallery_feature');
-        
+
         // Only load if it's for this workflow
         if (galleryImage && galleryFeature === workflowId) {
             setUploadedImage(galleryImage);
@@ -165,7 +165,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
             setShowAspectRatioDropdown(false);
             setShowImageCountDropdown(false);
         };
-        
+
         if (showAspectRatioDropdown || showImageCountDropdown) {
             document.addEventListener('click', handleClickOutside);
             return () => document.removeEventListener('click', handleClickOutside);
@@ -180,7 +180,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
 
     const handleOptimizePrompt = async () => {
         if (!prompt.trim()) return;
-        
+
         setIsOptimizing(true);
         try {
             const context = `${config.title} - ${config.subtitle}`;
@@ -237,7 +237,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     const handleMultipleImagesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         console.log('📸 [REFERENCE] Image select triggered, files:', files?.length || 0);
-        
+
         if (files && files.length > 0) {
             const fileArray = Array.from(files);
             const loadPromises = fileArray.map((file) => {
@@ -259,7 +259,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                     reader.readAsDataURL(file);
                 });
             });
-            
+
             Promise.all(loadPromises)
                 .then((loadedImages) => {
                     console.log('✅ [REFERENCE] All images loaded:', loadedImages.length);
@@ -286,7 +286,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
         } else {
             console.warn('⚠️ [REFERENCE] No files selected');
         }
-        
+
         // Reset input to allow selecting same files again
         if (multipleImagesInputRef.current) {
             multipleImagesInputRef.current.value = '';
@@ -345,12 +345,12 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
             alert('Please upload an image to upscale');
             return;
         }
-        
+
         if (!prompt || isGenerating) return;
-        
+
         setIsGenerating(true);
         setGeneratedImages([]);
-        
+
         try {
             // Helper function to convert base64 to File
             const base64ToFile = (base64: string, filename: string): File => {
@@ -370,7 +370,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 console.log('🚀 Starting intelligent upscaling process...');
                 const upscaledImage = await geminiService.upscaleImage(uploadedImage, prompt);
                 setGeneratedImages([upscaledImage]);
-                
+
                 // Save to Cloudinary storage
                 if (user) {
                     try {
@@ -381,7 +381,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                         console.warn('⚠️ Failed to save image to Cloudinary:', error);
                         // Continue even if Cloudinary save fails
                     }
-                    
+
                     // Increment user's generation count (1 image)
                     const result = await incrementGenerationsUsed(1);
                     if (result.dailyLimitHit && onOpenDailyLimitModal) {
@@ -412,12 +412,12 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                         return null;
                     }
                 });
-                
+
                 const results = await Promise.all(imagePromises);
                 const validImages = results.filter((img): img is string => img !== null);
-                
+
                 setGeneratedImages(validImages);
-                
+
                 // Save to Cloudinary storage
                 if (user && validImages.length > 0) {
                     try {
@@ -431,7 +431,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                         console.warn('⚠️ Failed to save images to Cloudinary:', error);
                         // Continue even if Cloudinary save fails
                     }
-                    
+
                     // Increment user's generation count
                     const result = await incrementGenerationsUsed(validImages.length);
                     if (result.dailyLimitHit && onOpenDailyLimitModal) {
@@ -459,7 +459,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
         <div className="min-h-screen bg-zinc-950 text-zinc-100">
             {/* Animated background */}
             <div className="fixed inset-0 bg-gradient-to-br from-emerald-950/20 via-zinc-950 to-teal-950/20 pointer-events-none" />
-            
+
             {/* Header */}
             <div className="relative z-10 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-xl sticky top-0">
                 <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
@@ -470,7 +470,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                         <span className="text-sm font-medium">Back</span>
                     </button>
-                    
+
                     <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${config.gradient} flex items-center justify-center`}>
                             <ImageIcon className="w-4 h-4 text-white" />
@@ -497,15 +497,15 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     <label className="block text-sm font-medium text-zinc-300 mb-3">
                                         {config.upload1Label}
                                     </label>
-                                    
+
                                     {/* Tabs */}
                                     <div className="flex gap-2 mb-3">
                                         <button
                                             onClick={() => setUploadMode('upload')}
                                             className={`
                                                 flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                                ${uploadMode === 'upload' 
-                                                    ? 'bg-emerald-500 text-black' 
+                                                ${uploadMode === 'upload'
+                                                    ? 'bg-emerald-500 text-black'
                                                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                                                 }
                                             `}
@@ -517,8 +517,8 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                             onClick={() => setUploadMode('library')}
                                             className={`
                                                 flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                                ${uploadMode === 'library' 
-                                                    ? 'bg-emerald-500 text-black' 
+                                                ${uploadMode === 'library'
+                                                    ? 'bg-emerald-500 text-black'
                                                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                                                 }
                                             `}
@@ -527,7 +527,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                             From Library
                                         </button>
                                     </div>
-                                    
+
                                     <input
                                         ref={fileInputRef}
                                         type="file"
@@ -535,12 +535,12 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                         onChange={handleFileInputChange}
                                         className="hidden"
                                     />
-                                    
+
                                     {uploadedImage ? (
                                         <div className="relative rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-800/50 p-2">
-                                            <img 
-                                                src={uploadedImage} 
-                                                alt="Uploaded 1" 
+                                            <img
+                                                src={uploadedImage}
+                                                alt="Uploaded 1"
                                                 className="w-full h-64 object-contain rounded-xl bg-zinc-900"
                                             />
                                             <button
@@ -559,16 +559,16 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                             className={`
                                                 relative rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer
                                                 h-64 flex flex-col items-center justify-center
-                                                ${isDragging 
-                                                    ? 'border-emerald-500 bg-emerald-500/10' 
+                                                ${isDragging
+                                                    ? 'border-emerald-500 bg-emerald-500/10'
                                                     : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50'
                                                 }
                                             `}
                                         >
                                             <div className={`
                                                 w-12 h-12 rounded-xl mb-4 flex items-center justify-center transition-all duration-300
-                                                ${isDragging 
-                                                    ? `bg-gradient-to-br ${config.gradient}` 
+                                                ${isDragging
+                                                    ? `bg-gradient-to-br ${config.gradient}`
                                                     : 'bg-zinc-800 group-hover:bg-zinc-700'
                                                 }
                                             `}>
@@ -604,15 +604,15 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     <label className="block text-sm font-medium text-zinc-300 mb-3">
                                         {config.upload2Label}
                                     </label>
-                                    
+
                                     {/* Tabs */}
                                     <div className="flex gap-2 mb-3">
                                         <button
                                             onClick={() => setUploadMode2('upload')}
                                             className={`
                                                 flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                                ${uploadMode2 === 'upload' 
-                                                    ? 'bg-emerald-500 text-black' 
+                                                ${uploadMode2 === 'upload'
+                                                    ? 'bg-emerald-500 text-black'
                                                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                                                 }
                                             `}
@@ -624,8 +624,8 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                             onClick={() => setUploadMode2('library')}
                                             className={`
                                                 flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                                ${uploadMode2 === 'library' 
-                                                    ? 'bg-emerald-500 text-black' 
+                                                ${uploadMode2 === 'library'
+                                                    ? 'bg-emerald-500 text-black'
                                                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                                                 }
                                             `}
@@ -634,7 +634,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                             From Library
                                         </button>
                                     </div>
-                                    
+
                                     <input
                                         ref={fileInputRef2}
                                         type="file"
@@ -651,12 +651,12 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                         }}
                                         className="hidden"
                                     />
-                                    
+
                                     {uploadedImage2 ? (
                                         <div className="relative rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-800/50 p-2">
-                                            <img 
-                                                src={uploadedImage2} 
-                                                alt="Uploaded 2" 
+                                            <img
+                                                src={uploadedImage2}
+                                                alt="Uploaded 2"
                                                 className="w-full h-64 object-contain rounded-xl bg-zinc-900"
                                             />
                                             <button
@@ -689,16 +689,16 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                             className={`
                                                 relative rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer
                                                 h-64 flex flex-col items-center justify-center
-                                                ${isDragging2 
-                                                    ? 'border-emerald-500 bg-emerald-500/10' 
+                                                ${isDragging2
+                                                    ? 'border-emerald-500 bg-emerald-500/10'
                                                     : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50'
                                                 }
                                             `}
                                         >
                                             <div className={`
                                                 w-12 h-12 rounded-xl mb-4 flex items-center justify-center transition-all duration-300
-                                                ${isDragging2 
-                                                    ? `bg-gradient-to-br ${config.gradient}` 
+                                                ${isDragging2
+                                                    ? `bg-gradient-to-br ${config.gradient}`
                                                     : 'bg-zinc-800 group-hover:bg-zinc-700'
                                                 }
                                             `}>
@@ -734,15 +734,15 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                 <label className="block text-sm font-medium text-zinc-300 mb-3">
                                     Upload Image {workflowId === 'upscale' ? '(Required)' : (workflowId === 'ai-photoshoot' || workflowId === 'virtual-tryon' ? '(Recommended)' : '(Optional)')}
                                 </label>
-                                
+
                                 {/* Tabs */}
                                 <div className="flex gap-2 mb-3">
                                     <button
                                         onClick={() => setUploadMode('upload')}
                                         className={`
                                             flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                            ${uploadMode === 'upload' 
-                                                ? 'bg-emerald-500 text-black' 
+                                            ${uploadMode === 'upload'
+                                                ? 'bg-emerald-500 text-black'
                                                 : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                                             }
                                         `}
@@ -754,8 +754,8 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                         onClick={() => setUploadMode('library')}
                                         className={`
                                             flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                            ${uploadMode === 'library' 
-                                                ? 'bg-emerald-500 text-black' 
+                                            ${uploadMode === 'library'
+                                                ? 'bg-emerald-500 text-black'
                                                 : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                                             }
                                         `}
@@ -764,7 +764,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                         From Library
                                     </button>
                                 </div>
-                                
+
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -772,12 +772,12 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     onChange={handleFileInputChange}
                                     className="hidden"
                                 />
-                                
+
                                 {uploadedImage ? (
                                     <div className="relative rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-800/50 p-2">
-                                        <img 
-                                            src={uploadedImage} 
-                                            alt="Uploaded" 
+                                        <img
+                                            src={uploadedImage}
+                                            alt="Uploaded"
                                             className="w-full h-80 object-contain rounded-xl bg-zinc-900"
                                         />
                                         <button
@@ -796,16 +796,16 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                         className={`
                                             relative rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer
                                             h-80 flex flex-col items-center justify-center
-                                            ${isDragging 
-                                                ? 'border-emerald-500 bg-emerald-500/10' 
+                                            ${isDragging
+                                                ? 'border-emerald-500 bg-emerald-500/10'
                                                 : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50'
                                             }
                                         `}
                                     >
                                         <div className={`
                                             w-16 h-16 rounded-2xl mb-6 flex items-center justify-center transition-all duration-300
-                                            ${isDragging 
-                                                ? `bg-gradient-to-br ${config.gradient}` 
+                                            ${isDragging
+                                                ? `bg-gradient-to-br ${config.gradient}`
                                                 : 'bg-zinc-800 group-hover:bg-zinc-700'
                                             }
                                         `}>
@@ -867,7 +867,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     <span className="text-xs text-zinc-500">{uploadedImages.length} added</span>
                                 )}
                             </div>
-                            
+
                             <input
                                 ref={multipleImagesInputRef}
                                 type="file"
@@ -880,7 +880,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                 className="hidden"
                                 id="multiple-reference-upload"
                             />
-                            
+
                             {uploadedImages.length > 0 && (
                                 <div className="grid grid-cols-3 gap-2 mb-2">
                                     {uploadedImages.map((img, idx) => (
@@ -896,7 +896,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     ))}
                                 </div>
                             )}
-                            
+
                             <label
                                 htmlFor="multiple-reference-upload"
                                 onClick={(e) => {
@@ -918,7 +918,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                         </div>
 
                         {/* Generate Button */}
-                        <button 
+                        <button
                             onClick={handleGenerate}
                             className={`
                                 w-full py-4 px-6 rounded-xl font-semibold transition-all duration-300
@@ -987,7 +987,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     AI Assistant
                                 </h4>
                                 {chatHistory.length > 1 && (
-                                    <button 
+                                    <button
                                         onClick={resetChat}
                                         className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
                                         title="Reset chat"
@@ -996,7 +996,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                     </button>
                                 )}
                             </div>
-                            
+
                             {/* Messages */}
                             <div className="flex-grow p-4 space-y-3 overflow-y-auto" ref={messagesEndRef}>
                                 {chatHistory.map((msg, index) => (
@@ -1043,14 +1043,14 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                             <Bot size={14} className="text-emerald-300" />
                                         </div>
                                         <div className="max-w-[80%] rounded-lg px-3 py-2 bg-zinc-800 rounded-tl-none flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay: '0s'}} />
-                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}} />
-                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}} />
+                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
                                         </div>
                                     </div>
                                 )}
                             </div>
-                            
+
                             {/* Input */}
                             <div className="flex-shrink-0 p-4 border-t border-zinc-800">
                                 {selectedChatImages.length > 0 && (
@@ -1123,7 +1123,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                             {/* Aspect Ratio Dropdown - Hide for certain workflows */}
                             {!config.hideAspectRatio && (
                                 <div className="relative">
-                                    <button 
+                                    <button
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setShowAspectRatioDropdown(!showAspectRatioDropdown);
@@ -1142,11 +1142,10 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                                         setAspectRatio(ar.value);
                                                         setShowAspectRatioDropdown(false);
                                                     }}
-                                                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                                                        aspectRatio === ar.value
+                                                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${aspectRatio === ar.value
                                                             ? 'bg-emerald-500/20 text-emerald-400'
                                                             : 'text-zinc-300 hover:bg-zinc-800'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {ar.label}
                                                 </button>
@@ -1159,7 +1158,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                             {/* Image Count Dropdown - Hide for certain workflows */}
                             {!config.hideImageCount && (
                                 <div className="relative">
-                                    <button 
+                                    <button
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setShowImageCountDropdown(!showImageCountDropdown);
@@ -1178,11 +1177,10 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                                         setImageCount(count);
                                                         setShowImageCountDropdown(false);
                                                     }}
-                                                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                                                        imageCount === count
+                                                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${imageCount === count
                                                             ? 'bg-emerald-500/20 text-emerald-400'
                                                             : 'text-zinc-300 hover:bg-zinc-800'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {count} {count === 1 ? 'image' : 'images'}
                                                 </button>
@@ -1193,57 +1191,57 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                             )}
                         </div>
                     </div>
-                    
+
                     {/* Higgsfield-style Dynamic Grid */}
                     <div className={`grid gap-4 ${config.singleOutput ? 'grid-cols-1' : (imageCount <= 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-2')}`}>
                         {Array.from({ length: config.singleOutput ? 1 : imageCount }).map((_, i) => {
                             const currentAspectRatio = ASPECT_RATIOS.find(ar => ar.value === aspectRatio);
                             return (
-                            <div 
-                                key={i}
-                                className={`${currentAspectRatio?.css || 'aspect-[3/4]'} rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group hover:border-emerald-500 transition-all relative overflow-hidden`}
-                            >
-                                {/* Show generated image or placeholder */}
-                                {generatedImages[i] ? (
-                                    <>
-                                        <img 
-                                            src={generatedImages[i]} 
-                                            alt={`Generated ${i + 1}`}
-                                            className="w-full h-full object-cover rounded-2xl"
-                                        />
-                                        {/* Hover overlay with actions */}
-                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                                            <div className="flex gap-2 w-full">
-                                                <button 
-                                                    onClick={() => handleDownload(generatedImages[i], i)}
-                                                    className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs text-black font-medium backdrop-blur-sm transition-all flex items-center justify-center gap-1"
-                                                >
-                                                    <Download className="w-3.5 h-3.5" />
-                                                    Download
-                                                </button>
+                                <div
+                                    key={i}
+                                    className={`${currentAspectRatio?.css || 'aspect-[3/4]'} rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group hover:border-emerald-500 transition-all relative overflow-hidden`}
+                                >
+                                    {/* Show generated image or placeholder */}
+                                    {generatedImages[i] ? (
+                                        <>
+                                            <img
+                                                src={generatedImages[i]}
+                                                alt={`Generated ${i + 1}`}
+                                                className="w-full h-full object-cover rounded-2xl"
+                                            />
+                                            {/* Hover overlay with actions */}
+                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                                                <div className="flex gap-2 w-full">
+                                                    <button
+                                                        onClick={() => handleDownload(generatedImages[i], i)}
+                                                        className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs text-black font-medium backdrop-blur-sm transition-all flex items-center justify-center gap-1"
+                                                    >
+                                                        <Download className="w-3.5 h-3.5" />
+                                                        Download
+                                                    </button>
+                                                </div>
                                             </div>
+                                        </>
+                                    ) : isGenerating ? (
+                                        <div className="text-center">
+                                            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mx-auto mb-3" />
+                                            <p className="text-xs text-zinc-400">Generating...</p>
                                         </div>
-                                    </>
-                                ) : isGenerating ? (
-                                    <div className="text-center">
-                                        <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mx-auto mb-3" />
-                                        <p className="text-xs text-zinc-400">Generating...</p>
-                                    </div>
-                                ) : (
-                                    <div className="text-center">
-                                        <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center mx-auto mb-3 group-hover:bg-emerald-500/10 transition-all">
-                                            <ImageIcon className="w-6 h-6 text-zinc-600 group-hover:text-emerald-400 transition-all" />
+                                    ) : (
+                                        <div className="text-center">
+                                            <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center mx-auto mb-3 group-hover:bg-emerald-500/10 transition-all">
+                                                <ImageIcon className="w-6 h-6 text-zinc-600 group-hover:text-emerald-400 transition-all" />
+                                            </div>
+                                            <p className="text-xs text-zinc-500">Image {i + 1}</p>
                                         </div>
-                                        <p className="text-xs text-zinc-500">Image {i + 1}</p>
-                                    </div>
-                                )}
-                            </div>
-                        );
+                                    )}
+                                </div>
+                            );
                         })}
                     </div>
                 </div>
             </div>
-            
+
             {/* Image Library Modals */}
             <ImageLibraryModal
                 isOpen={showLibraryModal}

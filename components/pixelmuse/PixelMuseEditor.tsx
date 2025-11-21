@@ -7,12 +7,14 @@ import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storageService';
 import { resizeImageToAspectRatio } from '../../utils/imageResizer';
+import { compressImage } from '../../utils/imageCompressor';
 import type { AspectRatio } from '../../types';
 
 interface PixelMuseEditorProps {
   onBack?: () => void;
 }
 
+// Helper function to adapt the new generateImage signature to use existing geminiService
 // Helper function to adapt the new generateImage signature to use existing geminiService
 const generateImage = async (
   prompt: string,
@@ -21,127 +23,32 @@ const generateImage = async (
   aspectRatio: string,
   isEdit: boolean = false
 ): Promise<string[]> => {
+  console.log(`[PixelMuse] Starting generation. Prompt: "${prompt}", Images: ${images.length}, Mode: ${isEdit ? 'Edit' : 'Generate'}`);
   try {
-    if (images.length > 0 && isEdit) {
-      // For image EDITING with annotations: 
-      // 1. Use Gemini Vision to READ annotations
-      // 2. Use gemini-2.5-flash-image (nano banana) to EDIT while preserving context
-      
-      console.log('🎨 Image editing mode: Analyzing annotated image with Gemini Vision...');
-      
-      const generationPromises = Array(imageCount)
-        .fill(0)
-        .map(async () => {
-          try {
-            // Step 1: Use Gemini Vision to analyze and understand annotations
-            console.log('📸 Analyzing image - size:', images[0].length, 'bytes');
-            
-            const visionPrompt = `You are analyzing an image with visual annotations (arrows and text labels).
+    // Unified generation using "Nano Banana" (gemini-2.5-flash-image)
+    // This model handles both text-to-image and image-to-image (editing)
 
-User instruction: ${prompt}
+    const generationPromises = Array(imageCount)
+      .fill(0)
+      .map(async () => {
+        // For text-to-image, images array is empty
+        // For image-to-image/editing, images array contains the input image(s)
+        const result = await geminiService.generateStyledImage(prompt, images);
 
-Your task:
-1. Look at the image - identify ALL visible elements (people, objects, jewelry, clothing, background, style, lighting, colors)
-2. Read any TEXT written on the image - these are direct instructions
-3. Follow any ARROWS - they show what to apply WHERE (arrow from X to Y = apply X to Y)
-4. Create an editing instruction that preserves everything EXCEPT what needs to change
+        // Resize if needed (though Nano Banana usually handles aspect ratio well via prompt, 
+        // we keep this for consistency if the output needs cropping)
+        if (aspectRatio) {
+          // Note: resizeImageToAspectRatio expects a full data URL
+          const resized = await resizeImageToAspectRatio(result, aspectRatio as AspectRatio['value']);
+          return resized.includes(',') ? resized.split(',')[1] : resized;
+        }
 
-Format your response as a clear, concise editing instruction. Example:
-"Keep the woman with red hair, white shirt, and ornate celestial background exactly as is. Add the golden tarot card earrings to her ears."
+        // Return base64 data without prefix if it was added by generateStyledImage
+        return result.includes(',') ? result.split(',')[1] : result;
+      });
 
-Write ONLY the editing instruction. Be specific about what to keep and what to change.`;
+    return await Promise.all(generationPromises);
 
-            const editingInstruction = await geminiService.analyzeImage(images[0], visionPrompt);
-            
-            console.log('📝 Vision analysis result:', editingInstruction);
-            console.log('🎨 Now generating with gemini-2.5-flash-image (nano banana)...');
-            
-            // Step 2: Use gemini-2.5-flash-image with the original image as reference
-            // This preserves context while applying changes
-            const result = await geminiService.generateStyledImage(editingInstruction, images);
-            
-            console.log('✅ Generation complete!');
-            let base64Data = result.includes(',') ? result.split(',')[1] : result;
-            const dataUrl = `data:image/png;base64,${base64Data}`;
-            
-            // Resize to match aspect ratio
-            const aspectRatioMap: Record<string, '1:1' | '4:5' | '16:9' | '9:16' | '3:4' | '4:3'> = {
-              '1:1': '1:1',
-              '4:5': '4:5',
-              '16:9': '16:9',
-              '9:16': '9:16',
-              '3:4': '3:4',
-              '4:3': '4:3',
-            };
-            const mappedAspectRatio = aspectRatioMap[aspectRatio] || '9:16';
-            
-            try {
-              const resizedDataUrl = await resizeImageToAspectRatio(dataUrl, mappedAspectRatio);
-              base64Data = resizedDataUrl.includes(',') ? resizedDataUrl.split(',')[1] : resizedDataUrl;
-            } catch (resizeError) {
-              console.warn('Failed to resize image to aspect ratio:', resizeError);
-            }
-            
-            return base64Data;
-          } catch (error) {
-            console.error('Failed to generate edited image:', error);
-            throw error;
-          }
-        });
-      
-      return await Promise.all(generationPromises);
-    } else if (images.length > 0) {
-      // Non-edit image-to-image generation (style reference)
-      let contextualPrompt = prompt || 'Generate an image based on the reference images, maintaining their style and composition.';
-      
-      const generationPromises = Array(imageCount)
-        .fill(0)
-        .map(async () => {
-          const result = await geminiService.generateStyledImage(contextualPrompt, images);
-          // Extract base64 from data URL
-          let base64Data = result.includes(',') ? result.split(',')[1] : result;
-          const dataUrl = `data:image/png;base64,${base64Data}`;
-          
-          // Resize to match aspect ratio for image-to-image generation
-          const aspectRatioMap: Record<string, '1:1' | '4:5' | '16:9' | '9:16' | '3:4' | '4:3'> = {
-            '1:1': '1:1',
-            '4:5': '4:5',
-            '16:9': '16:9',
-            '9:16': '9:16',
-            '3:4': '3:4',
-            '4:3': '4:3',
-          };
-          const mappedAspectRatio = aspectRatioMap[aspectRatio] || '9:16';
-          
-          try {
-            const resizedDataUrl = await resizeImageToAspectRatio(dataUrl, mappedAspectRatio);
-            base64Data = resizedDataUrl.includes(',') ? resizedDataUrl.split(',')[1] : resizedDataUrl;
-          } catch (resizeError) {
-            console.warn('Failed to resize image to aspect ratio:', resizeError);
-            // Continue with original image if resize fails
-          }
-          
-          return base64Data;
-        });
-      
-      return await Promise.all(generationPromises);
-    } else {
-      // Text-to-image generation using generateWithImagen
-      if (!prompt) {
-        throw new Error('A prompt is required to generate an image.');
-      }
-      
-      const generationPromises = Array(imageCount)
-        .fill(0)
-        .map(async () => {
-          const result = await geminiService.generateWithImagen(prompt, aspectRatio as AspectRatio['value']);
-          // Extract base64 from data URL
-          const base64Data = result.includes(',') ? result.split(',')[1] : result;
-          return base64Data;
-        });
-      
-      return await Promise.all(generationPromises);
-    }
   } catch (error) {
     console.error("Error generating image:", error);
     let errorMessage = "Failed to generate image.";
@@ -160,7 +67,7 @@ const enhancePrompt = async (prompt: string): Promise<string> => {
       `Enhance this image generation prompt to be more descriptive, vivid, and detailed for a text-to-image AI. Return ONLY the enhanced prompt, without any conversational preamble, labels, or explanation. Original prompt: "${prompt}"`,
       ''
     );
-    
+
     // Clean up potential markdown or quotes
     return response.trim().replace(/^"|"$/g, '').replace(/`/g, '');
   } catch (error) {
@@ -208,7 +115,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
         setIsLoadingCreations(true);
         // Load all user images (creations from all workflows)
         const userImages = await storageService.getUserImages(user.id, undefined, 100);
-        
+
         // Convert to data URLs for display
         const imageUrls = userImages.map(img => img.cloudinary_url);
         setImages(imageUrls);
@@ -235,7 +142,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       const resolvedImages = await generateImage(prompt, inputImages, imageCount, aspectRatio);
       const newImages = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
       setImages(prevImages => [...newImages, ...prevImages]);
-      
+
       // Save each generated image to database
       for (const imageDataUrl of newImages) {
         try {
@@ -243,7 +150,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
           const response = await fetch(imageDataUrl);
           const blob = await response.blob();
           const file = new File([blob], `pixelmuse-${Date.now()}.png`, { type: 'image/png' });
-          
+
           // Upload to storage service
           await storageService.uploadImage(
             file,
@@ -257,7 +164,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
           // Continue even if save fails
         }
       }
-      
+
       setInputImages([]); // Clear input images after generation
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
@@ -269,10 +176,10 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       setIsLoading(false);
     }
   }, [prompt, isLoading, imageCount, inputImages, aspectRatio, user?.id]);
-  
+
   const handleEnhancePrompt = useCallback(async () => {
     if (!prompt || isEnhancing) return;
-    
+
     setIsEnhancing(true);
     setError(null);
     try {
@@ -290,35 +197,44 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     setImages(prevImages => prevImages.filter((_, index) => index !== indexToDelete));
   }, []);
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
-      const files = Array.from(event.target.files);
-      
-      const filePromises = files.map((file: File) => {
-        return new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            if (typeof reader.result === 'string') {
-              resolve(reader.result);
-            } else {
-              reject(new Error('File could not be read as a data URL.'));
-            }
-          };
-          reader.onerror = (error) => {
-            console.error("Error reading file:", error);
-            reject(error);
-          };
-          reader.readAsDataURL(file);
-        });
-      });
+      const files: File[] = Array.from(event.target.files);
 
-      Promise.all(filePromises)
-        .then(newImages => {
-          setInputImages(prev => [...prev, ...newImages]);
-        })
-        .catch(() => {
-          setError("Failed to read one or more images.");
+      try {
+        // Compress images to avoid payload limits
+        const compressedFiles = await Promise.all(
+          files.map((file: File) => compressImage(file, {
+            maxSizeMB: 0.8,
+            maxWidth: 1536,
+            maxHeight: 1536
+          }))
+        );
+
+        const filePromises = compressedFiles.map((file: File) => {
+          return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result === 'string') {
+                resolve(reader.result);
+              } else {
+                reject(new Error('File could not be read as a data URL.'));
+              }
+            };
+            reader.onerror = (error) => {
+              console.error("Error reading file:", error);
+              reject(error);
+            };
+            reader.readAsDataURL(file);
+          });
         });
+
+        const newImages = await Promise.all(filePromises);
+        setInputImages(prev => [...prev, ...newImages]);
+      } catch (err) {
+        console.error("Error processing uploaded images:", err);
+        setError("Failed to process images. Please try again.");
+      }
     }
   };
 
@@ -331,7 +247,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     try {
       if (src.startsWith('http')) {
         console.log('🔄 Converting Cloudinary URL to base64 for editing...', src);
-        
+
         // For Cloudinary URLs, add fetch flag for CORS
         let fetchUrl = src;
         if (src.includes('res.cloudinary.com')) {
@@ -339,23 +255,23 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
           fetchUrl = src.replace('/upload/', '/upload/fl_attachment/');
           console.log('🔧 Modified URL for CORS:', fetchUrl);
         }
-        
+
         // Show loading state while converting
         setIsLoading(true);
-        
+
         // Fetch with proper CORS mode
         const response = await fetch(fetchUrl, {
           mode: 'cors',
           credentials: 'omit'
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
         }
-        
+
         const blob = await response.blob();
         console.log('📦 Image blob fetched, size:', blob.size);
-        
+
         const reader = new FileReader();
         reader.onloadend = () => {
           console.log('✅ Image converted successfully, opening editor');
@@ -384,9 +300,9 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     setEditingImage(null);
   };
 
-  const handleGenerateFromEditor = useCallback(async (editPrompt: string, editedImage: string, editorAspectRatio?: string) => {
+  const handleGenerateFromEditor = useCallback(async (editPrompt: string, images: string[], editorAspectRatio?: string) => {
     if (!user?.id) return;
-    
+
     setIsLoading(true);
     setError(null);
     setEditingImage(null); // Close editor on generation start
@@ -394,18 +310,18 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     try {
       // Use the editor's aspect ratio if provided, otherwise use the main aspect ratio
       const finalAspectRatio = editorAspectRatio || aspectRatio;
-      // We generate a single image from the editor, marking it as an edit for contextual understanding
-      const resolvedImages = await generateImage(editPrompt, [editedImage], 1, finalAspectRatio, true);
+      // Pass all images from the editor to Nano Banana
+      const resolvedImages = await generateImage(editPrompt, images, 1, finalAspectRatio, true);
       const newImages = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
       setImages(prevImages => [...newImages, ...prevImages]);
-      
+
       // Save generated image to database
       for (const imageDataUrl of newImages) {
         try {
           const response = await fetch(imageDataUrl);
           const blob = await response.blob();
           const file = new File([blob], `pixelmuse-edited-${Date.now()}.png`, { type: 'image/png' });
-          
+
           await storageService.uploadImage(
             file,
             user.id,
@@ -442,10 +358,10 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       )}
       <Header />
       <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
-        <ImageGrid 
-          images={images} 
-          isLoading={isLoading || isLoadingCreations} 
-          error={error} 
+        <ImageGrid
+          images={images}
+          isLoading={isLoading || isLoadingCreations}
+          error={error}
           imageCount={imageCount}
           onDeleteImage={handleDeleteImage}
           onEditImage={handleEditImage}
@@ -467,7 +383,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
         onRemoveInputImage={handleRemoveInputImage}
       />
       {editingImage && (
-        <ImageEditor 
+        <ImageEditor
           imageSrc={editingImage}
           onClose={handleCloseEditor}
           onGenerate={(prompt, image, editorAspectRatio) => handleGenerateFromEditor(prompt, image, editorAspectRatio)}
