@@ -50,10 +50,10 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
     // BASIC (solo) and PRO (studio) plans are locked out
     const userPlan = user?.plan || 'free';
     const hasAdvancedModeAccess = userPlan === 'brand' || user?.role === 'admin' || user?.role === 'super_admin';
-    
+
     // Debug log to verify plan
     console.log('🔍 User plan:', userPlan, 'hasAdvancedModeAccess:', hasAdvancedModeAccess, 'Full user:', user);
-    
+
     const handleAdvancedModeClick = () => {
         if (!hasAdvancedModeAccess) {
             // Show payment modal for locked feature
@@ -86,10 +86,10 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
     return (
         <div className="min-h-screen bg-zinc-950">
             {/* Glassmorphic Navigation Bar */}
-            <nav className="relative z-50 sticky top-0 px-6 lg:px-12 py-4">
+            <nav className="relative z-50 sticky top-0 px-6 lg:px-12 py-4 pointer-events-none">
                 <div className="flex justify-center">
                     {/* Glassmorphic container with rounded pill shape */}
-                    <div className="relative border border-white/20 bg-zinc-800 shadow-xl rounded-full px-8 py-2.5 inline-flex">
+                    <div className="relative border border-white/20 bg-zinc-800 shadow-xl rounded-full px-8 py-2.5 inline-flex pointer-events-auto">
                         <div className="relative flex items-center gap-8">
                             {/* Logo */}
                             <div className="flex items-center gap-2 cursor-pointer group" onClick={handleBackToDashboard}>
@@ -103,11 +103,10 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                             <div className="hidden lg:flex items-center gap-1">
                                 <button
                                     onClick={handleViewCreations}
-                                    className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${
-                                        currentView === 'creations'
+                                    className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${currentView === 'creations'
                                             ? 'text-emerald-400 bg-emerald-500/10'
                                             : 'text-white/70 hover:text-white hover:bg-white/5'
-                                    }`}
+                                        }`}
                                 >
                                     <ImageIcon size={16} />
                                     My Creations
@@ -121,11 +120,10 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                 {onSwitchToAdvanced && (
                                     <button
                                         onClick={handleAdvancedModeClick}
-                                        className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 relative ${
-                                            hasAdvancedModeAccess
+                                        className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all flex items-center gap-2 relative ${hasAdvancedModeAccess
                                                 ? 'text-white/70 hover:text-white hover:bg-white/5'
                                                 : 'text-zinc-500/50 hover:text-zinc-400 opacity-40 cursor-pointer border border-amber-500/30 bg-zinc-800/50'
-                                        }`}
+                                            }`}
                                         title={!hasAdvancedModeAccess ? 'Upgrade to ADVANCE plan to unlock Advanced Mode' : 'Switch to Advanced Mode'}
                                     >
                                         {!hasAdvancedModeAccess ? (
@@ -148,7 +146,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                             <div className="hidden md:flex items-center">
                                 {/* User Avatar with Dropdown */}
                                 <div className="relative">
-                                    <button 
+                                    <button
                                         onClick={() => setShowUserMenu(!showUserMenu)}
                                         className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-white font-semibold text-sm shadow-lg transition-all"
                                         title={user.email}
@@ -182,26 +180,25 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                                         </p>
                                                     )}
                                                 </div>
-                                                
+
                                                 <div className="p-2">
                                                     <button
                                                         onClick={() => {
                                                             handleViewCreations();
                                                             setShowUserMenu(false);
                                                         }}
-                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-white/5 rounded-lg transition-colors ${
-                                                            currentView === 'creations'
+                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-white/5 rounded-lg transition-colors ${currentView === 'creations'
                                                                 ? 'text-emerald-400 bg-emerald-500/10'
                                                                 : 'text-zinc-300'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <ImageIcon className="w-4 h-4" />
                                                         My Creations
                                                     </button>
-                                                    
+
                                                     {onSwitchToAdvanced && (
                                                         <button
-                                                            onClick={() => { 
+                                                            onClick={() => {
                                                                 if (hasAdvancedModeAccess) {
                                                                     onSwitchToAdvanced();
                                                                 } else {
@@ -209,11 +206,10 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                                                 }
                                                                 setShowUserMenu(false);
                                                             }}
-                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-lg transition-colors ${
-                                                                hasAdvancedModeAccess
+                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-lg transition-colors ${hasAdvancedModeAccess
                                                                     ? 'hover:bg-white/5 text-white/80'
                                                                     : 'text-zinc-500/50 hover:text-zinc-400 opacity-40 border border-amber-500/30 bg-zinc-800/50'
-                                                            }`}
+                                                                }`}
                                                             title={!hasAdvancedModeAccess ? 'Upgrade to ADVANCE plan to unlock Advanced Mode' : 'Switch to Advanced Mode'}
                                                         >
                                                             {!hasAdvancedModeAccess ? (
@@ -230,7 +226,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                                             )}
                                                         </button>
                                                     )}
-                                                    
+
                                                     {user.plan === 'free' && (
                                                         <button
                                                             onClick={() => { onOpenPayment(); setShowUserMenu(false); }}
@@ -240,7 +236,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                                             Upgrade Plan
                                                         </button>
                                                     )}
-                                                    
+
                                                     {(user.role === 'admin' || user.role === 'super_admin') && onOpenAdmin && (
                                                         <button
                                                             onClick={() => { onOpenAdmin(); setShowUserMenu(false); }}
@@ -250,7 +246,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                                             Admin Panel
                                                         </button>
                                                     )}
-                                                    
+
                                                     <button
                                                         onClick={() => { onLogout(); setShowUserMenu(false); }}
                                                         className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-white/5 rounded-lg transition-colors text-red-400"
@@ -265,13 +261,13 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                 </div>
                             </div>
 
-                        {/* Mobile: Hamburger */}
-                        <button
-                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            className="md:hidden p-2 hover:bg-zinc-800 rounded-lg transition-colors"
-                        >
-                            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                        </button>
+                            {/* Mobile: Hamburger */}
+                            <button
+                                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                                className="md:hidden p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+                            >
+                                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                            </button>
                         </div>
                     </div>
 
@@ -295,25 +291,24 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                         )}
                                     </div>
                                 </div>
-                                
+
                                 <button
-                                    onClick={() => { 
+                                    onClick={() => {
                                         handleViewCreations();
                                         setIsMobileMenuOpen(false);
                                     }}
-                                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-white/5 rounded-lg transition-colors ${
-                                        currentView === 'creations'
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-white/5 rounded-lg transition-colors ${currentView === 'creations'
                                             ? 'text-emerald-400 bg-emerald-500/10'
                                             : 'text-zinc-300'
-                                    }`}
+                                        }`}
                                 >
                                     <ImageIcon className="w-4 h-4" />
                                     My Creations
                                 </button>
-                                
+
                                 {onSwitchToAdvanced && (
                                     <button
-                                        onClick={() => { 
+                                        onClick={() => {
                                             if (hasAdvancedModeAccess) {
                                                 onSwitchToAdvanced();
                                             } else {
@@ -321,11 +316,10 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                             }
                                             setIsMobileMenuOpen(false);
                                         }}
-                                        className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-lg transition-colors ${
-                                            hasAdvancedModeAccess
+                                        className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-lg transition-colors ${hasAdvancedModeAccess
                                                 ? 'hover:bg-zinc-800'
                                                 : 'text-zinc-500/50 hover:text-zinc-400 opacity-40 border border-amber-500/30 bg-zinc-800/50'
-                                        }`}
+                                            }`}
                                         title={!hasAdvancedModeAccess ? 'Upgrade to ADVANCE plan to unlock Advanced Mode' : 'Switch to Advanced Mode'}
                                     >
                                         {!hasAdvancedModeAccess ? (
@@ -342,7 +336,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                         )}
                                     </button>
                                 )}
-                                
+
                                 {user.plan === 'free' && (
                                     <>
                                         <div className="px-3 py-2 bg-zinc-800 rounded-lg text-sm">
@@ -359,7 +353,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                         </button>
                                     </>
                                 )}
-                                
+
                                 {(user.role === 'admin' || user.role === 'super_admin') && onOpenAdmin && (
                                     <button
                                         onClick={onOpenAdmin}
@@ -369,7 +363,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                                         Admin Panel
                                     </button>
                                 )}
-                                
+
                                 <button
                                     onClick={onLogout}
                                     className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-zinc-800 rounded-lg transition-colors text-red-400"
@@ -415,7 +409,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-0">
                 {currentView === 'creations' ? (
-                    <MyCreations 
+                    <MyCreations
                         onBack={handleBackToDashboard}
                         key={currentView} // Force re-render when navigating to this view
                     />
@@ -437,7 +431,7 @@ export const DashboardContainer: React.FC<DashboardContainerProps> = ({
                         userPlan={user.plan}
                     />
                 )}
-                
+
                 {/* Footer */}
                 <Footer />
             </div>

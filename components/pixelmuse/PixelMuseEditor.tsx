@@ -8,7 +8,9 @@ import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storageService';
 import { resizeImageToAspectRatio } from '../../utils/imageResizer';
 import { compressImage } from '../../utils/imageCompressor';
+import { DEFAULT_STYLE } from './stylePresets';
 import type { AspectRatio } from '../../types';
+import type { ImageQuality, QualityUsage } from '../../types/quality';
 
 interface PixelMuseEditorProps {
   onBack?: () => void;
@@ -21,9 +23,11 @@ const generateImage = async (
   images: string[] = [],
   imageCount: number,
   aspectRatio: string,
-  isEdit: boolean = false
+  isEdit: boolean = false,
+  quality: ImageQuality = 'regular',
+  style: string = 'realistic'
 ): Promise<string[]> => {
-  console.log(`[PixelMuse] Starting generation. Prompt: "${prompt}", Images: ${images.length}, Mode: ${isEdit ? 'Edit' : 'Generate'}`);
+  console.log(`[PixelMuse] Starting generation. Prompt: "${prompt}", Images: ${images.length}, Mode: ${isEdit ? 'Edit' : 'Generate'}, Style: ${style}`);
   try {
     // Unified generation using "Nano Banana" (gemini-2.5-flash-image)
     // This model handles both text-to-image and image-to-image (editing)
@@ -33,7 +37,7 @@ const generateImage = async (
       .map(async () => {
         // For text-to-image, images array is empty
         // For image-to-image/editing, images array contains the input image(s)
-        const result = await geminiService.generateStyledImage(prompt, images);
+        const result = await geminiService.generateStyledImage(prompt, images, quality, style);
 
         // Resize if needed (though Nano Banana usually handles aspect ratio well via prompt, 
         // we keep this for consistency if the output needs cropping)
@@ -92,6 +96,9 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [editingImage, setEditingImage] = useState<string | null>(null);
   const [isLoadingCreations, setIsLoadingCreations] = useState<boolean>(true);
+  const [selectedQuality, setSelectedQuality] = useState<ImageQuality>('regular');
+  const [qualityUsage, setQualityUsage] = useState<QualityUsage>({ hd: 0, qhd: 0 });
+  const [selectedStyle, setSelectedStyle] = useState<string>(DEFAULT_STYLE.id);
 
   // Clean up old localStorage data on mount to prevent quota errors
   useEffect(() => {
@@ -130,6 +137,21 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     loadUserCreations();
   }, [user?.id]);
 
+  // Load quality usage on mount
+  useEffect(() => {
+    const loadQualityUsage = async () => {
+      if (user?.id) {
+        try {
+          const usage = await storageService.getQualityUsage(user.id);
+          setQualityUsage(usage);
+        } catch (error) {
+          console.error('Failed to load quality usage:', error);
+        }
+      }
+    };
+    loadQualityUsage();
+  }, [user?.id]);
+
   // Note: Images are saved to database/Cloudinary, no need for localStorage backup
   // localStorage has size limits and causes quota errors with many images
 
@@ -139,7 +161,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const resolvedImages = await generateImage(prompt, inputImages, imageCount, aspectRatio);
+      const resolvedImages = await generateImage(prompt, inputImages, imageCount, aspectRatio, false, selectedQuality, selectedStyle);
       const newImages = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
       setImages(prevImages => [...newImages, ...prevImages]);
 
@@ -165,6 +187,20 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
         }
       }
 
+      // Track quality usage for HD/QHD
+      if (selectedQuality !== 'regular') {
+        try {
+          for (let i = 0; i < newImages.length; i++) {
+            await storageService.incrementQualityUsage(user.id, selectedQuality);
+          }
+          // Reload usage to update UI
+          const newUsage = await storageService.getQualityUsage(user.id);
+          setQualityUsage(newUsage);
+        } catch (error) {
+          console.error('Failed to track quality usage:', error);
+        }
+      }
+
       setInputImages([]); // Clear input images after generation
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
@@ -175,7 +211,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [prompt, isLoading, imageCount, inputImages, aspectRatio, user?.id]);
+  }, [prompt, isLoading, imageCount, inputImages, aspectRatio, user?.id, selectedQuality, selectedStyle]);
 
   const handleEnhancePrompt = useCallback(async () => {
     if (!prompt || isEnhancing) return;
@@ -311,7 +347,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       // Use the editor's aspect ratio if provided, otherwise use the main aspect ratio
       const finalAspectRatio = editorAspectRatio || aspectRatio;
       // Pass all images from the editor to Nano Banana
-      const resolvedImages = await generateImage(editPrompt, images, 1, finalAspectRatio, true);
+      const resolvedImages = await generateImage(editPrompt, images, 1, finalAspectRatio, true, selectedQuality, selectedStyle);
       const newImages = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
       setImages(prevImages => [...newImages, ...prevImages]);
 
@@ -331,6 +367,20 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
           );
         } catch (saveErr) {
           console.error("Failed to save edited image to database:", saveErr);
+        }
+      }
+
+      // Track quality usage for HD/QHD
+      if (selectedQuality !== 'regular') {
+        try {
+          for (let i = 0; i < newImages.length; i++) {
+            await storageService.incrementQualityUsage(user.id, selectedQuality);
+          }
+          // Reload usage to update UI
+          const newUsage = await storageService.getQualityUsage(user.id);
+          setQualityUsage(newUsage);
+        } catch (error) {
+          console.error('Failed to track quality usage:', error);
         }
       }
     } catch (err) {
@@ -381,6 +431,12 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
         inputImages={inputImages}
         onImageUpload={handleImageUpload}
         onRemoveInputImage={handleRemoveInputImage}
+        selectedQuality={selectedQuality}
+        qualityUsage={qualityUsage}
+        onQualityChange={setSelectedQuality}
+        userPlan={user?.plan || 'free'}
+        selectedStyle={selectedStyle}
+        onStyleChange={setSelectedStyle}
       />
       {editingImage && (
         <ImageEditor

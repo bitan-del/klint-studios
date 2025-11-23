@@ -13,6 +13,8 @@ import { useStudio } from '../../context/StudioContext';
 import { Camera, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storageService';
+import { QualitySelector } from '../shared/QualitySelector';
+import type { ImageQuality, QualityUsage } from '../../types/quality';
 
 const PHOTO_STYLE_CATEGORIES = {
     'Portraits & Close-ups': [
@@ -130,12 +132,12 @@ const useMediaQuery = (query: string) => {
     return matches;
 };
 
-const ImageUploader = ({ label, imageUrl, onImageUpload, onImageRemove, inputId }: { 
-    label: string, 
-    imageUrl: string | null, 
-    onImageUpload: (file: File) => void, 
-    onImageRemove: () => void, 
-    inputId: string 
+const ImageUploader = ({ label, imageUrl, onImageUpload, onImageRemove, inputId }: {
+    label: string,
+    imageUrl: string | null,
+    onImageUpload: (file: File) => void,
+    onImageRemove: () => void,
+    inputId: string
 }) => {
     const [isDragOver, setIsDragOver] = useState(false);
 
@@ -186,8 +188,8 @@ const ImageUploader = ({ label, imageUrl, onImageUpload, onImageRemove, inputId 
                     </button>
                 </div>
             ) : (
-                <label 
-                    htmlFor={inputId} 
+                <label
+                    htmlFor={inputId}
                     className={cn(
                         "cursor-pointer aspect-square w-full flex flex-col items-center justify-center border-2 border-dashed border-zinc-700 rounded-md transition-colors",
                         isDragOver ? "bg-zinc-800 border-emerald-500" : "hover:bg-black/40 hover:border-zinc-600"
@@ -219,12 +221,12 @@ interface AccordionSectionProps {
 const AccordionSection: React.FC<AccordionSectionProps> = ({ title, description, children, isOpen, onToggle }) => {
     return (
         <div className="border-b border-zinc-800">
-            <button 
+            <button
                 onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     onToggle();
-                }} 
+                }}
                 className="w-full flex justify-between items-center py-4 text-left"
                 type="button"
             >
@@ -242,8 +244,8 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({ title, description,
                 </motion.div>
             </button>
             {isOpen && (
-                <div 
-                    className="pb-6" 
+                <div
+                    className="pb-6"
                     style={{ pointerEvents: 'auto', position: 'relative', zIndex: 10 }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -258,13 +260,13 @@ export default function Photoshoot({ onBack }: { onBack: () => void }) {
     console.log('🎬 [PHOTOSHOOT] Component mounted/rendered');
     const { t, chatReferenceImages } = useStudio();
     const { user, incrementGenerationsUsed } = useAuth();
-    
+
     console.log('👤 [PHOTOSHOOT] User from useAuth:', {
         hasUser: !!user,
         userId: user?.id,
         userPlan: user?.plan
     });
-    
+
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
     const [outfitImage, setOutfitImage] = useState<string | null>(null);
     const [objectImage, setObjectImage] = useState<string | null>(null);
@@ -285,6 +287,15 @@ export default function Photoshoot({ onBack }: { onBack: () => void }) {
     const [step1Tab, setStep1Tab] = useState<'upload' | 'generate'>('upload');
     const [modelGenPrompt, setModelGenPrompt] = useState('');
     const [isGeneratingModel, setIsGeneratingModel] = useState(false);
+    const [selectedQuality, setSelectedQuality] = useState<ImageQuality>('regular');
+    const [qualityUsage, setQualityUsage] = useState<QualityUsage>({ hd_count: 0, qhd_count: 0, month_year: '' });
+
+    useEffect(() => {
+        if (user) {
+            storageService.getQualityUsage(user.id).then(setQualityUsage);
+        }
+    }, [user]);
+
     const [localLibrary, setLocalLibrary] = useState<string[]>(() => {
         try {
             const savedLibrary = localStorage.getItem('aiPhotoshootModelLibrary');
@@ -309,7 +320,7 @@ export default function Photoshoot({ onBack }: { onBack: () => void }) {
             console.error("Failed to save model library to localStorage", error);
         }
     }, [localLibrary]);
-    
+
     // Helper function to convert base64 to File
     const base64ToFile = (base64: string, filename: string): File => {
         const arr = base64.split(',');
@@ -555,18 +566,18 @@ Your single most important, critical, and unbreakable task is to perfectly prese
             hasUser: !!user,
             userId: user?.id
         });
-        
+
         if (!uploadedImage || selectedStyles.length === 0) {
             console.warn('❌ [PHOTOSHOOT] Missing requirements:', { uploadedImage: !!uploadedImage, selectedStyles: selectedStyles.length });
             return;
         }
-        
+
         if (!user) {
             console.error('❌ [PHOTOSHOOT] No user found! Cannot save images.');
             alert('⚠️ You must be logged in to save images. Please refresh the page and log in.');
             return;
         }
-        
+
         setIsLoading(true);
         setAppState('generating');
 
@@ -583,7 +594,16 @@ Your single most important, critical, and unbreakable task is to perfectly prese
             try {
                 console.log(`🔄 [PHOTOSHOOT] Processing style: ${style.id}`);
                 const { finalPrompt, imageUrls } = await constructApiPayload(style.prompt);
-                const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls);
+                const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls, selectedQuality);
+
+                // Track usage for HD/QHD
+                if (user && (selectedQuality === 'hd' || selectedQuality === 'qhd')) {
+                    await storageService.incrementQualityUsage(user.id, selectedQuality);
+                    // Reload usage
+                    const newUsage = await storageService.getQualityUsage(user.id);
+                    setQualityUsage(newUsage);
+                }
+
                 console.log(`✅ [PHOTOSHOOT] Generated image for ${style.id}:`, {
                     urlType: typeof resultUrl,
                     urlLength: resultUrl?.length || 0,
@@ -621,7 +641,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
 
         const allResults = await Promise.all(workers);
         const generatedResults = allResults.flat().filter((r): r is { styleId: string; url: string; prompt: string } => r !== null);
-        
+
         console.log('🎯 [PHOTOSHOOT] ========================================');
         console.log('🎯 [PHOTOSHOOT] Generation complete!', {
             totalResults: generatedResults.length,
@@ -630,7 +650,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
             userId: user?.id
         });
         console.log('🎯 [PHOTOSHOOT] ========================================');
-        
+
         // ALWAYS log what we're about to check
         console.log('🔍 [PHOTOSHOOT] Checking save conditions:', {
             userExists: !!user,
@@ -639,7 +659,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
             resultsNotEmpty: generatedResults.length > 0,
             willSave: !!(user && generatedResults.length > 0)
         });
-        
+
         // Save all generated images to Cloudinary (same pattern as simple mode)
         // DO THIS BEFORE updating state to ensure it runs
         if (user && generatedResults.length > 0) {
@@ -651,10 +671,10 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                 generatedResultsCount: generatedResults.length
             });
             console.log('💾 [PHOTOSHOOT] ========================================');
-            
+
             let savedCount = 0;
             let failedCount = 0;
-            
+
             try {
                 // Save all generated images
                 for (const result of generatedResults) {
@@ -667,29 +687,29 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                             urlStart: result.url?.substring(0, 50) || 'NO URL',
                             hasDataPrefix: result.url?.startsWith('data:') || false
                         });
-                        
+
                         // Convert base64 data URL to File
                         let imageFile: File;
                         try {
                             imageFile = base64ToFile(result.url, `photo-editor_${result.styleId}_${Date.now()}.png`);
-                            console.log(`💾 [PHOTOSHOOT] File created successfully:`, { 
-                                name: imageFile.name, 
-                                size: imageFile.size, 
-                                type: imageFile.type 
+                            console.log(`💾 [PHOTOSHOOT] File created successfully:`, {
+                                name: imageFile.name,
+                                size: imageFile.size,
+                                type: imageFile.type
                             });
                         } catch (fileError) {
                             console.error(`❌ [PHOTOSHOOT] Failed to create file:`, fileError);
                             throw new Error(`Failed to create file: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
                         }
-                        
+
                         console.log(`💾 [PHOTOSHOOT] Calling storageService.uploadImage...`, {
                             userId: user.id,
                             workflowId: 'photo-editor',
                             hasPrompt: !!result.prompt
                         });
-                        
+
                         const savedImage = await storageService.uploadImage(imageFile, user.id, 'photo-editor', result.prompt);
-                        
+
                         console.log(`✅ [PHOTOSHOOT] Image saved successfully!`, {
                             imageId: savedImage.id,
                             cloudinaryUrl: savedImage.cloudinary_url,
@@ -711,9 +731,9 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                         // Continue with next image
                     }
                 }
-                
+
                 console.log(`✅ [PHOTOSHOOT] Save complete: ${savedCount} saved, ${failedCount} failed`);
-                
+
                 // Show alert if any were saved
                 if (savedCount > 0) {
                     alert(`✅ ${savedCount} image(s) saved to My Creations!`);
@@ -728,7 +748,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                 });
                 alert(`❌ Failed to save images: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
-            
+
             // Increment user's generation count (same as simple mode)
             try {
                 const result = await incrementGenerationsUsed(generatedResults.length);
@@ -750,7 +770,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                 alert('⚠️ Cannot save images: No images were generated successfully.');
             }
         }
-        
+
         // Update UI state AFTER saving
         setIsLoading(false);
         setAppState('results-shown');
@@ -771,12 +791,21 @@ Your single most important, critical, and unbreakable task is to perfectly prese
         }));
         try {
             const { finalPrompt, imageUrls } = await constructApiPayload(style.prompt, refinePrompt);
-            const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls);
+            const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls, selectedQuality);
+
+            // Track usage for HD/QHD
+            if (user && (selectedQuality === 'hd' || selectedQuality === 'qhd')) {
+                await storageService.incrementQualityUsage(user.id, selectedQuality);
+                // Reload usage
+                const newUsage = await storageService.getQualityUsage(user.id);
+                setQualityUsage(newUsage);
+            }
+
             setGeneratedImages(prev => ({
                 ...prev,
                 [photoId]: { status: 'done', url: resultUrl },
             }));
-            
+
             // Save to Cloudinary storage (same pattern as simple mode)
             if (user && resultUrl) {
                 try {
@@ -787,7 +816,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                     console.warn(`⚠️ Failed to save regenerated image to Cloudinary: ${photoId}`, error);
                     // Continue even if Cloudinary save fails
                 }
-                
+
                 // Increment generation count
                 try {
                     await incrementGenerationsUsed(1);
@@ -923,7 +952,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                 </div>
 
                 {appState === 'config' && (
-                    <motion.div 
+                    <motion.div
                         className="flex flex-col md:flex-row items-center md:items-start gap-8 w-full max-w-6xl"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -931,7 +960,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                     >
                         <div className="w-full md:w-1/3 flex-shrink-0 flex flex-col items-center gap-4">
                             <h2 className="text-xl font-bold text-zinc-100">Step 1: Upload Your Photo</h2>
-                            <label htmlFor="file-upload" 
+                            <label htmlFor="file-upload"
                                 className="cursor-pointer group w-full max-w-sm"
                                 onDrop={handlePolaroidDrop}
                                 onDragOver={handlePolaroidDragEvents}
@@ -944,8 +973,8 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                             imageUrl={uploadedImage}
                                             conceptName={getPolaroidCaption()}
                                             status="done"
-                                            onRetry={() => {}}
-                                            onDownload={() => {}}
+                                            onRetry={() => { }}
+                                            onDownload={() => { }}
                                             isHighlighted={isDraggingOverPolaroid}
                                         />
                                     </div>
@@ -981,16 +1010,16 @@ Your single most important, critical, and unbreakable task is to perfectly prese
 
                                 {step1Tab === 'generate' && (
                                     <div className="w-full flex flex-col gap-2">
-                                        <textarea 
-                                            value={modelGenPrompt} 
-                                            onChange={(e) => setModelGenPrompt(e.target.value)} 
-                                            placeholder="Describe the person you want to generate..." 
-                                            rows={3} 
-                                            className="w-full bg-zinc-850 border border-zinc-700 rounded-md p-2 text-zinc-200 focus:ring-2 focus:ring-emerald-500 transition" 
+                                        <textarea
+                                            value={modelGenPrompt}
+                                            onChange={(e) => setModelGenPrompt(e.target.value)}
+                                            placeholder="Describe the person you want to generate..."
+                                            rows={3}
+                                            className="w-full bg-zinc-850 border border-zinc-700 rounded-md p-2 text-zinc-200 focus:ring-2 focus:ring-emerald-500 transition"
                                         />
-                                        <button 
-                                            onClick={handleGenerateModel} 
-                                            disabled={isGeneratingModel || !modelGenPrompt} 
+                                        <button
+                                            onClick={handleGenerateModel}
+                                            disabled={isGeneratingModel || !modelGenPrompt}
                                             className="w-full flex items-center justify-center text-white font-bold py-3 px-4 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                                         >
                                             {isGeneratingModel ? 'Generating...' : 'Generate Model'}
@@ -1008,11 +1037,11 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                         ) : (
                                             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
                                                 {localLibrary.map((imgUrl, index) => (
-                                                    <div 
-                                                        key={index} 
-                                                        onClick={() => handleSelectFromLibrary(imgUrl)} 
+                                                    <div
+                                                        key={index}
+                                                        onClick={() => handleSelectFromLibrary(imgUrl)}
                                                         className={cn(
-                                                            "relative group aspect-square rounded-md overflow-hidden cursor-pointer ring-2 ring-offset-2 ring-offset-zinc-950 transition-all", 
+                                                            "relative group aspect-square rounded-md overflow-hidden cursor-pointer ring-2 ring-offset-2 ring-offset-zinc-950 transition-all",
                                                             uploadedImage === imgUrl ? "ring-emerald-500" : "ring-transparent hover:ring-zinc-600"
                                                         )}
                                                     >
@@ -1042,25 +1071,25 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                 isOpen={openAccordion === 'step2'}
                                 onToggle={() => setOpenAccordion(openAccordion === 'step2' ? null : 'step2')}
                             >
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <ImageUploader label="Outfit" imageUrl={outfitImage} onImageUpload={(file) => handleImageUpload(file, setOutfitImage)} onImageRemove={() => { setOutfitImage(null); setConcept(null); }} inputId="outfit-upload" />
-                                        <ImageUploader label="Object" imageUrl={objectImage} onImageUpload={(file) => handleImageUpload(file, setObjectImage)} onImageRemove={() => { setObjectImage(null); setConcept(null); }} inputId="object-upload" />
-                                        <ImageUploader label="Background" imageUrl={backgroundImage} onImageUpload={(file) => handleImageUpload(file, setBackgroundImage)} onImageRemove={() => setBackgroundImage(null)} inputId="background-upload" />
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <ImageUploader label="Outfit" imageUrl={outfitImage} onImageUpload={(file) => handleImageUpload(file, setOutfitImage)} onImageRemove={() => { setOutfitImage(null); setConcept(null); }} inputId="outfit-upload" />
+                                    <ImageUploader label="Object" imageUrl={objectImage} onImageUpload={(file) => handleImageUpload(file, setObjectImage)} onImageRemove={() => { setObjectImage(null); setConcept(null); }} inputId="object-upload" />
+                                    <ImageUploader label="Background" imageUrl={backgroundImage} onImageUpload={(file) => handleImageUpload(file, setBackgroundImage)} onImageRemove={() => setBackgroundImage(null)} inputId="background-upload" />
+                                </div>
+                                {(outfitImage || objectImage) && (
+                                    <div className="mt-6 border-t border-zinc-700 pt-4">
+                                        <h4 className="text-base font-bold text-zinc-300 mb-2">AI Concept Assistant</h4>
+                                        <button onClick={handleGenerateConcept} disabled={isGeneratingConcept} className="text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-2 px-4 rounded-lg w-full transition-colors">
+                                            {isGeneratingConcept ? 'Generating concepts...' : 'Suggest Concepts'}
+                                        </button>
+                                        {concept && (
+                                            <div className="mt-4 text-sm text-zinc-300 bg-zinc-800/50 p-4 rounded-lg space-y-2">
+                                                <p className="text-base text-emerald-400 font-bold">Concept Applied!</p>
+                                                <p className="border-t border-zinc-700 pt-2 mt-2"><strong className="text-zinc-100">Background:</strong> {concept.background}</p>
+                                            </div>
+                                        )}
                                     </div>
-                                    {(outfitImage || objectImage) && (
-                                        <div className="mt-6 border-t border-zinc-700 pt-4">
-                                            <h4 className="text-base font-bold text-zinc-300 mb-2">AI Concept Assistant</h4>
-                                            <button onClick={handleGenerateConcept} disabled={isGeneratingConcept} className="text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-2 px-4 rounded-lg w-full transition-colors">
-                                                {isGeneratingConcept ? 'Generating concepts...' : 'Suggest Concepts'}
-                                            </button>
-                                            {concept && (
-                                                <div className="mt-4 text-sm text-zinc-300 bg-zinc-800/50 p-4 rounded-lg space-y-2">
-                                                    <p className="text-base text-emerald-400 font-bold">Concept Applied!</p>
-                                                    <p className="border-t border-zinc-700 pt-2 mt-2"><strong className="text-zinc-100">Background:</strong> {concept.background}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                )}
                             </AccordionSection>
 
                             <AccordionSection
@@ -1076,8 +1105,8 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                             {CAMERA_ANGLES.map(angle => {
                                                 const isSelected = selectedCameraAngle === angle.id;
                                                 return (
-                                                    <button 
-                                                        key={angle.id} 
+                                                    <button
+                                                        key={angle.id}
                                                         onClick={(e) => {
                                                             e.preventDefault();
                                                             e.stopPropagation();
@@ -1086,12 +1115,12 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                                         }}
                                                         type="button"
                                                         className={cn(
-                                                            chipButtonClasses, 
+                                                            chipButtonClasses,
                                                             isSelected && selectedChipButtonClasses
                                                         )}
-                                                        style={{ 
-                                                            pointerEvents: 'auto', 
-                                                            position: 'relative', 
+                                                        style={{
+                                                            pointerEvents: 'auto',
+                                                            position: 'relative',
                                                             zIndex: 10,
                                                             ...(isSelected ? { backgroundColor: '#059669', borderColor: '#10b981', color: '#ffffff' } : {})
                                                         }}
@@ -1108,8 +1137,8 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                             {COLOR_GRADES.map(grade => {
                                                 const isSelected = selectedColorGrade === grade.id;
                                                 return (
-                                                    <button 
-                                                        key={grade.id} 
+                                                    <button
+                                                        key={grade.id}
                                                         onClick={(e) => {
                                                             e.preventDefault();
                                                             e.stopPropagation();
@@ -1118,12 +1147,12 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                                         }}
                                                         type="button"
                                                         className={cn(
-                                                            chipButtonClasses, 
+                                                            chipButtonClasses,
                                                             isSelected && selectedChipButtonClasses
                                                         )}
-                                                        style={{ 
-                                                            pointerEvents: 'auto', 
-                                                            position: 'relative', 
+                                                        style={{
+                                                            pointerEvents: 'auto',
+                                                            position: 'relative',
                                                             zIndex: 10,
                                                             ...(isSelected ? { backgroundColor: '#059669', borderColor: '#10b981', color: '#ffffff' } : {})
                                                         }}
@@ -1138,40 +1167,57 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                             </AccordionSection>
 
                             <AccordionSection
-                                title="Step 4: Aspect Ratio"
-                                description="Choose the output aspect ratio"
+                                title="Step 4: Output Settings"
+                                description="Choose aspect ratio and image quality"
                                 isOpen={openAccordion === 'step4'}
                                 onToggle={() => setOpenAccordion(openAccordion === 'step4' ? null : 'step4')}
                             >
-                                <h4 className="text-sm font-semibold text-zinc-400 mb-2">Aspect Ratio</h4>
-                                <div className="flex flex-wrap gap-3">
-                                    {['1:1', '9:16', '16:9', '4:3', '3:4'].map(ratio => {
-                                        const isSelected = aspectRatio === ratio;
-                                        return (
-                                            <button
-                                                key={ratio}
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    console.log('Aspect ratio clicked:', ratio, 'Current:', aspectRatio);
-                                                    setAspectRatio(ratio);
-                                                }}
-                                                type="button"
-                                                className={cn(
-                                                    chipButtonClasses, 
-                                                    isSelected && selectedChipButtonClasses
-                                                )}
-                                                style={{ 
-                                                    pointerEvents: 'auto', 
-                                                    position: 'relative', 
-                                                    zIndex: 10,
-                                                    ...(isSelected ? { backgroundColor: '#059669', borderColor: '#10b981', color: '#ffffff' } : {})
-                                                }}
-                                            >
-                                                {ratio}
-                                            </button>
-                                        );
-                                    })}
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-zinc-400 mb-2">Aspect Ratio</h4>
+                                        <div className="flex flex-wrap gap-3">
+                                            {['1:1', '9:16', '16:9', '4:3', '3:4'].map(ratio => {
+                                                const isSelected = aspectRatio === ratio;
+                                                return (
+                                                    <button
+                                                        key={ratio}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            console.log('Aspect ratio clicked:', ratio, 'Current:', aspectRatio);
+                                                            setAspectRatio(ratio);
+                                                        }}
+                                                        type="button"
+                                                        className={cn(
+                                                            chipButtonClasses,
+                                                            isSelected && selectedChipButtonClasses
+                                                        )}
+                                                        style={{
+                                                            pointerEvents: 'auto',
+                                                            position: 'relative',
+                                                            zIndex: 10,
+                                                            ...(isSelected ? { backgroundColor: '#059669', borderColor: '#10b981', color: '#ffffff' } : {})
+                                                        }}
+                                                    >
+                                                        {ratio}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-zinc-400 mb-2">Image Quality</h4>
+                                        <div className="max-w-md">
+                                            <QualitySelector
+                                                selected={selectedQuality}
+                                                onChange={setSelectedQuality}
+                                                usage={qualityUsage}
+                                                limits={storageService.getQualityLimits(user?.plan || 'free')}
+                                                disabled={isLoading}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </AccordionSection>
 
@@ -1204,12 +1250,12 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                                             }}
                                                             type="button"
                                                             className={cn(
-                                                                chipButtonClasses, 
+                                                                chipButtonClasses,
                                                                 isSelected && selectedChipButtonClasses
                                                             )}
-                                                            style={{ 
-                                                                pointerEvents: 'auto', 
-                                                                position: 'relative', 
+                                                            style={{
+                                                                pointerEvents: 'auto',
+                                                                position: 'relative',
                                                                 zIndex: 10,
                                                                 ...(isSelected ? { backgroundColor: '#059669', borderColor: '#10b981', color: '#ffffff' } : {})
                                                             }}
@@ -1229,7 +1275,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                     <button onClick={handleReset} className={secondaryButtonClasses}>
                                         Start Over
                                     </button>
-                                ) : <div/>}
+                                ) : <div />}
                                 {(() => {
                                     const isButtonDisabled = isLoading || !uploadedImage || selectedStyles.length === 0;
                                     console.log('🔘 [PHOTOSHOOT] Generate button rendering:', {
@@ -1271,8 +1317,8 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                             disabled={isButtonDisabled}
                                             type="button"
                                         >
-                                            {isLoading 
-                                                ? 'Generating...' 
+                                            {isLoading
+                                                ? 'Generating...'
                                                 : `Generate (${selectedStyles.length})`
                                             }
                                         </button>
@@ -1324,9 +1370,9 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                         <p className="text-xs text-zinc-400 mt-2">Use this to refine regenerated images with specific instructions</p>
                                     </div>
                                     <div className="flex flex-col sm:flex-row items-center gap-4 mt-4">
-                                        <button 
-                                            onClick={handleDownloadAll} 
-                                            disabled={isDownloading} 
+                                        <button
+                                            onClick={handleDownloadAll}
+                                            disabled={isDownloading}
                                             className={`${primaryButtonClasses} disabled:opacity-50 disabled:cursor-not-allowed`}
                                         >
                                             {isDownloading ? 'Creating ZIP...' : 'Download All'}

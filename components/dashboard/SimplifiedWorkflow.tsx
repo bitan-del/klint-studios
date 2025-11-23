@@ -7,6 +7,10 @@ import { storageService } from '../../services/storageService';
 import { ImageLibraryModal } from '../common/ImageLibraryModal';
 import { useStudio } from '../../context/StudioContext';
 import { ChatMessage } from '../../types';
+import { QualitySelector } from '../shared/QualitySelector';
+import { SimpleModeSidebar } from './SimpleModeSidebar';
+import { StyleLibraryModal } from './StyleLibraryModal';
+import type { ImageQuality, QualityUsage } from '../../types/quality';
 
 interface SimplifiedWorkflowProps {
     workflowId: string;
@@ -39,6 +43,10 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     const [showAspectRatioDropdown, setShowAspectRatioDropdown] = useState(false);
     const [imageCount, setImageCount] = useState(1);
     const [showImageCountDropdown, setShowImageCountDropdown] = useState(false);
+    const [selectedQuality, setSelectedQuality] = useState<ImageQuality>('regular');
+    const [qualityUsage, setQualityUsage] = useState<QualityUsage>({ hd: 0, qhd: 0 });
+    const [selectedStyle, setSelectedStyle] = useState<string>('realistic');
+    const [showStyleModal, setShowStyleModal] = useState(false);
     const [showLibraryModal, setShowLibraryModal] = useState(false);
     const [showLibraryModal2, setShowLibraryModal2] = useState(false);
     const [uploadMode, setUploadMode] = useState<'upload' | 'library'>('upload');
@@ -148,10 +156,9 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 };
             default:
                 return {
-                    title: workflowId,
-                    subtitle: 'AI-powered creative workflow',
+                    title: 'AI Generator',
+                    subtitle: 'Create amazing images with AI',
                     gradient: 'from-emerald-600 to-teal-600',
-                    dualUpload: false,
                     presets: [],
                 };
         }
@@ -171,6 +178,21 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
             return () => document.removeEventListener('click', handleClickOutside);
         }
     }, [showAspectRatioDropdown, showImageCountDropdown]);
+
+    // Load quality usage on mount
+    useEffect(() => {
+        const loadQualityUsage = async () => {
+            if (user?.id) {
+                try {
+                    const usage = await storageService.getQualityUsage(user.id);
+                    setQualityUsage(usage);
+                } catch (error) {
+                    console.error('Failed to load quality usage:', error);
+                }
+            }
+        };
+        loadQualityUsage();
+    }, [user?.id]);
 
     // Clear generated images when aspect ratio or image count changes
     // This provides visual feedback that user needs to regenerate
@@ -234,7 +256,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     };
 
     // Handle multiple image uploads for reference images
-    const handleMultipleImagesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleReferenceImagesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         console.log('📸 [REFERENCE] Image select triggered, files:', files?.length || 0);
 
@@ -346,7 +368,8 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
             return;
         }
 
-        if (!prompt || isGenerating) return;
+        // Allow generation if either prompt exists OR an image is uploaded
+        if ((!prompt && !uploadedImage) || isGenerating) return;
 
         setIsGenerating(true);
         setGeneratedImages([]);
@@ -393,17 +416,20 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 // Standard generation for all other workflows
                 const imagePromises = Array.from({ length: config.singleOutput ? 1 : imageCount }).map(async (_, index) => {
                     try {
-                        // If reference images are provided, use generateStyledImage
-                        if (uploadedImages.length > 0) {
+                        // Use generateStyledImage if:
+                        // 1. Reference images are provided, OR
+                        // 2. A style is selected (not 'realistic'), OR
+                        // 3. An uploaded image exists
+                        if (uploadedImages.length > 0 || selectedStyle !== 'realistic' || uploadedImage) {
                             const allImages = [uploadedImage, ...uploadedImages].filter(Boolean) as string[];
-                            const imageB64 = await geminiService.generateStyledImage(prompt, allImages);
+                            const imageB64 = await geminiService.generateStyledImage(prompt || '', allImages, selectedQuality, selectedStyle);
                             return imageB64;
                         } else {
-                            // Otherwise use standard generation
+                            // Otherwise use standard generation (text-to-image only)
                             const imageB64 = await geminiService.generateSimplifiedPhotoshoot(
                                 prompt,
                                 aspectRatio,
-                                uploadedImage // Pass the uploaded image (can be null)
+                                null // No image for pure text-to-image
                             );
                             return imageB64;
                         }
@@ -432,6 +458,20 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                         // Continue even if Cloudinary save fails
                     }
 
+                    // Track quality usage for HD/QHD
+                    if (selectedQuality !== 'regular') {
+                        try {
+                            for (let i = 0; i < validImages.length; i++) {
+                                await storageService.incrementQualityUsage(user.id, selectedQuality);
+                            }
+                            // Reload usage to update UI
+                            const newUsage = await storageService.getQualityUsage(user.id);
+                            setQualityUsage(newUsage);
+                        } catch (error) {
+                            console.error('Failed to track quality usage:', error);
+                        }
+                    }
+
                     // Increment user's generation count
                     const result = await incrementGenerationsUsed(validImages.length);
                     if (result.dailyLimitHit && onOpenDailyLimitModal) {
@@ -448,814 +488,206 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
         }
     };
 
-    const handleDownload = (imageB64: string, index: number) => {
+    const handleDownload = (imageUrl: string, index: number) => {
         const link = document.createElement('a');
-        link.href = imageB64;
-        link.download = `klint-studios-${Date.now()}-${index + 1}.png`;
+        link.href = imageUrl;
+        link.download = `generated-image-${Date.now()}.png`;
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
     };
 
     return (
-        <div className="min-h-screen bg-zinc-950 text-zinc-100">
-            {/* Animated background */}
-            <div className="fixed inset-0 bg-gradient-to-br from-emerald-950/20 via-zinc-950 to-teal-950/20 pointer-events-none" />
+        <div className="fixed inset-0 z-40 flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
+            <SimpleModeSidebar
+                config={config}
+                prompt={prompt}
+                setPrompt={setPrompt}
+                onGenerate={handleGenerate}
+                isGenerating={isGenerating}
+                uploadedImage={uploadedImage}
+                setUploadedImage={setUploadedImage}
+                uploadedImage2={uploadedImage2}
+                setUploadedImage2={setUploadedImage2}
+                aspectRatio={aspectRatio}
+                setAspectRatio={setAspectRatio}
+                imageCount={imageCount}
+                setImageCount={setImageCount}
+                selectedQuality={selectedQuality}
+                setSelectedQuality={setSelectedQuality}
+                qualityUsage={qualityUsage}
+                user={user}
+                onUploadClick={(ref) => ref.current?.click()}
+                onLibraryClick={() => setShowLibraryModal(true)}
+                fileInputRef={fileInputRef}
+                fileInputRef2={fileInputRef2}
+                uploadMode={uploadMode}
+                setUploadMode={setUploadMode}
+                onBack={onBack}
+                uploadedImages={uploadedImages}
+                setUploadedImages={setUploadedImages}
+                multipleImagesInputRef={multipleImagesInputRef}
+                selectedStyle={selectedStyle}
+                onStyleClick={() => setShowStyleModal(true)}
+            />
 
-            {/* Header */}
-            <div className="relative z-10 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-xl sticky top-0">
-                <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
-                    <button
-                        onClick={onBack}
-                        className="flex items-center gap-2 text-zinc-400 hover:text-zinc-100 transition-colors group"
-                    >
-                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                        <span className="text-sm font-medium">Back</span>
-                    </button>
-
-                    <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${config.gradient} flex items-center justify-center`}>
-                            <ImageIcon className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                            <h2 className="text-sm font-semibold text-zinc-100">{config.title}</h2>
-                            <p className="text-xs text-zinc-400">{config.subtitle}</p>
-                        </div>
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-zinc-950">
+                {/* Top Navigation Bar */}
+                <div className="h-24 border-b border-zinc-800 flex items-center justify-end px-6 bg-zinc-950/80 backdrop-blur-xl z-10 flex-shrink-0">
+                    <div className="flex items-center gap-4">
+                        {/* User Credits / Profile could go here */}
                     </div>
-
-                    <div className="w-20" /> {/* Spacer for alignment */}
                 </div>
-            </div>
 
-            <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-12">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column - Upload & Prompt */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Upload Area - Conditional Single or Dual */}
-                        {config.dualUpload ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* First Upload Box */}
-                                <div className="group">
-                                    <label className="block text-sm font-medium text-zinc-300 mb-3">
-                                        {config.upload1Label}
-                                    </label>
+                {/* Scrollable Results Area */}
+                <div className="flex-1 overflow-y-auto p-6 lg:p-10 custom-scrollbar">
+                    <div className="max-w-[1600px] mx-auto space-y-8">
 
-                                    {/* Tabs */}
-                                    <div className="flex gap-2 mb-3">
-                                        <button
-                                            onClick={() => setUploadMode('upload')}
-                                            className={`
-                                                flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                                ${uploadMode === 'upload'
-                                                    ? 'bg-emerald-500 text-black'
-                                                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                                }
-                                            `}
-                                        >
-                                            <Upload className="w-4 h-4 inline mr-2" />
-                                            Upload
-                                        </button>
-                                        <button
-                                            onClick={() => setUploadMode('library')}
-                                            className={`
-                                                flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                                ${uploadMode === 'library'
-                                                    ? 'bg-emerald-500 text-black'
-                                                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                                }
-                                            `}
-                                        >
-                                            <FolderOpen className="w-4 h-4 inline mr-2" />
-                                            From Library
-                                        </button>
+                        {/* Results Header */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
+                                    <Sparkles className="w-5 h-5 text-emerald-500" />
+                                    Generated Results
+                                </h3>
+                                <p className="text-sm text-zinc-500 mt-1">
+                                    {generatedImages.length > 0
+                                        ? `Showing ${generatedImages.length} generated image${generatedImages.length !== 1 ? 's' : ''}`
+                                        : 'Your generated images will appear here'
+                                    }
+                                </p>
+                            </div>
+
+                            {generatedImages.length > 0 && (
+                                <button
+                                    onClick={() => setGeneratedImages([])}
+                                    className="text-xs text-zinc-500 hover:text-red-400 transition-colors"
+                                >
+                                    Clear All
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Results Grid */}
+                        {generatedImages.length > 0 ? (
+                            <div className={`grid gap-6 ${aspectRatio === '9:16' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' :
+                                aspectRatio === '16:9' ? 'grid-cols-1 md:grid-cols-2' :
+                                    'grid-cols-2 md:grid-cols-3'
+                                }`}>
+                                {generatedImages.map((img, idx) => (
+                                    <div key={idx} className="group relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-xl transition-all hover:shadow-2xl hover:border-zinc-700">
+                                        <img
+                                            src={img}
+                                            alt={`Generated ${idx + 1}`}
+                                            className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
+                                        />
+
+                                        {/* Overlay Actions */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                                            <div className="flex items-center gap-2 translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                                                <button
+                                                    onClick={() => handleDownload(img, idx)}
+                                                    className="flex-1 py-2 bg-white text-black rounded-lg text-xs font-bold flex items-center justify-center gap-2 hover:bg-zinc-200 transition-colors"
+                                                >
+                                                    <DownloadIcon className="w-3 h-3" />
+                                                    Download
+                                                </button>
+                                                <button
+                                                    className="p-2 bg-zinc-800/80 text-white rounded-lg hover:bg-zinc-700 backdrop-blur-sm transition-colors"
+                                                    title="Upscale"
+                                                >
+                                                    <Zap className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleFileInputChange}
-                                        className="hidden"
-                                    />
-
-                                    {uploadedImage ? (
-                                        <div className="relative rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-800/50 p-2">
-                                            <img
-                                                src={uploadedImage}
-                                                alt="Uploaded 1"
-                                                className="w-full h-64 object-contain rounded-xl bg-zinc-900"
-                                            />
-                                            <button
-                                                onClick={() => setUploadedImage(null)}
-                                                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center hover:bg-zinc-800 transition-colors border border-zinc-700"
-                                            >
-                                                <X className="w-4 h-4 text-zinc-300" />
-                                            </button>
-                                        </div>
-                                    ) : uploadMode === 'upload' ? (
-                                        <div
-                                            onClick={() => fileInputRef.current?.click()}
-                                            onDragOver={handleDragOver}
-                                            onDragLeave={handleDragLeave}
-                                            onDrop={handleDrop}
-                                            className={`
-                                                relative rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer
-                                                h-64 flex flex-col items-center justify-center
-                                                ${isDragging
-                                                    ? 'border-emerald-500 bg-emerald-500/10'
-                                                    : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50'
-                                                }
-                                            `}
-                                        >
-                                            <div className={`
-                                                w-12 h-12 rounded-xl mb-4 flex items-center justify-center transition-all duration-300
-                                                ${isDragging
-                                                    ? `bg-gradient-to-br ${config.gradient}`
-                                                    : 'bg-zinc-800 group-hover:bg-zinc-700'
-                                                }
-                                            `}>
-                                                <Upload className="w-6 h-6 text-zinc-400" />
-                                            </div>
-                                            <p className="text-sm font-medium mb-2 text-zinc-300">
-                                                {isDragging ? 'Drop here' : 'Click to upload'}
-                                            </p>
-                                            <p className="text-xs text-zinc-500">
-                                                PNG, JPG, WEBP
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            onClick={() => setShowLibraryModal(true)}
-                                            className="relative rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all duration-300 cursor-pointer h-64 flex flex-col items-center justify-center"
-                                        >
-                                            <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-zinc-800 group-hover:bg-zinc-700 transition-all duration-300">
-                                                <FolderOpen className="w-6 h-6 text-zinc-400" />
-                                            </div>
-                                            <p className="text-sm font-medium mb-2 text-zinc-300">
-                                                Click to select from library
-                                            </p>
-                                            <p className="text-xs text-zinc-500">
-                                                My Creations
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Second Upload Box */}
-                                <div className="group">
-                                    <label className="block text-sm font-medium text-zinc-300 mb-3">
-                                        {config.upload2Label}
-                                    </label>
-
-                                    {/* Tabs */}
-                                    <div className="flex gap-2 mb-3">
-                                        <button
-                                            onClick={() => setUploadMode2('upload')}
-                                            className={`
-                                                flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                                ${uploadMode2 === 'upload'
-                                                    ? 'bg-emerald-500 text-black'
-                                                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                                }
-                                            `}
-                                        >
-                                            <Upload className="w-4 h-4 inline mr-2" />
-                                            Upload
-                                        </button>
-                                        <button
-                                            onClick={() => setUploadMode2('library')}
-                                            className={`
-                                                flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                                ${uploadMode2 === 'library'
-                                                    ? 'bg-emerald-500 text-black'
-                                                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                                }
-                                            `}
-                                        >
-                                            <FolderOpen className="w-4 h-4 inline mr-2" />
-                                            From Library
-                                        </button>
-                                    </div>
-
-                                    <input
-                                        ref={fileInputRef2}
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file && file.type.startsWith('image/')) {
-                                                const reader = new FileReader();
-                                                reader.onload = (event) => {
-                                                    setUploadedImage2(event.target?.result as string);
-                                                };
-                                                reader.readAsDataURL(file);
-                                            }
-                                        }}
-                                        className="hidden"
-                                    />
-
-                                    {uploadedImage2 ? (
-                                        <div className="relative rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-800/50 p-2">
-                                            <img
-                                                src={uploadedImage2}
-                                                alt="Uploaded 2"
-                                                className="w-full h-64 object-contain rounded-xl bg-zinc-900"
-                                            />
-                                            <button
-                                                onClick={() => setUploadedImage2(null)}
-                                                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center hover:bg-zinc-800 transition-colors border border-zinc-700"
-                                            >
-                                                <X className="w-4 h-4 text-zinc-300" />
-                                            </button>
-                                        </div>
-                                    ) : uploadMode2 === 'upload' ? (
-                                        <div
-                                            onClick={() => fileInputRef2.current?.click()}
-                                            onDragOver={(e) => {
-                                                e.preventDefault();
-                                                setIsDragging2(true);
-                                            }}
-                                            onDragLeave={() => setIsDragging2(false)}
-                                            onDrop={(e) => {
-                                                e.preventDefault();
-                                                setIsDragging2(false);
-                                                const file = e.dataTransfer.files[0];
-                                                if (file && file.type.startsWith('image/')) {
-                                                    const reader = new FileReader();
-                                                    reader.onload = (event) => {
-                                                        setUploadedImage2(event.target?.result as string);
-                                                    };
-                                                    reader.readAsDataURL(file);
-                                                }
-                                            }}
-                                            className={`
-                                                relative rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer
-                                                h-64 flex flex-col items-center justify-center
-                                                ${isDragging2
-                                                    ? 'border-emerald-500 bg-emerald-500/10'
-                                                    : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50'
-                                                }
-                                            `}
-                                        >
-                                            <div className={`
-                                                w-12 h-12 rounded-xl mb-4 flex items-center justify-center transition-all duration-300
-                                                ${isDragging2
-                                                    ? `bg-gradient-to-br ${config.gradient}`
-                                                    : 'bg-zinc-800 group-hover:bg-zinc-700'
-                                                }
-                                            `}>
-                                                <Upload className="w-6 h-6 text-zinc-400" />
-                                            </div>
-                                            <p className="text-sm font-medium mb-2 text-zinc-300">
-                                                {isDragging2 ? 'Drop here' : 'Click to upload'}
-                                            </p>
-                                            <p className="text-xs text-zinc-500">
-                                                PNG, JPG, WEBP
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            onClick={() => setShowLibraryModal2(true)}
-                                            className="relative rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all duration-300 cursor-pointer h-64 flex flex-col items-center justify-center"
-                                        >
-                                            <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-zinc-800 group-hover:bg-zinc-700 transition-all duration-300">
-                                                <FolderOpen className="w-6 h-6 text-zinc-400" />
-                                            </div>
-                                            <p className="text-sm font-medium mb-2 text-zinc-300">
-                                                Click to select from library
-                                            </p>
-                                            <p className="text-xs text-zinc-500">
-                                                My Creations
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
+                                ))}
                             </div>
                         ) : (
-                            <div className="group">
-                                <label className="block text-sm font-medium text-zinc-300 mb-3">
-                                    Upload Image {workflowId === 'upscale' ? '(Required)' : (workflowId === 'ai-photoshoot' || workflowId === 'virtual-tryon' ? '(Recommended)' : '(Optional)')}
-                                </label>
-
-                                {/* Tabs */}
-                                <div className="flex gap-2 mb-3">
-                                    <button
-                                        onClick={() => setUploadMode('upload')}
-                                        className={`
-                                            flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                            ${uploadMode === 'upload'
-                                                ? 'bg-emerald-500 text-black'
-                                                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                            }
-                                        `}
-                                    >
-                                        <Upload className="w-4 h-4 inline mr-2" />
-                                        Upload
-                                    </button>
-                                    <button
-                                        onClick={() => setUploadMode('library')}
-                                        className={`
-                                            flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                                            ${uploadMode === 'library'
-                                                ? 'bg-emerald-500 text-black'
-                                                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                            }
-                                        `}
-                                    >
-                                        <FolderOpen className="w-4 h-4 inline mr-2" />
-                                        From Library
-                                    </button>
+                            /* Empty State */
+                            <div className="h-[60vh] flex flex-col items-center justify-center border-2 border-dashed border-zinc-800/50 rounded-3xl bg-zinc-900/20">
+                                <div className="w-20 h-20 rounded-full bg-zinc-900 flex items-center justify-center mb-6 shadow-inner">
+                                    <Wand2 className="w-8 h-8 text-zinc-600" />
                                 </div>
-
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleFileInputChange}
-                                    className="hidden"
-                                />
-
-                                {uploadedImage ? (
-                                    <div className="relative rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-800/50 p-2">
-                                        <img
-                                            src={uploadedImage}
-                                            alt="Uploaded"
-                                            className="w-full h-80 object-contain rounded-xl bg-zinc-900"
-                                        />
-                                        <button
-                                            onClick={() => setUploadedImage(null)}
-                                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center hover:bg-zinc-800 transition-colors border border-zinc-700"
-                                        >
-                                            <X className="w-4 h-4 text-zinc-300" />
-                                        </button>
-                                    </div>
-                                ) : uploadMode === 'upload' ? (
-                                    <div
-                                        onClick={() => fileInputRef.current?.click()}
-                                        onDragOver={handleDragOver}
-                                        onDragLeave={handleDragLeave}
-                                        onDrop={handleDrop}
-                                        className={`
-                                            relative rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer
-                                            h-80 flex flex-col items-center justify-center
-                                            ${isDragging
-                                                ? 'border-emerald-500 bg-emerald-500/10'
-                                                : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50'
-                                            }
-                                        `}
-                                    >
-                                        <div className={`
-                                            w-16 h-16 rounded-2xl mb-6 flex items-center justify-center transition-all duration-300
-                                            ${isDragging
-                                                ? `bg-gradient-to-br ${config.gradient}`
-                                                : 'bg-zinc-800 group-hover:bg-zinc-700'
-                                            }
-                                        `}>
-                                            <Upload className="w-8 h-8 text-zinc-400" />
-                                        </div>
-                                        <p className="text-base font-medium mb-2 text-zinc-300">
-                                            {isDragging ? 'Drop your image here' : 'Click to upload or drag and drop'}
-                                        </p>
-                                        <p className="text-sm text-zinc-500">
-                                            PNG, JPG, WEBP up to 10MB
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div
-                                        onClick={() => setShowLibraryModal(true)}
-                                        className="relative rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all duration-300 cursor-pointer h-80 flex flex-col items-center justify-center"
-                                    >
-                                        <div className="w-16 h-16 rounded-2xl mb-6 flex items-center justify-center bg-zinc-800 group-hover:bg-zinc-700 transition-all duration-300">
-                                            <FolderOpen className="w-8 h-8 text-zinc-400" />
-                                        </div>
-                                        <p className="text-base font-medium mb-2 text-zinc-300">
-                                            Click to select from library
-                                        </p>
-                                        <p className="text-sm text-zinc-500">
-                                            My Creations
-                                        </p>
-                                    </div>
-                                )}
+                                <h3 className="text-lg font-medium text-zinc-300 mb-2">Ready to Create</h3>
+                                <p className="text-sm text-zinc-500 max-w-md text-center">
+                                    Configure your settings in the sidebar and click Generate to start creating amazing visuals.
+                                </p>
                             </div>
                         )}
-
-                        {/* Prompt Input */}
-                        <div>
-                            <div className="flex items-center justify-between mb-3">
-                                <label className="text-sm font-medium text-zinc-300">Describe Your Vision</label>
-                                <button
-                                    onClick={handleOptimizePrompt}
-                                    disabled={!prompt.trim() || isOptimizing}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                >
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                    {isOptimizing ? 'Optimizing...' : 'AI Enhance'}
-                                </button>
-                            </div>
-                            <textarea
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                                placeholder="Describe the style, mood, lighting, and composition you want..."
-                                className="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 text-zinc-100 placeholder-zinc-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none transition-all"
-                                rows={4}
-                            />
-                        </div>
-
-                        {/* Multiple Reference Images */}
-                        <div>
-                            <div className="flex items-center justify-between mb-3">
-                                <label className="text-sm font-medium text-zinc-300">Reference Images (Optional)</label>
-                                {uploadedImages.length > 0 && (
-                                    <span className="text-xs text-zinc-500">{uploadedImages.length} added</span>
-                                )}
-                            </div>
-
-                            <input
-                                ref={multipleImagesInputRef}
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                onChange={handleMultipleImagesSelect}
-                                onClick={(e) => {
-                                    console.log('📸 [REFERENCE] File input clicked');
-                                }}
-                                className="hidden"
-                                id="multiple-reference-upload"
-                            />
-
-                            {uploadedImages.length > 0 && (
-                                <div className="grid grid-cols-3 gap-2 mb-2">
-                                    {uploadedImages.map((img, idx) => (
-                                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-700 bg-zinc-800/50">
-                                            <img src={img} alt={`Reference ${idx + 1}`} className="w-full h-full object-cover" />
-                                            <button
-                                                onClick={() => removeReferenceImage(idx)}
-                                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
-                                            >
-                                                <X className="w-3 h-3 text-white" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <label
-                                htmlFor="multiple-reference-upload"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    console.log('📸 [REFERENCE] Label clicked, triggering file input');
-                                    multipleImagesInputRef.current?.click();
-                                }}
-                                className="block w-full rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all duration-300 cursor-pointer p-4 text-center"
-                            >
-                                <div className="flex flex-col items-center gap-2">
-                                    <ImageIcon className="w-6 h-6 text-zinc-400" />
-                                    <span className="text-sm text-zinc-300">
-                                        {uploadedImages.length > 0 ? 'Add More Reference Images' : 'Add Reference Images'}
-                                    </span>
-                                    <span className="text-xs text-zinc-500">Upload multiple images for style reference</span>
-                                </div>
-                            </label>
-                        </div>
-
-                        {/* Generate Button */}
-                        <button
-                            onClick={handleGenerate}
-                            className={`
-                                w-full py-4 px-6 rounded-xl font-semibold transition-all duration-300
-                                bg-emerald-500 hover:bg-emerald-600 text-black hover:shadow-2xl hover:shadow-emerald-500/30 hover:scale-[1.02]
-                                disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
-                            `}
-                            disabled={!prompt || isGenerating}
-                        >
-                            <div className="flex items-center justify-center gap-2">
-                                {isGenerating ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                        <span>Generating...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Zap className="w-5 h-5" />
-                                        <span>Generate</span>
-                                    </>
-                                )}
-                            </div>
-                        </button>
-                    </div>
-
-                    {/* Right Column - Presets */}
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-zinc-300 mb-3">Quick Styles</label>
-                            <div className="space-y-2">
-                                {config.presets.map((preset) => (
-                                    <button
-                                        key={preset.id}
-                                        onClick={() => {
-                                            setSelectedPreset(preset.id);
-                                            setPrompt(preset.description);
-                                        }}
-                                        className={`
-                                            w-full text-left px-4 py-3 rounded-xl transition-all duration-300 group
-                                            ${selectedPreset === preset.id
-                                                ? `bg-gradient-to-r ${config.gradient} shadow-lg border-transparent`
-                                                : 'bg-zinc-900 hover:bg-zinc-800 border border-zinc-700'
-                                            }
-                                        `}
-                                    >
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className={`text-sm font-medium ${selectedPreset === preset.id ? 'text-white' : 'text-zinc-300'}`}>
-                                                {preset.label}
-                                            </span>
-                                            {selectedPreset === preset.id && (
-                                                <Check className="w-4 h-4 text-white" />
-                                            )}
-                                        </div>
-                                        <p className={`text-xs leading-relaxed ${selectedPreset === preset.id ? 'text-white/80' : 'text-zinc-500'}`}>
-                                            {preset.description}
-                                        </p>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Integrated Chatbot */}
-                        <div className="rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col h-[500px] max-h-[500px]">
-                            <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-zinc-800">
-                                <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-                                    <Bot className="w-4 h-4 text-emerald-400" />
-                                    AI Assistant
-                                </h4>
-                                {chatHistory.length > 1 && (
-                                    <button
-                                        onClick={resetChat}
-                                        className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                                        title="Reset chat"
-                                    >
-                                        Reset
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Messages */}
-                            <div className="flex-grow p-4 space-y-3 overflow-y-auto" ref={messagesEndRef}>
-                                {chatHistory.map((msg, index) => (
-                                    <div key={index} className={`flex items-start gap-2 ${msg.role === 'model' ? '' : 'justify-end'}`}>
-                                        {msg.role === 'model' && (
-                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
-                                                <Bot size={14} className="text-emerald-300" />
-                                            </div>
-                                        )}
-                                        <div className={`max-w-[80%] rounded-lg px-3 py-2 text-xs ${msg.role === 'model' ? 'bg-zinc-800 rounded-tl-none text-zinc-200' : 'bg-emerald-600 text-white rounded-br-none'}`}>
-                                            {msg.images && msg.images.length > 0 && (
-                                                <div className="mb-1 flex flex-wrap gap-1">
-                                                    {msg.images.map((img, idx) => (
-                                                        <div key={idx} className="w-10 h-10 rounded overflow-hidden border border-white/20">
-                                                            <img src={img} alt={`Ref ${idx + 1}`} className="w-full h-full object-cover" />
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {msg.generatedImage && (
-                                                <div className="mb-1 rounded overflow-hidden border border-emerald-500/50 relative group">
-                                                    <img src={msg.generatedImage} alt="Generated" className="w-full h-auto max-h-48 object-contain" />
-                                                    <button
-                                                        onClick={() => {
-                                                            const link = document.createElement('a');
-                                                            link.href = msg.generatedImage!;
-                                                            link.download = `klint-generated-${Date.now()}.png`;
-                                                            link.click();
-                                                        }}
-                                                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center hover:bg-emerald-600 transition-colors opacity-0 group-hover:opacity-100"
-                                                        title="Download image"
-                                                    >
-                                                        <DownloadIcon size={12} className="text-white" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                            <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                                {isBotReplying && (
-                                    <div className="flex items-start gap-2">
-                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
-                                            <Bot size={14} className="text-emerald-300" />
-                                        </div>
-                                        <div className="max-w-[80%] rounded-lg px-3 py-2 bg-zinc-800 rounded-tl-none flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
-                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                                            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Input */}
-                            <div className="flex-shrink-0 p-4 border-t border-zinc-800">
-                                {selectedChatImages.length > 0 && (
-                                    <div className="mb-2 flex flex-wrap gap-1 max-h-16 overflow-y-auto">
-                                        {selectedChatImages.map((img, idx) => (
-                                            <div key={idx} className="relative w-10 h-10 rounded overflow-hidden border border-emerald-500/50 group">
-                                                <img src={img} alt={`Selected ${idx + 1}`} className="w-full h-full object-cover" />
-                                                <button
-                                                    onClick={() => removeChatImage(idx)}
-                                                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                                                >
-                                                    <XCircle size={12} className="text-white" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                <form onSubmit={handleChatSubmit} className="relative">
-                                    <input
-                                        ref={chatFileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        onChange={handleChatImageSelect}
-                                        className="hidden"
-                                        id="workflow-chat-image-upload"
-                                    />
-                                    <input
-                                        type="text"
-                                        value={chatInput}
-                                        onChange={(e) => setChatInput(e.target.value)}
-                                        placeholder="Ask a question..."
-                                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg py-2 pl-3 pr-20 text-xs text-zinc-200 placeholder:text-zinc-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                                    />
-                                    <label
-                                        htmlFor="workflow-chat-image-upload"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            chatFileInputRef.current?.click();
-                                        }}
-                                        className="absolute right-10 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded transition-colors cursor-pointer"
-                                        title="Upload images"
-                                    >
-                                        <ImageIcon size={14} />
-                                    </label>
-                                    <button
-                                        type="submit"
-                                        className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors disabled:bg-zinc-600"
-                                        disabled={(!chatInput.trim() && selectedChatImages.length === 0) || isBotReplying}
-                                    >
-                                        <Send size={14} />
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
-                {/* Results Area - Higgsfield Style Grid */}
-                <div className="mt-12">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-semibold text-zinc-100">
-                            Generated Results
-                            {generatedImages.length > 0 && (
-                                <span className="ml-3 text-sm text-emerald-400">({generatedImages.length} images)</span>
-                            )}
-                        </h3>
-                        <div className="flex items-center gap-2">
-                            {/* Aspect Ratio Dropdown - Hide for certain workflows */}
-                            {!config.hideAspectRatio && (
-                                <div className="relative">
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowAspectRatioDropdown(!showAspectRatioDropdown);
-                                        }}
-                                        className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs text-zinc-300 transition-all border border-zinc-700 flex items-center gap-2"
-                                    >
-                                        <span>{aspectRatio}</span>
-                                        <ChevronDown className="w-3 h-3" />
-                                    </button>
-                                    {showAspectRatioDropdown && (
-                                        <div className="absolute top-full mt-1 right-0 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50 min-w-[140px]">
-                                            {ASPECT_RATIOS.map((ar) => (
-                                                <button
-                                                    key={ar.value}
-                                                    onClick={() => {
-                                                        setAspectRatio(ar.value);
-                                                        setShowAspectRatioDropdown(false);
-                                                    }}
-                                                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${aspectRatio === ar.value
-                                                            ? 'bg-emerald-500/20 text-emerald-400'
-                                                            : 'text-zinc-300 hover:bg-zinc-800'
-                                                        }`}
-                                                >
-                                                    {ar.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Image Count Dropdown - Hide for certain workflows */}
-                            {!config.hideImageCount && (
-                                <div className="relative">
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowImageCountDropdown(!showImageCountDropdown);
-                                        }}
-                                        className="px-3 py-1.5 bg-emerald-500/20 rounded-lg text-xs text-emerald-400 font-medium border border-emerald-500/50 flex items-center gap-2"
-                                    >
-                                        <span>{imageCount} images</span>
-                                        <ChevronDown className="w-3 h-3" />
-                                    </button>
-                                    {showImageCountDropdown && (
-                                        <div className="absolute top-full mt-1 right-0 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50">
-                                            {[1, 2, 4, 6, 8].map((count) => (
-                                                <button
-                                                    key={count}
-                                                    onClick={() => {
-                                                        setImageCount(count);
-                                                        setShowImageCountDropdown(false);
-                                                    }}
-                                                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${imageCount === count
-                                                            ? 'bg-emerald-500/20 text-emerald-400'
-                                                            : 'text-zinc-300 hover:bg-zinc-800'
-                                                        }`}
-                                                >
-                                                    {count} {count === 1 ? 'image' : 'images'}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Higgsfield-style Dynamic Grid */}
-                    <div className={`grid gap-4 ${config.singleOutput ? 'grid-cols-1' : (imageCount <= 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-2')}`}>
-                        {Array.from({ length: config.singleOutput ? 1 : imageCount }).map((_, i) => {
-                            const currentAspectRatio = ASPECT_RATIOS.find(ar => ar.value === aspectRatio);
-                            return (
-                                <div
-                                    key={i}
-                                    className={`${currentAspectRatio?.css || 'aspect-[3/4]'} rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group hover:border-emerald-500 transition-all relative overflow-hidden`}
-                                >
-                                    {/* Show generated image or placeholder */}
-                                    {generatedImages[i] ? (
-                                        <>
-                                            <img
-                                                src={generatedImages[i]}
-                                                alt={`Generated ${i + 1}`}
-                                                className="w-full h-full object-cover rounded-2xl"
-                                            />
-                                            {/* Hover overlay with actions */}
-                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                                                <div className="flex gap-2 w-full">
-                                                    <button
-                                                        onClick={() => handleDownload(generatedImages[i], i)}
-                                                        className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs text-black font-medium backdrop-blur-sm transition-all flex items-center justify-center gap-1"
-                                                    >
-                                                        <Download className="w-3.5 h-3.5" />
-                                                        Download
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </>
-                                    ) : isGenerating ? (
-                                        <div className="text-center">
-                                            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mx-auto mb-3" />
-                                            <p className="text-xs text-zinc-400">Generating...</p>
-                                        </div>
-                                    ) : (
-                                        <div className="text-center">
-                                            <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center mx-auto mb-3 group-hover:bg-emerald-500/10 transition-all">
-                                                <ImageIcon className="w-6 h-6 text-zinc-600 group-hover:text-emerald-400 transition-all" />
-                                            </div>
-                                            <p className="text-xs text-zinc-500">Image {i + 1}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
+                {/* Hidden Inputs for Sidebar */}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileInputChange}
+                    className="hidden"
+                />
+                <input
+                    ref={fileInputRef2}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file && file.type.startsWith('image/')) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                setUploadedImage2(event.target?.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    }}
+                    className="hidden"
+                />
+                <input
+                    ref={multipleImagesInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleReferenceImagesSelect}
+                    className="hidden"
+                />
             </div>
 
-            {/* Image Library Modals */}
-            <ImageLibraryModal
-                isOpen={showLibraryModal}
-                onClose={() => setShowLibraryModal(false)}
-                onSelect={(imageUrl) => setUploadedImage(imageUrl)}
-                title="Select from My Creations"
-                workflowId={workflowId}
-            />
-            <ImageLibraryModal
-                isOpen={showLibraryModal2}
-                onClose={() => setShowLibraryModal2(false)}
-                onSelect={(imageUrl) => setUploadedImage2(imageUrl)}
-                title="Select from My Creations"
-                workflowId={workflowId}
+            {/* Modals */}
+            {showLibraryModal && (
+                <ImageLibraryModal
+                    isOpen={showLibraryModal}
+                    onClose={() => setShowLibraryModal(false)}
+                    onSelect={(url) => {
+                        setUploadedImage(url);
+                        setShowLibraryModal(false);
+                    }}
+                    title="Select from My Creations"
+                    workflowId={workflowId}
+                    userId={user?.id || ''}
+                />
+            )}
+            {showLibraryModal2 && (
+                <ImageLibraryModal
+                    isOpen={showLibraryModal2}
+                    onClose={() => setShowLibraryModal2(false)}
+                    onSelect={(url) => {
+                        setUploadedImage2(url);
+                        setShowLibraryModal2(false);
+                    }}
+                    title="Select from My Creations"
+                    workflowId={workflowId}
+                    userId={user?.id || ''}
+                />
+            )}
+            <StyleLibraryModal
+                isOpen={showStyleModal}
+                onClose={() => setShowStyleModal(false)}
+                onSelect={(style) => {
+                    setSelectedStyle(style.id);
+                    setShowStyleModal(false);
+                }}
+                currentStyleId={selectedStyle}
             />
         </div>
     );

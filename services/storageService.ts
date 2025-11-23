@@ -46,7 +46,7 @@ class StorageService {
       workflowId,
       hasPrompt: !!prompt
     });
-    
+
     try {
       // 1. Compress image before upload
       console.log('📦 [STORAGE] Compressing image...');
@@ -74,13 +74,13 @@ class StorageService {
           throw new Error('Cloudinary initialization failed. Please check your settings in Admin Panel → Integrations.');
         }
       }
-      
+
       // 4. Upload to Cloudinary
       console.log('☁️ [STORAGE] Uploading to Cloudinary...', {
         compressedSize: compressedFile.size,
         fileName: compressedFile.name
       });
-      
+
       // Upload to Cloudinary without metadata (metadata stored in our database)
       const cloudinaryResponse = await cloudinaryService.uploadImage(
         compressedFile,
@@ -88,7 +88,7 @@ class StorageService {
         'klint-studios'
         // No metadata - we store it in our database instead
       );
-      
+
       console.log('✅ [STORAGE] Cloudinary upload successful!', {
         url: cloudinaryResponse.secure_url,
         publicId: cloudinaryResponse.public_id
@@ -271,11 +271,11 @@ class StorageService {
     switch (plan) {
       case 'free':
         return 10;
-      case 'solo':
+      case 'solo': // BASIC plan
         return 100;
-      case 'studio':
+      case 'studio': // PRO plan
         return 500;
-      case 'brand':
+      case 'brand': // ADVANCE plan (highest tier)
         return 2000;
       default:
         return 10;
@@ -289,14 +289,87 @@ class StorageService {
     switch (plan) {
       case 'free':
         return 7;
-      case 'solo':
+      case 'solo': // BASIC plan
         return 30;
-      case 'studio':
+      case 'studio': // PRO plan
         return 90;
-      case 'brand':
+      case 'brand': // ADVANCE plan (highest tier)
         return 180;
       default:
         return 7;
+    }
+  }
+
+  /**
+   * Get quality usage for current month
+   */
+  async getQualityUsage(userId: string): Promise<{ hd: number; qhd: number }> {
+    const monthYear = new Date().toISOString().slice(0, 7); // "2025-01"
+
+    const { data, error } = await supabase
+      .from('user_quality_usage')
+      .select('hd_count, qhd_count')
+      .eq('user_id', userId)
+      .eq('month_year', monthYear)
+      .single();
+
+    if (error || !data) {
+      return { hd: 0, qhd: 0 };
+    }
+
+    return { hd: data.hd_count, qhd: data.qhd_count };
+  }
+
+  /**
+   * Increment quality usage counter
+   */
+  async incrementQualityUsage(userId: string, quality: 'hd' | 'qhd'): Promise<void> {
+    const monthYear = new Date().toISOString().slice(0, 7);
+    const field = quality === 'hd' ? 'hd_count' : 'qhd_count';
+
+    const { error } = await supabase.rpc('increment_quality_usage', {
+      p_user_id: userId,
+      p_month_year: monthYear,
+      p_field: field
+    });
+
+    if (error) {
+      console.error(`Failed to increment ${quality} usage:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user can use quality tier based on plan and usage
+   */
+  async canUseQuality(userId: string, quality: 'regular' | 'hd' | 'qhd', userPlan: UserPlan): Promise<boolean> {
+    if (quality === 'regular') return true; // Regular is always available
+
+    const usage = await this.getQualityUsage(userId);
+    const limits = this.getQualityLimits(userPlan);
+
+    if (quality === 'hd') {
+      return usage.hd < limits.hd;
+    } else {
+      return usage.qhd < limits.qhd;
+    }
+  }
+
+  /**
+   * Get quality limits by plan
+   */
+  getQualityLimits(plan: UserPlan): { hd: number; qhd: number } {
+    switch (plan) {
+      case 'free':
+        return { hd: 0, qhd: 0 };
+      case 'solo': // BASIC plan
+        return { hd: 10, qhd: 0 };
+      case 'studio': // PRO plan
+        return { hd: 50, qhd: 10 };
+      case 'brand': // ADVANCE plan (highest tier)
+        return { hd: 100, qhd: 100 };
+      default:
+        return { hd: 0, qhd: 0 };
     }
   }
 }
