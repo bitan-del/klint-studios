@@ -258,19 +258,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             loadUserProfile(session.user);
           } else {
             console.log('⚪ No session on initial check');
-            // MOCK USER FOR DEV/TESTING
-            console.log('⚠️ Using MOCK user for development/testing.');
-            const mockUser: User = {
-              id: 'mock-user-id',
-              email: 'dev@klintstudios.com',
-              plan: 'brand',
-              role: 'admin',
-              generationsUsed: 0,
-              dailyGenerationsUsed: 0,
-              dailyVideosUsed: 0,
-              lastGenerationDate: new Date().toISOString().split('T')[0],
-            };
-            setUser(mockUser);
             setLoading(false);
           }
         } else if (event === 'SIGNED_IN' && session?.user) {
