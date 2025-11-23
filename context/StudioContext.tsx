@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import type { StateCreator } from 'zustand';
 import { createApparelSlice, ApparelSlice } from './apparelStore';
@@ -6,12 +5,13 @@ import { createProductSlice, ProductSlice } from './productStore';
 import { createDesignSlice, DesignSlice } from './designStore';
 import { createSharedSlice, SharedSlice } from './sharedStore';
 import { createReimagineSlice, ReimagineSlice } from './reimagineStore';
+import { createVideoSlice, VideoSlice } from './videoStore';
 
 /**
  * The combined store type, merging all individual slices.
  * This provides a single, unified interface for the entire application state.
  */
-export type StudioStore = ApparelSlice & ProductSlice & DesignSlice & ReimagineSlice & SharedSlice;
+export type StudioStore = ApparelSlice & ProductSlice & DesignSlice & ReimagineSlice & SharedSlice & VideoSlice;
 
 /**
  * A helper type for creating slices that are aware of the full store.
@@ -29,4 +29,5 @@ export const useStudio = create<StudioStore>()((...a) => ({
     ...createDesignSlice(...a),
     ...createReimagineSlice(...a),
     ...createSharedSlice(...a),
+    ...createVideoSlice(...a),
 }));

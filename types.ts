@@ -72,7 +72,7 @@ export interface Background {
 }
 
 export interface Lighting {
-  id:string;
+  id: string;
   name: string;
   description: string;
   isDynamic?: boolean;
@@ -91,13 +91,13 @@ export interface Scene {
 export type GenerationMode = 'image' | 'video';
 
 // FIX: Add 'reimagine' and 'video' to StudioMode type.
-export type StudioMode = 'apparel' | 'product' | 'design' | 'reimagine' | 'video';
+export type StudioMode = 'apparel' | 'product' | 'design' | 'reimagine' | 'video' | 'chason';
 
 export interface AspectRatio {
-    id: string;
-    name: string;
-    value: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
-    icon: React.ReactNode;
+  id: string;
+  name: string;
+  value: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+  icon: React.ReactNode;
 }
 
 // FIX: Add missing Animation interface
@@ -125,7 +125,7 @@ export interface AIModel {
 export type ApparelCategory = 'Uncategorized' | 'Upper Body' | 'Lower Body' | 'Full Body' | 'Outerwear' | 'Accessory' | 'Footwear' | 'Handheld';
 
 export interface ApparelItem {
-  id:string;
+  id: string;
   base64: string; // Represents the Front View
   // FIX: Added missing optional properties for other apparel views.
   backViewBase64?: string | null;
@@ -199,7 +199,7 @@ export interface PackShot {
   shotId: string;
   expressionId: string;
   cameraAngleId?: string;
-  name: string; 
+  name: string;
 }
 
 // FIX: Add 'pov' to EcommercePack type to support point-of-view packshots.
@@ -264,7 +264,7 @@ export interface StagedAsset {
 
 export interface ProductSceneTemplate {
   id: string;
-  name:string;
+  name: string;
   description: string;
   scene: Partial<Scene>;
   controls: Partial<ProductCreativeControls>;
@@ -291,8 +291,8 @@ export interface SceneSuggestion {
 // from types/design.ts
 
 export interface DesignInput {
-  id:string;
-  base64: string; 
+  id: string;
+  base64: string;
   name: string;
 }
 
@@ -363,9 +363,9 @@ export interface User {
 // FIX: Add missing ReimagineCreativeControls interface.
 // from types/reimagine.ts
 export interface ReimagineCreativeControls {
-    newModelDescription: string;
-    newBackgroundDescription: string;
-    negativePrompt: string;
+  newModelDescription: string;
+  newBackgroundDescription: string;
+  negativePrompt: string;
 }
 // FIX: Add missing ReimagineState interface to resolve import error.
 // from types/reimagine.ts

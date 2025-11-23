@@ -28,7 +28,7 @@ const PasswordInput: React.FC<{ value: string; onChange: (e: React.ChangeEvent<H
     const [isVisible, setIsVisible] = useState(false);
     return (
         <div className="relative">
-            <input 
+            <input
                 type={isVisible ? 'text' : 'password'}
                 value={value}
                 onChange={onChange}
@@ -44,8 +44,8 @@ const PasswordInput: React.FC<{ value: string; onChange: (e: React.ChangeEvent<H
 
 
 const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ isOpen, onClose }) => {
-    const { 
-        users, 
+    const {
+        users,
         updateUserPlan,
         refreshUsers,
         resetUserUsage,
@@ -59,10 +59,10 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         apiSettings,
         updateApiSettings,
     } = useAuth();
-    
+
     const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'integrations'>('users');
     const [searchQuery, setSearchQuery] = useState('');
-    
+
     // Local state for forms to avoid re-rendering on every keystroke
     const [stripeKeys, setStripeKeys] = useState(paymentSettings.stripe);
     const [razorpayKeys, setRazorpayKeys] = useState(paymentSettings.razorpay);
@@ -75,7 +75,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
     const [gemini, setGemini] = useState(apiSettings.gemini || {});
     const [cloudinary, setCloudinary] = useState(apiSettings.cloudinary || {});
     const [canva, setCanva] = useState(apiSettings.canva || { clientId: '', clientSecret: '', accessToken: '', refreshToken: '' });
-    
+
     // Loading and success states - Ensure all state variables are always defined
     const [savingStripe, setSavingStripe] = useState(false);
     const [savingRazorpay, setSavingRazorpay] = useState(false);
@@ -83,18 +83,18 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
     const [savingGemini, setSavingGemini] = useState(false);
     const [savingCloudinary, setSavingCloudinary] = useState(false);
     const [savingCanva, setSavingCanva] = useState(false);
-    
+
     const [savedStripe, setSavedStripe] = useState(false);
     const [savedRazorpay, setSavedRazorpay] = useState(false);
     const [savedPrices, setSavedPrices] = useState(false);
     const [savedGemini, setSavedGemini] = useState(false);
     const [savedCloudinary, setSavedCloudinary] = useState(false);
     const [savedCanva, setSavedCanva] = useState(false);
-    
+
     // Track plan changes for each user
     const [userPlanChanges, setUserPlanChanges] = useState<Record<string, UserPlan>>({});
     const [savingPlan, setSavingPlan] = useState<string | null>(null);
-    
+
     // Effect to reset local state when modal is opened
     useEffect(() => {
         if (isOpen) {
@@ -102,7 +102,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
             console.log('Payment settings:', paymentSettings);
             console.log('Plan prices:', planPrices);
             console.log('API settings:', apiSettings);
-            
+
             setStripeKeys(paymentSettings.stripe);
             setRazorpayKeys(paymentSettings.razorpay);
             setPrices({
@@ -124,17 +124,17 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
             console.log('👥 Users data:', users);
         }
     }, [isOpen, users]);
-    
+
     // Auto-refresh users every 5 seconds when Admin Panel is open
     useEffect(() => {
         if (!isOpen) return;
-        
+
         console.log('🔄 Setting up auto-refresh for user list...');
         const interval = setInterval(() => {
             console.log('🔄 Auto-refreshing users...');
             refreshUsers();
         }, 5000); // Refresh every 5 seconds
-        
+
         return () => {
             console.log('🔄 Cleaning up auto-refresh...');
             clearInterval(interval);
@@ -159,7 +159,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         setSavedStripe(true);
         setTimeout(() => setSavedStripe(false), 3000);
     };
-    
+
     const handleSaveRazorpay = async () => {
         setSavingRazorpay(true);
         setSavedRazorpay(false);
@@ -168,7 +168,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         setSavedRazorpay(true);
         setTimeout(() => setSavedRazorpay(false), 3000);
     };
-    
+
     const handleSavePrices = async () => {
         console.log('💾 Save Prices clicked');
         setSavingPrices(true);
@@ -183,7 +183,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
             setSavedPrices(false);
         }, 3000);
     };
-    
+
     const handleSaveGemini = async () => {
         setSavingGemini(true);
         setSavedGemini(false);
@@ -192,7 +192,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         setSavedGemini(true);
         setTimeout(() => setSavedGemini(false), 3000);
     };
-    
+
     const handleSaveCloudinary = async () => {
         try {
             // Safely check and use state setters - they should always exist but be defensive
@@ -218,7 +218,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
             console.error('Error saving Cloudinary settings:', err);
         }
     };
-    
+
     const handleSaveCanva = async () => {
         setSavingCanva(true);
         setSavedCanva(false);
@@ -227,38 +227,38 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         setSavedCanva(true);
         setTimeout(() => setSavedCanva(false), 3000);
     };
-    
+
     const handlePlanChange = (userId: string, newPlan: UserPlan) => {
         setUserPlanChanges(prev => ({ ...prev, [userId]: newPlan }));
     };
-    
+
     const handleSavePlan = async (userId: string) => {
         const newPlan = userPlanChanges[userId];
         if (!newPlan) return;
-        
+
         console.log(`💾 Saving plan change: ${userId} → ${newPlan}`);
         setSavingPlan(userId);
         await updateUserPlan(userId, newPlan);
-        
+
         // Refresh users to get latest data from database
         console.log('🔄 Refreshing users after plan change...');
         await refreshUsers();
-        
+
         setSavingPlan(null);
-        
+
         // Remove from pending changes
         setUserPlanChanges(prev => {
             const updated = { ...prev };
             delete updated[userId];
             return updated;
         });
-        
+
         console.log('✅ Plan change saved and users refreshed');
     };
 
 
     return (
-        <div 
+        <div
             className="fixed inset-0 bg-black/60 backdrop-blur-md z-[70] flex items-center justify-center p-4 animate-slide-up"
             role="dialog"
             aria-modal="true"
@@ -280,14 +280,14 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                     <button onClick={() => setActiveTab('payments')} className={`flex-shrink-0 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'payments' ? 'text-white border-b-2 border-emerald-500' : 'text-zinc-400 hover:text-white'}`}>Payments & Plans</button>
                     <button onClick={() => setActiveTab('integrations')} className={`flex-shrink-0 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'integrations' ? 'text-white border-b-2 border-emerald-500' : 'text-zinc-400 hover:text-white'}`}>Integrations</button>
                 </div>
-                
+
                 <div className="max-h-[60vh] overflow-y-auto pr-2">
                     {activeTab === 'users' && (
                         <div>
                             <div className="flex items-center gap-3 mb-6">
                                 <div className="relative flex-1 max-w-sm">
                                     <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                                    <input 
+                                    <input
                                         type="text"
                                         placeholder="Search by email..."
                                         value={searchQuery}
@@ -307,10 +307,10 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                     Refresh ({users.length})
                                 </button>
                             </div>
-                            
+
                             {/* Debug info */}
                             <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg text-xs text-blue-300">
-                                <strong>Debug Info:</strong> Showing {filteredUsers.length} of {users.length} total users. 
+                                <strong>Debug Info:</strong> Showing {filteredUsers.length} of {users.length} total users.
                                 {users.length === 0 && ' No users loaded from database.'}
                                 {users.length === 1 && ' Only 1 user found. Have other users logged in?'}
                             </div>
@@ -335,11 +335,10 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                             <tr key={user.id} className="border-b border-zinc-800 hover:bg-zinc-800/50">
                                                 <td className="p-3 font-medium text-zinc-300 truncate" title={user.email}>{user.email}</td>
                                                 <td className="p-3">
-                                                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                                                        user.role === 'admin' 
-                                                            ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-500/30' 
-                                                            : 'bg-zinc-700 text-zinc-300'
-                                                    }`}>
+                                                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin'
+                                                        ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-500/30'
+                                                        : 'bg-zinc-700 text-zinc-300'
+                                                        }`}>
                                                         {user.role}
                                                     </span>
                                                 </td>
@@ -383,8 +382,8 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                 <td className="p-3">{new Date(user.lastGenerationDate).toLocaleDateString()}</td>
                                                 <td className="p-3">
                                                     <div className="flex items-center gap-2">
-                                                        <select 
-                                                            value={userPlanChanges[user.id] || user.plan} 
+                                                        <select
+                                                            value={userPlanChanges[user.id] || user.plan}
                                                             onChange={(e) => handlePlanChange(user.id, e.target.value as UserPlan)}
                                                             className="bg-zinc-800 border border-zinc-700 rounded-md p-1.5 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 flex-1"
                                                             aria-label={`Change plan for ${user.email}`}
@@ -433,14 +432,14 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                         <h4 className="font-bold text-zinc-100">Stripe</h4>
                                         <div className="space-y-1">
                                             <label className="text-xs text-zinc-400">Publishable Key</label>
-                                            <PasswordInput value={stripeKeys.publishableKey} onChange={(e) => setStripeKeys({...stripeKeys, publishableKey: e.target.value})} placeholder="pk_live_..." />
+                                            <PasswordInput value={stripeKeys.publishableKey} onChange={(e) => setStripeKeys({ ...stripeKeys, publishableKey: e.target.value })} placeholder="pk_live_..." />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs text-zinc-400">Secret Key</label>
-                                            <PasswordInput value={stripeKeys.secretKey} onChange={(e) => setStripeKeys({...stripeKeys, secretKey: e.target.value})} placeholder="sk_live_..." />
+                                            <PasswordInput value={stripeKeys.secretKey} onChange={(e) => setStripeKeys({ ...stripeKeys, secretKey: e.target.value })} placeholder="sk_live_..." />
                                         </div>
-                                        <button 
-                                            onClick={handleSaveStripe} 
+                                        <button
+                                            onClick={handleSaveStripe}
                                             disabled={savingStripe}
                                             className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
                                         >
@@ -452,16 +451,16 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                     {/* Razorpay */}
                                     <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
                                         <h4 className="font-bold text-zinc-100">Razorpay</h4>
-                                         <div className="space-y-1">
+                                        <div className="space-y-1">
                                             <label className="text-xs text-zinc-400">Key ID</label>
-                                            <PasswordInput value={razorpayKeys.publishableKey} onChange={(e) => setRazorpayKeys({...razorpayKeys, publishableKey: e.target.value})} placeholder="rzp_live_..." />
+                                            <PasswordInput value={razorpayKeys.publishableKey} onChange={(e) => setRazorpayKeys({ ...razorpayKeys, publishableKey: e.target.value })} placeholder="rzp_live_..." />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs text-zinc-400">Key Secret</label>
-                                            <PasswordInput value={razorpayKeys.secretKey} onChange={(e) => setRazorpayKeys({...razorpayKeys, secretKey: e.target.value})} placeholder="Your secret key" />
+                                            <PasswordInput value={razorpayKeys.secretKey} onChange={(e) => setRazorpayKeys({ ...razorpayKeys, secretKey: e.target.value })} placeholder="Your secret key" />
                                         </div>
-                                        <button 
-                                            onClick={handleSaveRazorpay} 
+                                        <button
+                                            onClick={handleSaveRazorpay}
                                             disabled={savingRazorpay}
                                             className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[180px]"
                                         >
@@ -473,7 +472,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                 </div>
                             </section>
 
-                             {/* Plan Pricing Section */}
+                            {/* Plan Pricing Section */}
                             <section>
                                 <h3 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2"><DollarSign size={20} /> Subscription Plan Pricing (INR)</h3>
                                 <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-4">
@@ -482,33 +481,33 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                             <label className="text-sm font-medium text-zinc-300 mb-2 block">Free Plan Price</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">₹</span>
-                                                <input type="number" value={prices.free} onChange={(e) => setPrices({...prices, free: parseFloat(e.target.value) || 0})} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
+                                                <input type="number" value={prices.free} onChange={(e) => setPrices({ ...prices, free: parseFloat(e.target.value) || 0 })} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
                                             </div>
                                         </div>
                                         <div>
                                             <label className="text-sm font-medium text-zinc-300 mb-2 block">BASIC Plan Price</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">₹</span>
-                                                <input type="number" value={prices.solo} onChange={(e) => setPrices({...prices, solo: parseFloat(e.target.value) || 0})} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
+                                                <input type="number" value={prices.solo} onChange={(e) => setPrices({ ...prices, solo: parseFloat(e.target.value) || 0 })} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
                                             </div>
                                         </div>
                                         <div>
                                             <label className="text-sm font-medium text-zinc-300 mb-2 block">PRO Plan Price</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">₹</span>
-                                                <input type="number" value={prices.studio} onChange={(e) => setPrices({...prices, studio: parseFloat(e.target.value) || 0})} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
+                                                <input type="number" value={prices.studio} onChange={(e) => setPrices({ ...prices, studio: parseFloat(e.target.value) || 0 })} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
                                             </div>
                                         </div>
                                         <div>
                                             <label className="text-sm font-medium text-zinc-300 mb-2 block">ADVANCE Plan Price</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">₹</span>
-                                                <input type="number" value={prices.brand} onChange={(e) => setPrices({...prices, brand: parseFloat(e.target.value) || 0})} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
+                                                <input type="number" value={prices.brand} onChange={(e) => setPrices({ ...prices, brand: parseFloat(e.target.value) || 0 })} className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 pl-8 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" />
                                             </div>
                                         </div>
                                     </div>
-                                    <button 
-                                        onClick={handleSavePrices} 
+                                    <button
+                                        onClick={handleSavePrices}
                                         disabled={savingPrices}
                                         className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[140px]"
                                     >
@@ -521,14 +520,14 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                         </div>
                     )}
                     {activeTab === 'integrations' && (
-                         <div className="space-y-8 animate-fade-in">
+                        <div className="space-y-8 animate-fade-in">
                             <div className="bg-blue-900/50 border border-blue-500/30 text-blue-300 text-sm rounded-lg p-3">
                                 <strong>Info:</strong> Supabase credentials are configured via environment variables for security. Update them in your .env file or hosting platform settings.
                             </div>
                             <div className="bg-yellow-900/50 border border-yellow-500/30 text-yellow-300 text-sm rounded-lg p-3">
                                 <strong>Note:</strong> Changes to Gemini API key take effect immediately. The cache refreshes automatically within 5 minutes or on the next API call.
                             </div>
-                             <section>
+                            <section>
                                 <h3 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2"><Link2 size={20} /> API Keys & Integrations</h3>
                                 <div className="grid md:grid-cols-2 gap-6">
                                     {/* Supabase Status */}
@@ -544,8 +543,8 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                 <input value={apiSettings.supabase.url} disabled className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-zinc-500 cursor-not-allowed" />
                                             </div>
                                             <p className="text-xs text-zinc-500 mt-2">
-                                                Configure in environment variables:<br/>
-                                                <code className="bg-zinc-900 px-1.5 py-0.5 rounded">VITE_SUPABASE_URL</code><br/>
+                                                Configure in environment variables:<br />
+                                                <code className="bg-zinc-900 px-1.5 py-0.5 rounded">VITE_SUPABASE_URL</code><br />
                                                 <code className="bg-zinc-900 px-1.5 py-0.5 rounded">VITE_SUPABASE_ANON_KEY</code>
                                             </p>
                                         </div>
@@ -553,12 +552,12 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                     {/* Gemini */}
                                     <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
                                         <h4 className="font-bold text-zinc-100">Google Gemini</h4>
-                                         <div className="space-y-1">
+                                        <div className="space-y-1">
                                             <label className="text-xs text-zinc-400">Gemini API Key</label>
-                                            <PasswordInput value={gemini.apiKey} onChange={(e) => setGemini({...gemini, apiKey: e.target.value})} placeholder="AIzaSy..." />
+                                            <PasswordInput value={gemini.apiKey} onChange={(e) => setGemini({ ...gemini, apiKey: e.target.value })} placeholder="AIzaSy..." />
                                         </div>
-                                        <button 
-                                            onClick={handleSaveGemini} 
+                                        <button
+                                            onClick={handleSaveGemini}
                                             disabled={savingGemini}
                                             className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
                                         >
@@ -570,13 +569,13 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                             Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Google AI Studio</a>
                                         </p>
                                     </div>
-                                    
+
                                     {/* Canva */}
                                     <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
                                         <h4 className="font-bold text-zinc-100 flex items-center gap-2">
-                                            <img 
-                                                src="https://static.canva.com/web/images/12487a1e0770d29351bd4ce9622e97db.ico" 
-                                                alt="Canva" 
+                                            <img
+                                                src="https://static.canva.com/web/images/12487a1e0770d29351bd4ce9622e97db.ico"
+                                                alt="Canva"
                                                 className="w-5 h-5 rounded-full"
                                                 onError={(e) => {
                                                     (e.target as HTMLImageElement).style.display = 'none';
@@ -587,36 +586,36 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                         <div className="space-y-2">
                                             <div className="space-y-1">
                                                 <label className="text-xs text-zinc-400">Client ID</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={canva.clientId} 
-                                                    onChange={(e) => setCanva({...canva, clientId: e.target.value})} 
-                                                    placeholder="Your Canva Client ID" 
+                                                <input
+                                                    type="text"
+                                                    value={canva.clientId}
+                                                    onChange={(e) => setCanva({ ...canva, clientId: e.target.value })}
+                                                    placeholder="Your Canva Client ID"
                                                     className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-white placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                                                 />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs text-zinc-400">Client Secret</label>
-                                                <PasswordInput 
-                                                    value={canva.clientSecret} 
-                                                    onChange={(e) => setCanva({...canva, clientSecret: e.target.value})} 
-                                                    placeholder="Your Canva Client Secret" 
+                                                <PasswordInput
+                                                    value={canva.clientSecret}
+                                                    onChange={(e) => setCanva({ ...canva, clientSecret: e.target.value })}
+                                                    placeholder="Your Canva Client Secret"
                                                 />
                                             </div>
                                             {canva.accessToken && (
                                                 <div className="space-y-1">
                                                     <label className="text-xs text-zinc-400">Access Token (Auto-generated)</label>
-                                                    <input 
-                                                        type="text" 
-                                                        value={canva.accessToken.substring(0, 20) + '...'} 
+                                                    <input
+                                                        type="text"
+                                                        value={canva.accessToken.substring(0, 20) + '...'}
                                                         disabled
                                                         className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm text-zinc-500 cursor-not-allowed"
                                                     />
                                                 </div>
                                             )}
                                         </div>
-                                        <button 
-                                            onClick={handleSaveCanva} 
+                                        <button
+                                            onClick={handleSaveCanva}
                                             disabled={savingCanva || !canva.clientId || !canva.clientSecret}
                                             className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
                                         >
@@ -624,7 +623,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                             {savedCanva && <Check size={16} className="animate-bounce" />}
                                             {savingCanva ? 'Saving...' : savedCanva ? 'Saved!' : 'Save Canva Settings'}
                                         </button>
-                                        
+
                                         {/* Connect Canva Account Button */}
                                         {!canva.accessToken && canva.clientId && canva.clientSecret && (
                                             <div className="space-y-2">
@@ -632,37 +631,37 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                     onClick={async (e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
-                                                        
+
                                                         const button = e.currentTarget;
                                                         const originalText = button.innerHTML;
                                                         button.disabled = true;
                                                         button.innerHTML = '<span class="animate-spin">⏳</span> Connecting...';
-                                                        
+
                                                         try {
                                                             console.log('🚀 Button clicked - Starting Canva OAuth flow...');
-                                                            
+
                                                             const { getCanvaAuthUrl } = await import('./services/canvaService');
                                                             // Always use the exact production URL (Canva requires exact match)
                                                             // This MUST match the redirect URI in CanvaCallback.tsx and Canva Developer Portal
                                                             const redirectUri = 'https://www.klintstudios.com/canva-callback.html';
-                                                            
+
                                                             console.log('📍 Using redirect URI:', redirectUri);
                                                             console.log('📍 Client ID:', canva.clientId);
                                                             console.log('📍 Client Secret:', canva.clientSecret ? '***configured***' : 'MISSING');
-                                                            
+
                                                             // Generate auth URL (stores verifier SERVER-SIDE ONLY)
                                                             // getCanvaAuthUrl will throw an error if storage fails
                                                             console.log('⏳ Generating auth URL and storing verifier...');
                                                             const authUrl = await getCanvaAuthUrl(redirectUri);
-                                                            
+
                                                             console.log('✅ Code verifier stored server-side successfully');
                                                             console.log('✅ Auth URL generated:', authUrl.substring(0, 150) + '...');
                                                             console.log('✅ Redirecting to Canva in 500ms...');
-                                                            
+
                                                             // Small delay to ensure Edge Function storage commits
                                                             // (getCanvaAuthUrl already waits 1.5s, so this is just extra safety)
                                                             await new Promise(resolve => setTimeout(resolve, 500));
-                                                            
+
                                                             console.log('🔄 NOW REDIRECTING TO CANVA...');
                                                             window.location.href = authUrl;
                                                         } catch (error: any) {
@@ -699,7 +698,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                     </div>
                                 </div>
                             </section>
-                            
+
                             {/* Canva Features Section */}
                             <section>
                                 <h3 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2">
@@ -726,7 +725,7 @@ const ApiKeySelectorModal: React.FC = () => {
             // @ts-ignore
             await window.aistudio.openSelectKey();
             // Assume success to avoid race condition
-            setHasSelectedApiKey(true); 
+            setHasSelectedApiKey(true);
             closeApiKeySelector();
         }
     };
@@ -734,12 +733,12 @@ const ApiKeySelectorModal: React.FC = () => {
     if (!isApiKeySelectorOpen) return null;
 
     return (
-        <div 
+        <div
             className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-slide-up duration-300"
             role="dialog"
             aria-modal="true"
         >
-            <div 
+            <div
                 className="bg-zinc-925/70 backdrop-blur-2xl w-full max-w-md rounded-xl border border-white/10 shadow-glass shadow-black/40 text-zinc-200 p-6"
             >
                 <div className="flex items-center justify-between mb-4">
@@ -760,7 +759,7 @@ const ApiKeySelectorModal: React.FC = () => {
                         billing documentation
                     </a>.
                 </p>
-                <button 
+                <button
                     onClick={handleSelectKey}
                     className="w-full bg-brand-primary text-white font-semibold py-3 px-5 rounded-lg transition-all duration-300 shadow-button-glow-pro hover:shadow-button-glow-pro-hover bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 hover:-translate-y-px active:translate-y-0 active:scale-[0.98] border border-emerald-400/50"
                 >
@@ -857,7 +856,7 @@ const UserMenu: React.FC = () => {
     if (!user) {
         console.log('📍 UserMenu: showing login button (no user)');
         return (
-            <a 
+            <a
                 href="/login.html"
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors"
             >
@@ -873,8 +872,8 @@ const UserMenu: React.FC = () => {
 
     return (
         <div className="relative" ref={menuRef}>
-            <button 
-                onClick={() => setIsOpen(!isOpen)} 
+            <button
+                onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-zinc-800 transition-colors"
                 aria-expanded={isOpen}
                 aria-haspopup="true"
@@ -888,7 +887,7 @@ const UserMenu: React.FC = () => {
             {isOpen && (
                 <div className="absolute left-0 lg:left-auto lg:right-0 mt-2 w-72 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl z-50 p-4 animate-fade-in duration-150">
                     <div className="flex items-center gap-3 border-b border-zinc-700 pb-3 mb-3">
-                         <div className="w-9 h-9 bg-zinc-700 rounded-full flex items-center justify-center text-emerald-300 font-bold text-base border border-zinc-600">
+                        <div className="w-9 h-9 bg-zinc-700 rounded-full flex items-center justify-center text-emerald-300 font-bold text-base border border-zinc-600">
                             {userInitial}
                         </div>
                         <div>
@@ -928,7 +927,9 @@ const AppHeader: React.FC<{
     onSwitchToSimple?: () => void;
     studioMode?: string;
     onShowPixelMuse?: () => void;
-}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple, studioMode, onShowPixelMuse }) => {
+    onSwitchMode?: () => void;
+    isPixelMuseActive?: boolean;
+}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple, studioMode, onShowPixelMuse, onSwitchMode, isPixelMuseActive }) => {
     const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
     const { t } = useStudio();
@@ -936,66 +937,33 @@ const AppHeader: React.FC<{
 
     return (
         <>
-            <header className="relative flex-shrink-0 p-2 border-b border-white/10 flex items-center justify-between gap-4 bg-zinc-925/70 backdrop-blur-xl z-40 shadow-lg shadow-black/20">
+            <header className="h-16 border-b border-white/10 bg-zinc-950/80 backdrop-blur-md flex items-center px-4 justify-between relative z-30">
                 {/* --- LEFT GROUP --- */}
-                <div className="flex items-center justify-start gap-2 lg:flex-1">
-                    {/* Mobile Inputs Button */}
-                    {studioMode !== 'design' && studioMode !== 'reimagine' && (
-                        <button onClick={onInputsClick} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 lg:hidden" aria-label="Open inputs panel">
-                            <PanelLeft size={20} />
-                            <span className="font-medium text-sm hidden sm:inline">{t('inputs')}</span>
-                        </button>
-                    )}
-                    
-                    {/* Moved Mobile Icons */}
-                    <div className="flex items-center gap-1 sm:gap-2 lg:hidden">
-                        {onSwitchToSimple && (
-                            <button 
-                                onClick={onSwitchToSimple}
-                                className="p-2 rounded-lg hover:bg-zinc-800" 
-                                aria-label="Switch to Simple Mode"
-                                title="Simple Mode"
-                            >
-                                <LayoutGrid size={20} className="text-zinc-400 hover:text-emerald-400" />
-                            </button>
-                        )}
-                        <LanguageSwitcher />
-                         {user?.role === 'admin' && (
-                           <button onClick={() => setIsAdminPanelOpen(true)} className="p-2 rounded-lg hover:bg-zinc-800" aria-label="Open admin panel">
-                               <Shield size={20} className="text-emerald-300" />
-                           </button>
-                        )}
-                        <UserMenu />
-                        {studioMode !== 'design' && studioMode !== 'reimagine' && (
-                            <button onClick={onSettingsClick} className="p-2 rounded-lg hover:bg-zinc-800 flex items-center gap-2" aria-label="Open settings panel">
-                                <span className="font-medium text-sm hidden sm:inline">{t('settings')}</span>
-                                <PanelRight size={20} />
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Desktop Logo */}
-                    <a href="https://klintstudios.com" className="hidden lg:flex items-center gap-2 hover:opacity-80 transition-opacity" aria-label="Go to Klint Studios website">
-                        <KLogo size={24} className="text-emerald-400" />
-                        <h1 className="hidden md:block text-lg font-bold text-zinc-100">Klint Studios</h1>
+                <div className="flex items-center gap-4 flex-1">
+                    <KLogo className="h-8 w-auto text-emerald-500" />
+                    <div className="h-6 w-px bg-white/10 hidden sm:block" />
+                    <a href="https://klintstudios.com" target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors hidden sm:block">
+                        Klint Studios
                     </a>
                 </div>
 
                 {/* --- CENTER GROUP (Absolutely positioned on mobile) --- */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:left-auto lg:top-auto lg:translate-x-0 lg:translate-y-0 flex items-center gap-4">
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:left-auto lg:top-auto lg:translate-x-0 lg:translate-y-0 flex items-center gap-4 lg:mx-10">
                     {/* Desktop Switcher */}
                     <div className="hidden lg:flex justify-center items-center">
-                        <StudioModeSwitcher onShowPixelMuse={onShowPixelMuse} />
+                        <StudioModeSwitcher
+                            onShowPixelMuse={onShowPixelMuse}
+                            onSwitchMode={onSwitchMode}
+                            isPixelMuseActive={isPixelMuseActive}
+                        />
                     </div>
-                    <div id="generate-button-container">
-                        <GenerateButton />
-                    </div>
+
                 </div>
 
                 {/* --- RIGHT GROUP --- */}
                 <div className="flex-1 items-center justify-end gap-2 sm:gap-3 hidden lg:flex">
                     {onSwitchToSimple && (
-                        <button 
+                        <button
                             onClick={onSwitchToSimple}
                             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-emerald-400 transition-colors whitespace-nowrap"
                             title="Switch to Simple Mode"
@@ -1004,7 +972,7 @@ const AppHeader: React.FC<{
                             <span className="text-sm font-medium">Simple Mode</span>
                         </button>
                     )}
-                     {user?.role === 'admin' && (
+                    {user?.role === 'admin' && (
                         <button onClick={() => setIsAdminPanelOpen(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-900/50 hover:bg-emerald-800/70 border border-emerald-500/30 text-emerald-300 transition-colors whitespace-nowrap">
                             <Shield size={18} />
                             <span className="text-sm font-medium">Admin Panel</span>
@@ -1022,7 +990,7 @@ const AppHeader: React.FC<{
 
 
 const AppContent: React.FC = () => {
-    const { isGuideActive, isBestPracticesModalOpen, setBestPracticesModalOpen, t, studioMode } = useStudio();
+    const { isGuideActive, isBestPracticesModalOpen, setBestPracticesModalOpen, t, studioMode, setStudioMode } = useStudio();
     const { user, needsPayment, checkSubscriptionStatus, logout } = useAuth();
     const [activeMobilePanel, setActiveMobilePanel] = useState<'inputs' | 'settings' | null>(null);
     const [isLgSettingsPanelOpen, setLgSettingsPanelOpen] = useState(false);
@@ -1048,16 +1016,16 @@ const AppContent: React.FC = () => {
     useEffect(() => {
         if (user && user.plan === 'free' && user.role !== 'admin') {
             console.log('⏰ Setting up payment reminder for free user');
-            
+
             // Show immediately on first login
             setIsPaymentModalOpen(true);
-            
+
             // Then show every 30 minutes
             const interval = setInterval(() => {
                 console.log('💳 Reminder: Payment modal for free user');
                 setIsPaymentModalOpen(true);
             }, 1800000); // 30 minutes (30 * 60 * 1000)
-            
+
             return () => clearInterval(interval);
         }
     }, [user]);
@@ -1068,14 +1036,14 @@ const AppContent: React.FC = () => {
             // Admin has full access
             return true;
         }
-        
+
         if (needsPayment) {
             console.log('🔒 Feature locked - opening payment modal');
             setIsPaymentModalOpen(true);
             setIsFeatureLocked(false); // Allow closing for feature-lock scenario
             return false;
         }
-        
+
         return true;
     };
 
@@ -1089,8 +1057,8 @@ const AppContent: React.FC = () => {
             document.body.classList.remove('no-scroll');
         }
         return () => {
-             document.documentElement.classList.remove('no-scroll');
-             document.body.classList.remove('no-scroll');
+            document.documentElement.classList.remove('no-scroll');
+            document.body.classList.remove('no-scroll');
         }
     }, [activeMobilePanel]);
 
@@ -1104,7 +1072,10 @@ const AppContent: React.FC = () => {
                     onOpenPayment={() => setIsPaymentModalOpen(true)}
                     onOpenDailyLimitModal={() => setIsDailyLimitModalOpen(true)}
                     onOpenAdmin={() => setIsAdminPanelOpen(true)}
-                    onSwitchToAdvanced={() => setUseSimplifiedUI(false)}
+                    onSwitchToAdvanced={() => {
+                        setUseSimplifiedUI(false);
+                        setStudioMode('chason');
+                    }}
                 />
 
                 {/* Payment Modal */}
@@ -1123,10 +1094,21 @@ const AppContent: React.FC = () => {
     // Show PixelMuse if enabled - goes directly to editor
     if (showPixelMuse) {
         return (
-            <div className="min-h-screen bg-zinc-950">
-                <PixelMuseEditor
-                    onBack={() => setShowPixelMuse(false)}
+            <div className="bg-zinc-950 text-zinc-300 font-sans antialiased h-screen flex flex-col overflow-hidden">
+                <AppHeader
+                    onInputsClick={() => setActiveMobilePanel('inputs')}
+                    onSettingsClick={() => setActiveMobilePanel('settings')}
+                    onSwitchToSimple={() => setUseSimplifiedUI(true)}
+                    studioMode={studioMode}
+                    onShowPixelMuse={() => setShowPixelMuse(true)}
+                    onSwitchMode={() => setShowPixelMuse(false)}
+                    isPixelMuseActive={true}
                 />
+                <div className="flex-1 relative overflow-hidden">
+                    <PixelMuseEditor
+                        onBack={() => setShowPixelMuse(false)}
+                    />
+                </div>
             </div>
         );
     }
@@ -1146,7 +1128,7 @@ const AppContent: React.FC = () => {
                     2. User hasn't paid (needsPayment) and is not admin
                 */}
                 {(!user || (user.role !== 'admin' && needsPayment)) && !hideFeatureLock && (
-                    <FeatureLockOverlay 
+                    <FeatureLockOverlay
                         isLocked={!user || needsPayment}
                         onUnlock={() => setIsPaymentModalOpen(true)}
                         onClose={() => {
@@ -1157,25 +1139,25 @@ const AppContent: React.FC = () => {
                     />
                 )}
                 {/* --- DESKTOP INPUTS PANEL --- */}
-                {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                {studioMode !== 'design' && studioMode !== 'reimagine' && studioMode !== 'chason' && (
                     <aside className="w-[380px] flex-shrink-0 hidden lg:flex flex-col border-r border-white/10">
-                        <InputPanel onClose={() => {}} />
+                        <InputPanel onClose={() => { }} />
                     </aside>
                 )}
-                
-                <section className={`min-w-0 flex-1 flex flex-col ${(studioMode === 'design' || studioMode === 'reimagine') ? 'p-0' : 'p-3'}`}>
+
+                <section className={`min-w-0 flex-1 flex flex-col ${(studioMode === 'design' || studioMode === 'reimagine' || studioMode === 'chason') ? 'p-0' : 'p-3'}`}>
                     <StudioView />
                 </section>
-                
+
                 {/* --- XL+ DESKTOP SETTINGS PANEL (PERMANENT) --- */}
-                {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                {studioMode !== 'design' && studioMode !== 'reimagine' && studioMode !== 'chason' && (
                     <aside className="w-[420px] flex-shrink-0 hidden xl:flex flex-col border-l border-white/10">
-                        <SettingsPanel onClose={() => {}} />
+                        <SettingsPanel onClose={() => { }} />
                     </aside>
                 )}
 
                 {/* --- NEW: LG-ONLY SLIDEOUT PANEL --- */}
-                {studioMode !== 'design' && studioMode !== 'reimagine' && (
+                {studioMode !== 'design' && studioMode !== 'reimagine' && studioMode !== 'chason' && (
                     <>
                         {/* Handle to open panel */}
                         <div className="hidden lg:block xl:hidden absolute top-1/2 right-0 -translate-y-1/2 z-30 animate-peek-in">
@@ -1189,7 +1171,7 @@ const AppContent: React.FC = () => {
                                            focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                                 aria-label="Open settings panel"
                             >
-                                <PanelLeft size={16} className="text-zinc-400 group-hover:text-emerald-300 transition-colors duration-200"/>
+                                <PanelLeft size={16} className="text-zinc-400 group-hover:text-emerald-300 transition-colors duration-200" />
                                 <span
                                     className="text-xs font-bold uppercase text-zinc-400 group-hover:text-emerald-300 transition-colors duration-200"
                                     style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
@@ -1200,7 +1182,7 @@ const AppContent: React.FC = () => {
                         </div>
 
                         {/* The Panel */}
-                        <div 
+                        <div
                             className={`
                                 absolute top-0 right-0 h-full w-[420px] bg-zinc-925/90 backdrop-blur-xl border-l border-white/10 z-20 
                                 transform transition-transform duration-300 ease-in-out 
@@ -1215,7 +1197,7 @@ const AppContent: React.FC = () => {
             </main>
 
             {/* --- MOBILE FULL-SCREEN PANELS --- */}
-            {studioMode !== 'design' && studioMode !== 'reimagine' && (
+            {studioMode !== 'design' && studioMode !== 'reimagine' && studioMode !== 'chason' && (
                 <>
                     <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'inputs' ? 'translate-x-0' : '-translate-x-full'}`}>
                         <InputPanel onClose={() => setActiveMobilePanel(null)} isMobileView={true} />
@@ -1229,14 +1211,14 @@ const AppContent: React.FC = () => {
 
             {isGuideActive && <InteractiveGuide />}
             <BestPracticesModal isOpen={isBestPracticesModalOpen} onClose={() => setBestPracticesModalOpen(false)} />
-            <PaymentModal 
-                isOpen={isPaymentModalOpen} 
+            <PaymentModal
+                isOpen={isPaymentModalOpen}
                 onClose={() => {
                     setIsPaymentModalOpen(false);
                     setIsFeatureLocked(false);
                     // Re-check subscription status after modal closes
                     checkSubscriptionStatus();
-                }} 
+                }}
                 isFirstLogin={isFeatureLocked}
                 canClose={!isFeatureLocked}
             />
@@ -1264,10 +1246,10 @@ const App: React.FC = () => {
                 console.warn('⚠️ Failed to initialize Cloudinary on app load:', err);
             });
         }, 500);
-        
+
         return () => clearTimeout(timer);
     }, []);
-    
+
     return (
         <AuthProvider>
             <AppContent />

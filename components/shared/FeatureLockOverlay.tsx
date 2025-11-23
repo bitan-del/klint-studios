@@ -57,12 +57,12 @@ export const FeatureLockOverlay: React.FC<FeatureLockOverlayProps> = ({
           {isLoggedOut ? 'Login Required' : 'Features Locked'}
         </h3>
         <p className="text-zinc-300 mb-6">
-          {isLoggedOut 
+          {isLoggedOut
             ? 'Please login to access Klint Studios and start creating amazing content!'
             : 'Subscribe to a plan to unlock all features and start creating amazing content!'
           }
         </p>
-        
+
         {isLoggedOut ? (
           /* Login Button */
           <button
@@ -93,7 +93,7 @@ export const FeatureLockOverlay: React.FC<FeatureLockOverlayProps> = ({
         )}
 
         <p className="text-xs text-zinc-500 mt-4">
-          {isLoggedOut 
+          {isLoggedOut
             ? 'Sign in with Google to get started'
             : 'Subscribe or logout to switch accounts'
           }

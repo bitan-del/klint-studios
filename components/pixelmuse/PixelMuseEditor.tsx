@@ -395,18 +395,8 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
   }, [aspectRatio, user?.id]);
 
   return (
-    <div className="bg-black min-h-screen text-white font-sans flex flex-col">
-      {onBack && (
-        <div className="absolute top-4 left-4 z-10">
-          <button
-            onClick={onBack}
-            className="px-4 py-2 bg-[#1e1f20] hover:bg-[#2c2d2f] rounded-lg text-gray-300 transition-colors"
-          >
-            ← Back
-          </button>
-        </div>
-      )}
-      <Header />
+    <div className="bg-black h-full text-white font-sans flex flex-col">
+      <Header onBack={onBack} />
       <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
         <ImageGrid
           images={images}

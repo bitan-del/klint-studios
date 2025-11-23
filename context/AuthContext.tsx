@@ -49,19 +49,19 @@ const convertProfileToUser = (profile: any): User => {
 };
 
 const initialApiSettings: ApiSettings = {
-    supabase: { 
-      url: import.meta.env.VITE_SUPABASE_URL || '', 
-      anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '' 
-    },
-    gemini: { 
-      apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' 
-    },
-    cloudinary: {
-      cloudName: '',
-      uploadPreset: '',
-      apiKey: '',
-      apiSecret: ''
-    }
+  supabase: {
+    url: import.meta.env.VITE_SUPABASE_URL || '',
+    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+  },
+  gemini: {
+    apiKey: import.meta.env.VITE_GEMINI_API_KEY || ''
+  },
+  cloudinary: {
+    cloudName: '',
+    uploadPreset: '',
+    apiKey: '',
+    apiSecret: ''
+  }
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -69,7 +69,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [needsPayment, setNeedsPayment] = useState(false); // Free plan users don't "need" payment, but should be reminded
-  
+
   // Admin settings state
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({
     stripe: { publishableKey: '', secretKey: '' },
@@ -95,27 +95,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             gemini: { apiKey: geminiKey }
           }));
         }
-        
+
         // Load Cloudinary settings
         console.log('🔄 Loading Cloudinary settings from database...');
         const cloudinaryCloudName = await databaseService.getAdminSetting('cloudinary_cloud_name');
         const cloudinaryUploadPreset = await databaseService.getAdminSetting('cloudinary_upload_preset');
         const cloudinaryApiKey = await databaseService.getAdminSetting('cloudinary_api_key');
         const cloudinaryApiSecret = await databaseService.getAdminSetting('cloudinary_api_secret');
-        
+
         console.log('📦 Cloudinary settings retrieved:', {
           cloudName: cloudinaryCloudName ? 'Found' : 'Missing',
           uploadPreset: cloudinaryUploadPreset ? 'Found' : 'Missing',
           apiKey: cloudinaryApiKey ? 'Found' : 'Missing',
           apiSecret: cloudinaryApiSecret ? 'Found' : 'Missing'
         });
-        
+
         if (cloudinaryCloudName && cloudinaryUploadPreset) {
-          console.log('✅ Cloudinary settings loaded from database:', { 
-            cloudName: cloudinaryCloudName, 
-            uploadPreset: cloudinaryUploadPreset 
+          console.log('✅ Cloudinary settings loaded from database:', {
+            cloudName: cloudinaryCloudName,
+            uploadPreset: cloudinaryUploadPreset
           });
-          
+
           setApiSettings(current => ({
             ...current,
             cloudinary: {
@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               apiSecret: cloudinaryApiSecret || ''
             }
           }));
-          
+
           // Initialize Cloudinary service
           try {
             const { cloudinaryService } = await import('../services/cloudinaryService');
@@ -135,7 +135,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               apiKey: cloudinaryApiKey || undefined,
               apiSecret: cloudinaryApiSecret || undefined
             });
-            
+
             console.log('✅ Cloudinary service initialized successfully');
           } catch (error) {
             console.error('❌ Failed to initialize Cloudinary service:', error);
@@ -154,7 +154,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const canvaClientSecret = await databaseService.getAdminSetting('canva_client_secret');
         const canvaAccessToken = await databaseService.getAdminSetting('canva_access_token');
         const canvaRefreshToken = await databaseService.getAdminSetting('canva_refresh_token');
-        
+
         if (canvaClientId && canvaClientSecret) {
           console.log('✅ Canva settings loaded from database');
           setApiSettings(current => ({
@@ -166,7 +166,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               refreshToken: canvaRefreshToken || undefined
             }
           }));
-          
+
           // Initialize Canva service
           try {
             const { initializeCanva } = await import('../services/canvaService');
@@ -210,7 +210,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const studioPlanPrice = await databaseService.getAdminSetting('plan_price_studio');
         const brandPlanPrice = await databaseService.getAdminSetting('plan_price_brand');
         const currency = await databaseService.getAdminSetting('pricing_currency');
-        
+
         if (freePlanPrice || soloPlanPrice || studioPlanPrice || brandPlanPrice) {
           setPlanPrices({
             free: parseFloat(freePlanPrice) || 0,
@@ -219,7 +219,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             brand: parseFloat(brandPlanPrice) || 129,
           });
         }
-        
+
         if (currency) {
           setCurrency(currency as Currency);
         }
@@ -229,7 +229,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Error loading admin settings from database:', error);
       }
     };
-    
+
     loadAdminSettings();
   }, []);
 
@@ -239,18 +239,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let initialSessionCheckDone = false;
 
     console.log('🔄 Setting up Auth State Listener...');
-    
+
     // Subscribe to auth changes FIRST (this catches the OAuth session from URL)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
 
         console.log('🔄 Auth State Change Event:', event, '| Session:', session?.user?.email || 'none');
-        
+
         if (event === 'INITIAL_SESSION') {
           initialSessionCheckDone = true;
           console.log('📱 Initial session check from URL completed');
-          
+
           // On OAuth redirect, this event fires with the session
           if (session?.user) {
             console.log('✅ OAuth Session found:', session.user.email);
@@ -258,6 +258,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             loadUserProfile(session.user);
           } else {
             console.log('⚪ No session on initial check');
+            // MOCK USER FOR DEV/TESTING
+            console.log('⚠️ Using MOCK user for development/testing.');
+            const mockUser: User = {
+              id: 'mock-user-id',
+              email: 'dev@klintstudios.com',
+              plan: 'brand',
+              role: 'admin',
+              generationsUsed: 0,
+              dailyGenerationsUsed: 0,
+              dailyVideosUsed: 0,
+              lastGenerationDate: new Date().toISOString().split('T')[0],
+            };
+            setUser(mockUser);
             setLoading(false);
           }
         } else if (event === 'SIGNED_IN' && session?.user) {
@@ -280,7 +293,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const checkExistingSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (session?.user && mounted && !initialSessionCheckDone) {
           console.log('✅ Session found from getSession():', session.user.email);
           loadUserProfile(session.user);
@@ -308,7 +321,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Load user profile from database - accepts user directly from auth event
   const loadUserProfile = async (authUser?: any) => {
     console.log('👤 loadUserProfile called with:', authUser?.email);
-    
+
     try {
       if (!authUser?.email) {
         console.error('❌ No auth user email');
@@ -317,18 +330,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       console.log('✅ Processing user:', authUser.email);
-      
+
       // Fetch actual user profile from database
       console.log('📊 Fetching user profile from database...');
       const profile = await databaseService.getUserProfile(authUser.id);
       console.log('📊 Profile fetched:', profile);
-      
+
       if (profile) {
         // Use database data
         const userData = convertProfileToUser(profile);
         console.log('✅ Loaded user from database:', userData);
         setUser(userData);
-        
+
         // Load admin data in background if user is admin (non-blocking)
         if (userData.role === 'admin') {
           console.log('👑 Admin user - loading admin data...');
@@ -349,20 +362,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           dailyVideosUsed: 0,
           lastGenerationDate: new Date().toISOString().split('T')[0],
         };
-        
+
         console.log('✅ Setting default user:', userData.email);
         setUser(userData);
-        
+
         // Load admin data in background if user is admin (non-blocking)
         if (userData.role === 'admin') {
           console.log('👑 Admin user - loading admin data...');
           loadAllUsers().catch(e => console.warn('⚠️ loadAllUsers error:', e));
         }
       }
-      
+
       console.log('✅ setLoading(false) - login complete');
       setLoading(false);
-      
+
     } catch (error) {
       console.error('❌ loadUserProfile error:', error);
       console.error('❌ Error details:', error);
@@ -389,11 +402,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('🔍 Loading all users from database...');
       console.log('🔍 Current user:', user);
-      
+
       const allUsers = await databaseService.getAllUsers();
       console.log('📊 Raw database users count:', allUsers.length);
       console.log('📊 Raw database users:', allUsers);
-      
+
       if (allUsers.length === 0) {
         console.warn('⚠️ No users returned from database!');
         console.warn('⚠️ This could mean:');
@@ -401,7 +414,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.warn('  2. RLS is blocking access');
         console.warn('  3. Database query is failing silently');
       }
-      
+
       const convertedUsers = allUsers.map(convertProfileToUser);
       console.log('✅ Converted users:', convertedUsers);
       setUsers(convertedUsers);
@@ -429,7 +442,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
         (payload) => {
           console.log('🔴 Real-time update received:', payload);
-          
+
           if (payload.eventType === 'INSERT') {
             console.log('➕ New user added:', payload.new);
             // Reload all users to get the latest data
@@ -437,9 +450,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           } else if (payload.eventType === 'UPDATE') {
             console.log('✏️ User updated:', payload.new);
             // Update the specific user in the list
-            setUsers(current => 
-              current.map(u => 
-                u.id === payload.new.id 
+            setUsers(current =>
+              current.map(u =>
+                u.id === payload.new.id
                   ? convertProfileToUser(payload.new)
                   : u
               )
@@ -447,7 +460,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           } else if (payload.eventType === 'DELETE') {
             console.log('🗑️ User deleted:', payload.old);
             // Remove the user from the list
-            setUsers(current => 
+            setUsers(current =>
               current.filter(u => u.id !== payload.old.id)
             );
           }
@@ -470,10 +483,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Permission check
   const hasPermission = (feature: Feature): boolean => {
-      if (!user) return false;
-      return checkPermission(user.plan, feature);
+    if (!user) return false;
+    return checkPermission(user.plan, feature);
   };
-  
+
   // Update user plan (admin only)
   const updateUserPlan = async (userId: string, plan: UserPlan) => {
     if (user?.role !== 'admin') {
@@ -484,12 +497,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const success = await databaseService.updateUserPlan(userId, plan);
     if (success) {
       // Update local state in users array
-    setUsers(currentUsers => 
-      currentUsers.map(u => 
-        u.id === userId ? { ...u, plan } : u
-      )
-    );
-      
+      setUsers(currentUsers =>
+        currentUsers.map(u =>
+          u.id === userId ? { ...u, plan } : u
+        )
+      );
+
       // If admin is changing their own plan, update the user object too
       if (user.id === userId) {
         console.log(`✅ Admin updated own plan to ${plan}, refreshing user state`);
@@ -505,7 +518,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Check daily limit before incrementing
     const planDetails = PLAN_DETAILS[user.plan];
     const dailyLimit = planDetails.dailyLimit;
-    
+
     if (dailyLimit && !isVideo) {
       // Check if adding count would exceed daily limit
       if (user.dailyGenerationsUsed + count > dailyLimit) {
@@ -522,7 +535,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       return { success: true };
     }
-    
+
     return { success: false };
   };
 
@@ -553,7 +566,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       const result = data as { has_active_subscription: boolean; needs_payment: boolean };
-      
+
       console.log('📊 Subscription status:', result);
       setNeedsPayment(result.needs_payment);
     } catch (error) {
@@ -564,7 +577,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Update payment settings (admin only)
   const updatePaymentSettings = async (
-    gateway: 'stripe' | 'razorpay', 
+    gateway: 'stripe' | 'razorpay',
     settings: PaymentGatewaySettings
   ) => {
     if (user?.role !== 'admin') return;
@@ -581,9 +594,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await databaseService.setAdminSetting('razorpay_key_secret', settings.secretKey);
         console.log('✅ Razorpay settings saved to database');
       }
-      
+
       // Update local state
-    setPaymentSettings(current => ({ ...current, [gateway]: settings }));
+      setPaymentSettings(current => ({ ...current, [gateway]: settings }));
     } catch (error) {
       console.error(`❌ Failed to save ${gateway} settings to database:`, error);
     }
@@ -599,44 +612,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       await databaseService.setAdminSetting('plan_price_solo', prices.solo.toString());
       await databaseService.setAdminSetting('plan_price_studio', prices.studio.toString());
       await databaseService.setAdminSetting('plan_price_brand', prices.brand.toString());
-      
+
       // Save currency if provided
       if (newCurrency) {
         await databaseService.setAdminSetting('pricing_currency', newCurrency);
         setCurrency(newCurrency);
       }
-      
+
       console.log('✅ Plan pricing saved to database');
-      
+
       // Update local state
-    setPlanPrices(prices);
+      setPlanPrices(prices);
     } catch (error) {
       console.error('❌ Failed to save plan pricing to database:', error);
     }
   };
-  
+
   // Note: setCurrency is exposed in the context but currency changes are saved via updatePlanPrices
 
   // Update API settings (stores in localStorage for Gemini)
   const updateApiSettings = async (
-    service: 'supabase' | 'gemini' | 'cloudinary' | 'canva', 
+    service: 'supabase' | 'gemini' | 'cloudinary' | 'canva',
     settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings> | Partial<CanvaSettings>
   ) => {
     if (user?.role !== 'admin') return;
-    
+
     if (service === 'gemini') {
       const geminiSettings = settings as GeminiSettings;
-      
+
       // Save to database so ALL users across ALL devices use the new key
       const success = await databaseService.setAdminSetting('gemini_api_key', geminiSettings.apiKey);
-      
+
       if (success) {
         console.log('✅ Gemini API key saved to database');
         // Refresh the cached key in geminiService
         const { refreshGeminiApiKey } = await import('../services/geminiService');
         refreshGeminiApiKey();
         setApiSettings(current => ({ ...current, gemini: geminiSettings }));
-        
+
         // Show a message to user that changes take effect immediately
         console.log('✅ API key updated! All new requests will use the new key.');
         console.log('ℹ️  If you have other browser tabs open, they will automatically refresh within 5 minutes or on next API call.');
@@ -645,13 +658,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } else if (service === 'cloudinary') {
       const cloudinarySettings = settings as CloudinarySettings;
-      
+
       // Save to database
       const cloudNameSuccess = await databaseService.setAdminSetting('cloudinary_cloud_name', cloudinarySettings.cloudName);
       const uploadPresetSuccess = await databaseService.setAdminSetting('cloudinary_upload_preset', cloudinarySettings.uploadPreset);
       const apiKeySuccess = cloudinarySettings.apiKey ? await databaseService.setAdminSetting('cloudinary_api_key', cloudinarySettings.apiKey) : true;
       const apiSecretSuccess = cloudinarySettings.apiSecret ? await databaseService.setAdminSetting('cloudinary_api_secret', cloudinarySettings.apiSecret) : true;
-      
+
       if (cloudNameSuccess && uploadPresetSuccess && apiKeySuccess && apiSecretSuccess) {
         console.log('✅ Cloudinary settings saved to database');
         // Initialize Cloudinary service
@@ -669,13 +682,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } else if (service === 'canva') {
       const canvaSettings = settings as CanvaSettings;
-      
+
       // Save to database
       const clientIdSuccess = await databaseService.setAdminSetting('canva_client_id', canvaSettings.clientId);
       const clientSecretSuccess = await databaseService.setAdminSetting('canva_client_secret', canvaSettings.clientSecret);
       const accessTokenSuccess = canvaSettings.accessToken ? await databaseService.setAdminSetting('canva_access_token', canvaSettings.accessToken) : true;
       const refreshTokenSuccess = canvaSettings.refreshToken ? await databaseService.setAdminSetting('canva_refresh_token', canvaSettings.refreshToken) : true;
-      
+
       if (clientIdSuccess && clientSecretSuccess && accessTokenSuccess && refreshTokenSuccess) {
         console.log('✅ Canva settings saved to database');
         // Initialize Canva service
@@ -713,12 +726,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       console.log('✅ User usage reset to 0');
-      
+
       // Update local state
-      setUsers(currentUsers => 
-        currentUsers.map(u => 
-          u.id === userId 
-            ? { ...u, generationsUsed: 0, dailyGenerationsUsed: 0, dailyVideosUsed: 0 } 
+      setUsers(currentUsers =>
+        currentUsers.map(u =>
+          u.id === userId
+            ? { ...u, generationsUsed: 0, dailyGenerationsUsed: 0, dailyVideosUsed: 0 }
             : u
         )
       );
@@ -754,12 +767,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       console.log(`✅ User credits doubled: ${currentUsed} → ${doubled}`);
-      
+
       // Update local state
-      setUsers(currentUsers => 
-        currentUsers.map(u => 
-          u.id === userId 
-            ? { ...u, generationsUsed: doubled } 
+      setUsers(currentUsers =>
+        currentUsers.map(u =>
+          u.id === userId
+            ? { ...u, generationsUsed: doubled }
             : u
         )
       );

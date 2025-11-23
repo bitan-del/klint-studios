@@ -25,7 +25,7 @@ export interface Background {
 }
 
 export interface Lighting {
-  id:string;
+  id: string;
   name: string;
   description: string;
   isDynamic?: boolean;
@@ -47,7 +47,7 @@ export interface Scene {
 
 export type GenerationMode = 'image' | 'video';
 
-export type StudioMode = 'apparel' | 'product' | 'design' | 'reimagine' | 'video';
+export type StudioMode = 'apparel' | 'product' | 'design' | 'reimagine' | 'video' | 'chason';
 
 export interface Animation {
   id: string;
@@ -56,10 +56,10 @@ export interface Animation {
 }
 
 export interface AspectRatio {
-    id: string;
-    name: string;
-    value: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
-    icon: React.ReactNode;
+  id: string;
+  name: string;
+  value: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+  icon: React.ReactNode;
 }
 
 export interface FocalLength {
