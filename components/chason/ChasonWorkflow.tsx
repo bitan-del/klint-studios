@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useStudio } from '../../context/StudioContext';
 import {
@@ -20,12 +21,19 @@ import {
     Sun,
     Layers,
     Save,
-    Wand2
+    Wand2,
+    Share2,
+    Download,
+    Maximize2,
+    Monitor,
+    Smartphone,
+    Loader2
 } from 'lucide-react';
 import { ASPECT_RATIOS_LIBRARY } from '../../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatBubble } from './ui/ChatBubble';
 import { OptionGrid, OptionItem } from './ui/OptionGrid';
+import { ChasonChatInput } from './ChasonChatInput';
 
 type ChasonStep =
     | 'goal'
@@ -280,6 +288,13 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
         setChatHistory(prev => [...prev, { role: 'chason', message: response }]);
     };
 
+    // Handle workflow selection from Goal step
+    const handleWorkflowSelect = (workflow: 'apparel' | 'product') => {
+        updateSelection('goal', null, workflow === 'apparel' ? 'photoshoot' : 'product');
+        setChasonMessage(getChasonResponse('goalSelected'));
+        setTimeout(() => nextStep('person'), 800);
+    };
+
     // --- Step Renderers ---
 
     const renderGoalStep = () => (
@@ -396,7 +411,7 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {selections.items.map((img, idx) => (
                         <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-800 group">
-                            <img src={img} alt={`Item ${idx}`} className="w-full h-full object-cover" />
+                            <img src={img} alt={`Item ${idx} `} className="w-full h-full object-cover" />
                             <button
                                 onClick={() => {
                                     const newItems = selections.items.filter((_, i) => i !== idx);
@@ -418,7 +433,7 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
                             className="hidden"
                             onChange={(e) => {
                                 if (e.target.files) {
-                                    const files = Array.from(e.target.files);
+                                    const files = Array.from(e.target.files) as File[];
                                     files.forEach(file => {
                                         const reader = new FileReader();
                                         reader.onload = (ev) => {
@@ -701,10 +716,10 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
                             <button
                                 key={ar.id}
                                 onClick={() => selectAspectRatio(ar)}
-                                className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${aspectRatio.id === ar.id
+                                className={`p - 3 rounded - xl border flex flex - col items - center justify - center gap - 2 transition - all ${aspectRatio.id === ar.id
                                     ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
                                     : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                    }`}
+                                    } `}
                             >
                                 <div className="scale-75">{ar.icon}</div>
                                 <span className="text-xs font-medium">{ar.name}</span>
@@ -724,10 +739,10 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
                             <button
                                 key={num}
                                 onClick={() => setNumberOfImages(num)}
-                                className={`p-3 rounded-xl border flex items-center justify-center transition-all ${numberOfImages === num
+                                className={`p - 3 rounded - xl border flex items - center justify - center transition - all ${numberOfImages === num
                                     ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
                                     : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                    }`}
+                                    } `}
                             >
                                 <span className="text-lg font-bold">{num}</span>
                             </button>
@@ -744,30 +759,30 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
                     <div className="grid grid-cols-3 gap-3">
                         <button
                             onClick={() => updateSelection('output', 'quality', 'standard')}
-                            className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${selections.output.quality === 'standard'
+                            className={`p - 4 rounded - xl border flex flex - col items - center justify - center gap - 2 transition - all ${selections.output.quality === 'standard'
                                 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
                                 : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                }`}
+                                } `}
                         >
                             <span className="text-sm font-semibold">Standard</span>
                             <span className="text-xs text-zinc-500">Fast generation</span>
                         </button>
                         <button
                             onClick={() => updateSelection('output', 'quality', 'high')}
-                            className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${selections.output.quality === 'high'
+                            className={`p - 4 rounded - xl border flex flex - col items - center justify - center gap - 2 transition - all ${selections.output.quality === 'high'
                                 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
                                 : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                }`}
+                                } `}
                         >
                             <span className="text-sm font-semibold">High</span>
                             <span className="text-xs text-zinc-500">Better quality</span>
                         </button>
                         <button
                             onClick={() => updateSelection('output', 'quality', 'ultra')}
-                            className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${selections.output.quality === 'ultra'
+                            className={`p - 4 rounded - xl border flex flex - col items - center justify - center gap - 2 transition - all ${selections.output.quality === 'ultra'
                                 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
                                 : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                }`}
+                                } `}
                         >
                             <span className="text-sm font-semibold">Ultra</span>
                             <span className="text-xs text-zinc-500">Maximum detail</span>
@@ -804,11 +819,11 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
                             // Construct prompt from all selections
                             const constructedPrompt = selections.customPrompt || `
                                 ${selections.goal} of ${selections.person || 'a model'} wearing ${selections.items.length} items.
-                                Scene: ${selections.scene.background}, ${selections.scene.props}, ${selections.scene.effects}.
-                                Styling: ${selections.styling.hair}, ${selections.styling.makeup}, ${selections.styling.itemStyling}.
-                                Camera: ${selections.camera.shotType}, ${selections.camera.angle}, ${selections.camera.focalLength}, ${selections.camera.aperture}.
-                                Lighting: ${selections.lighting.preset}, ${selections.lighting.direction}.
-                            `;
+    Scene: ${selections.scene.background}, ${selections.scene.props}, ${selections.scene.effects}.
+Styling: ${selections.styling.hair}, ${selections.styling.makeup}, ${selections.styling.itemStyling}.
+Camera: ${selections.camera.shotType}, ${selections.camera.angle}, ${selections.camera.focalLength}, ${selections.camera.aperture}.
+Lighting: ${selections.lighting.preset}, ${selections.lighting.direction}.
+`;
 
                             // Collect all images
                             const imagesToGenerate = [
@@ -885,7 +900,7 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
                 {generatedImages?.map((img, idx) => (
                     <div key={idx} className="relative aspect-[3/4] rounded-xl overflow-hidden group bg-zinc-900">
                         {img ? (
-                            <img src={img} alt={`Result ${idx}`} className="w-full h-full object-cover" />
+                            <img src={img} alt={`Result ${idx} `} className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-zinc-600">
                                 <ImageIcon size={32} />
@@ -936,6 +951,72 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
                         {currentStep === 'output' && renderOutputStep()}
                         {currentStep === 'generating' && renderGeneratingStep()}
                         {currentStep === 'result' && renderResultStep()}
+                        {currentStep === 'generating' && (
+                            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                                <div className="w-24 h-24 rounded-full border-4 border-emerald-500/30 border-t-emerald-500 animate-spin mb-8"></div>
+                                <h2 className="text-2xl font-bold mb-2 animate-pulse">Generating your vision...</h2>
+                                <p className="text-zinc-400 max-w-md">
+                                    Chason is synthesizing all your choices into a photorealistic image. This usually takes about 15-30 seconds.
+                                </p>
+                            </div>
+                        )}
+                        {currentStep === 'result' && (
+                            <div className="flex flex-col h-full">
+                                <div className="flex-grow p-4 flex items-center justify-center bg-zinc-900/30">
+                                    {isGenerating ? (
+                                        <div className="text-center">
+                                            <div className="w-16 h-16 mx-auto rounded-full border-4 border-emerald-500/30 border-t-emerald-500 animate-spin mb-4"></div>
+                                            <p className="text-zinc-400">Finalizing details...</p>
+                                        </div>
+                                    ) : generatedImages && generatedImages.length > 0 ? (
+                                        <div className="relative w-full max-w-4xl aspect-[3/4] md:aspect-video bg-black rounded-lg overflow-hidden shadow-2xl border border-white/10 group">
+                                            <img
+                                                src={generatedImages[activeImageIndex || 0]}
+                                                alt="Generated Result"
+                                                className="w-full h-full object-contain"
+                                            />
+                                            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="flex justify-between items-end">
+                                                    <div>
+                                                        <p className="text-white font-medium mb-1">Generated with Chason</p>
+                                                        <p className="text-xs text-zinc-400">{new Date().toLocaleDateString()}</p>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button className="p-2 bg-white/10 hover:bg-white/20 rounded-lg backdrop-blur-md transition-colors">
+                                                            <DownloadIcon />
+                                                        </button>
+                                                        <button className="p-2 bg-emerald-500 hover:bg-emerald-400 text-black rounded-lg transition-colors font-medium px-4">
+                                                            Upscale
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center text-red-400">
+                                            <p>Something went wrong. Please try again.</p>
+                                            <button
+                                                onClick={() => setCurrentStep('output')}
+                                                className="mt-4 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white text-sm"
+                                            >
+                                                Go Back
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 border-t border-white/10 bg-zinc-900/50 backdrop-blur-md">
+                                    <div className="max-w-3xl mx-auto flex items-center gap-4">
+                                        <ChatBubble message={chasonMessage} />
+                                        <div className="flex-grow">
+                                            <ChasonChatInput
+                                                onSendMessage={(msg) => handleChatMessage(msg)}
+                                                placeholder="Refine result (e.g., 'Make the lighting warmer')"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </motion.div>
                 </AnimatePresence>
             </div>
@@ -944,3 +1025,12 @@ export const ChasonWorkflow: React.FC<ChasonWorkflowProps> = ({ onBack }) => {
         </div>
     );
 };
+
+// Helper Icons
+const DownloadIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+);

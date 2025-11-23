@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Image as ImageIcon, 
-  Trash2, 
-  Download, 
-  Filter, 
+import {
+  Image as ImageIcon,
+  Trash2,
+  Download,
+  Filter,
   Search,
   X,
   Loader2,
@@ -21,7 +21,7 @@ interface MyCreationsProps {
   onRefresh?: () => void;
 }
 
-type FilterType = 'all' | 'ai-photoshoot' | 'product-photography' | 'virtual-tryon' | 'photo-editor' | 'storyboard' | 'social-media-posts' | 'style-transfer' | 'upscale' | 'video';
+type FilterType = 'all' | 'ai-photoshoot' | 'product-photography' | 'virtual-tryon' | 'photo-editor' | 'storyboard' | 'social-media-posts' | 'style-transfer' | 'upscale' | 'video' | 'pixelmuse';
 
 const WORKFLOW_NAMES: Record<string, string> = {
   'ai-photoshoot': 'AI Photoshoot',
@@ -33,6 +33,7 @@ const WORKFLOW_NAMES: Record<string, string> = {
   'style-transfer': 'Style Transfer',
   'upscale': 'Image Upscale',
   'video': 'Video',
+  'pixelmuse': 'Advanced Mode',
 };
 
 export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
@@ -63,16 +64,16 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
         loadStorageInfo();
       }
     };
-    
+
     // Reload when window gains focus
     window.addEventListener('focus', handleFocus);
-    
+
     // Also reload on mount/visibility change
     if (document.visibilityState === 'visible' && user) {
       loadImages();
       loadStorageInfo();
     }
-    
+
     return () => {
       window.removeEventListener('focus', handleFocus);
     };
@@ -84,7 +85,7 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
 
   const loadImages = async () => {
     if (!user) return;
-    
+
     setLoading(true);
     try {
       const userImages = await storageService.getUserImages(user.id);
@@ -98,7 +99,7 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
 
   const loadStorageInfo = async () => {
     if (!user) return;
-    
+
     try {
       const info = await storageService.getStorageInfo(user.id);
       setStorageInfo(info);
@@ -118,7 +119,7 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(img => 
+      filtered = filtered.filter(img =>
         img.prompt?.toLowerCase().includes(query) ||
         img.workflow_id?.toLowerCase().includes(query) ||
         WORKFLOW_NAMES[img.workflow_id || '']?.toLowerCase().includes(query)
@@ -158,9 +159,9 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -227,13 +228,12 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
             </div>
             <div className="w-full bg-zinc-800 rounded-full h-2 mb-2">
               <div
-                className={`h-2 rounded-full transition-all ${
-                  storageInfo.usage_percentage >= 90
-                    ? 'bg-red-500'
-                    : storageInfo.usage_percentage >= 70
+                className={`h-2 rounded-full transition-all ${storageInfo.usage_percentage >= 90
+                  ? 'bg-red-500'
+                  : storageInfo.usage_percentage >= 70
                     ? 'bg-amber-500'
                     : 'bg-emerald-500'
-                }`}
+                  }`}
                 style={{ width: `${storageInfo.usage_percentage}%` }}
               />
             </div>
@@ -319,10 +319,10 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
                         try {
                           // Copy image URL to clipboard
                           await navigator.clipboard.writeText(image.cloudinary_url);
-                          
+
                           // Try to use Canva API to import image
                           const { importImageToCanva, isCanvaAuthenticated } = await import('../../services/canvaService');
-                          
+
                           if (isCanvaAuthenticated()) {
                             const result = await importImageToCanva(image.cloudinary_url);
                             if (result.method === 'api' && result.designId) {
@@ -331,7 +331,7 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
                               return;
                             }
                           }
-                          
+
                           // Fallback: Open Canva and show instructions modal
                           setCanvaImageUrl(image.cloudinary_url);
                           window.open('https://www.canva.com/create', '_blank');
@@ -354,14 +354,14 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
                       title="Edit image in Canva"
                     >
                       {/* Canva Logo */}
-                      <img 
-                        src="/icons/canva-logo.png" 
-                        alt="Canva" 
+                      <img
+                        src="/icons/canva-logo.png"
+                        alt="Canva"
                         className="w-9 h-9 rounded-full flex-shrink-0 object-contain brightness-0 invert"
                         style={{ filter: 'brightness(0) invert(1)' }}
                       />
                     </button>
-                    
+
                     <button
                       onClick={() => handleDownload(image.cloudinary_url, image.id)}
                       className="flex-1 p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors flex items-center justify-center h-[34px]"
@@ -452,9 +452,9 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <img 
-                  src="https://static.canva.com/web/images/12487a1e0770d29351bd4ce9622e97db.ico" 
-                  alt="Canva" 
+                <img
+                  src="https://static.canva.com/web/images/12487a1e0770d29351bd4ce9622e97db.ico"
+                  alt="Canva"
                   className="w-6 h-6 rounded-full"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';

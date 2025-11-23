@@ -3,9 +3,10 @@ import { ImageGrid } from './ImageGrid';
 import { PromptBar } from './PromptBar';
 import { Header } from './Header';
 import { ImageEditor } from './ImageEditor';
+import { MyCreations } from '../dashboard/MyCreations';
 import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../context/AuthContext';
-import { storageService } from '../../services/storageService';
+import { storageService, type UserImage } from '../../services/storageService';
 import { resizeImageToAspectRatio } from '../../utils/imageResizer';
 import { compressImage } from '../../utils/imageCompressor';
 import { DEFAULT_STYLE } from './stylePresets';
@@ -88,7 +89,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
   const { user } = useAuth();
   const [prompt, setPrompt] = useState<string>('');
   const [inputImages, setInputImages] = useState<string[]>([]);
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<UserImage[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isEnhancing, setIsEnhancing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,11 +122,11 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       try {
         setIsLoadingCreations(true);
         // Load all user images (creations from all workflows)
+        // Load all user images (creations from all workflows)
         const userImages = await storageService.getUserImages(user.id, undefined, 100);
-
-        // Convert to data URLs for display
-        const imageUrls = userImages.map(img => img.cloudinary_url);
-        setImages(imageUrls);
+        // Filter out images with invalid URLs
+        const validImages = userImages.filter(img => img.cloudinary_url && img.cloudinary_url.startsWith('http'));
+        setImages(validImages);
       } catch (err) {
         console.error("Failed to load user creations:", err);
         setError("Failed to load your creations.");
@@ -162,11 +163,28 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     setError(null);
     try {
       const resolvedImages = await generateImage(prompt, inputImages, imageCount, aspectRatio, false, selectedQuality, selectedStyle);
-      const newImages = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
-      setImages(prevImages => [...newImages, ...prevImages]);
+      const newImagesData = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
+
+      // Create temporary UserImage objects for immediate display
+      const tempImages: UserImage[] = newImagesData.map((url, index) => ({
+        id: `temp-${Date.now()}-${index}`,
+        user_id: user.id,
+        cloudinary_url: url,
+        cloudinary_public_id: null,
+        original_size: null,
+        compressed_size: null,
+        workflow_id: 'pixelmuse',
+        prompt: prompt,
+        metadata: { quality: selectedQuality, feature: 'PixelMuse' },
+        created_at: new Date().toISOString(),
+        expires_at: null
+      }));
+
+      setImages(prevImages => [...tempImages, ...prevImages]);
 
       // Save each generated image to database
-      for (const imageDataUrl of newImages) {
+      for (let i = 0; i < newImagesData.length; i++) {
+        const imageDataUrl = newImagesData[i];
         try {
           // Convert data URL to Blob
           const response = await fetch(imageDataUrl);
@@ -174,13 +192,18 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
           const file = new File([blob], `pixelmuse-${Date.now()}.png`, { type: 'image/png' });
 
           // Upload to storage service
-          await storageService.uploadImage(
+          const savedImage = await storageService.uploadImage(
             file,
             user.id,
             'pixelmuse', // workflow_id
             prompt || 'PixelMuse generation',
-            { aspectRatio, imageCount, inputImagesCount: inputImages.length }
+            { aspectRatio, imageCount, inputImagesCount: inputImages.length, quality: selectedQuality, feature: 'PixelMuse' }
           );
+
+          // Update the temporary image with the real one from DB
+          setImages(prev => prev.map(img =>
+            img.id === tempImages[i].id ? savedImage : img
+          ));
         } catch (saveErr) {
           console.error("Failed to save image to database:", saveErr);
           // Continue even if save fails
@@ -347,24 +370,47 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       // Use the editor's aspect ratio if provided, otherwise use the main aspect ratio
       const finalAspectRatio = editorAspectRatio || aspectRatio;
       // Pass all images from the editor to Nano Banana
+      // Pass all images from the editor to Nano Banana
       const resolvedImages = await generateImage(editPrompt, images, 1, finalAspectRatio, true, selectedQuality, selectedStyle);
-      const newImages = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
-      setImages(prevImages => [...newImages, ...prevImages]);
+      const newImagesData = resolvedImages.map(imageData => `data:image/png;base64,${imageData}`);
+
+      // Create temporary UserImage objects for immediate display
+      const tempImages: UserImage[] = newImagesData.map((url, index) => ({
+        id: `temp-edit-${Date.now()}-${index}`,
+        user_id: user.id,
+        cloudinary_url: url,
+        cloudinary_public_id: null,
+        original_size: null,
+        compressed_size: null,
+        workflow_id: 'pixelmuse',
+        prompt: editPrompt,
+        metadata: { quality: selectedQuality, source: 'editor', feature: 'PixelMuse Editor' },
+        created_at: new Date().toISOString(),
+        expires_at: null
+      }));
+
+      setImages(prevImages => [...tempImages, ...prevImages]);
 
       // Save generated image to database
-      for (const imageDataUrl of newImages) {
+      for (let i = 0; i < newImagesData.length; i++) {
+        const imageDataUrl = newImagesData[i];
         try {
           const response = await fetch(imageDataUrl);
           const blob = await response.blob();
           const file = new File([blob], `pixelmuse-edited-${Date.now()}.png`, { type: 'image/png' });
 
-          await storageService.uploadImage(
+          const savedImage = await storageService.uploadImage(
             file,
             user.id,
             'pixelmuse',
             editPrompt || 'PixelMuse edited generation',
-            { aspectRatio, source: 'editor' }
+            { aspectRatio, source: 'editor', quality: selectedQuality, feature: 'PixelMuse Editor' }
           );
+
+          // Update the temporary image with the real one from DB
+          setImages(prev => prev.map(img =>
+            img.id === tempImages[i].id ? savedImage : img
+          ));
         } catch (saveErr) {
           console.error("Failed to save edited image to database:", saveErr);
         }
@@ -394,9 +440,21 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
     }
   }, [aspectRatio, user?.id]);
 
+  const [showMyCreations, setShowMyCreations] = useState(false);
+
+  if (showMyCreations) {
+    return (
+      <div className="bg-black h-full text-white font-sans flex flex-col">
+        <MyCreations
+          onBack={() => setShowMyCreations(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="bg-black h-full text-white font-sans flex flex-col">
-      <Header onBack={onBack} />
+      <Header onBack={onBack} onMyCreations={() => setShowMyCreations(true)} />
       <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
         <ImageGrid
           images={images}

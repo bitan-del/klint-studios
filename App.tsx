@@ -15,12 +15,15 @@ import { FeatureLockOverlay } from './components/shared/FeatureLockOverlay';
 import { DailyLimitModal } from './components/shared/DailyLimitModal';
 import { Chatbot } from './components/chatbot/Chatbot';
 import { DashboardContainer } from './components/dashboard/DashboardContainer';
+import { MyCreations } from './components/dashboard/MyCreations';
 import { PixelMuseEditor } from './components/pixelmuse/PixelMuseEditor';
-import { User, PanelLeft, PanelRight, ChevronDown, Globe, Key, X, Shield, Search, CreditCard, DollarSign, Eye, EyeOff, Link2, Loader2, Check, RefreshCw, RotateCcw, Zap, LayoutGrid, Layers, CheckCircle2, Sparkles } from 'lucide-react';
 import { KLogo } from './components/shared/KLogo';
 import { CanvaFeaturesDisplay } from './components/shared/CanvaFeaturesDisplay';
 import type { User as UserType, UserPlan, Currency, PlanPrices, PaymentGatewaySettings, SupabaseSettings, GeminiSettings } from './types';
 import { PLAN_DETAILS, getPlanDisplayName } from './services/permissionsService';
+import {
+    Eye, EyeOff, Shield, X, Search, RefreshCw, RotateCcw, Zap, Loader2, CreditCard, Check, DollarSign, Link2, CheckCircle2, Key, Globe, ChevronDown, LayoutGrid, PanelLeft, ImageIcon, Layers, Sparkles
+} from 'lucide-react';
 
 
 // A helper component for API key inputs with a visibility toggle
@@ -929,7 +932,8 @@ const AppHeader: React.FC<{
     onShowPixelMuse?: () => void;
     onSwitchMode?: () => void;
     isPixelMuseActive?: boolean;
-}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple, studioMode, onShowPixelMuse, onSwitchMode, isPixelMuseActive }) => {
+    onShowMyCreations: () => void;
+}> = ({ onInputsClick, onSettingsClick, onSwitchToSimple, studioMode, onShowPixelMuse, onSwitchMode, isPixelMuseActive, onShowMyCreations }) => {
     const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
     const { t } = useStudio();
@@ -945,6 +949,14 @@ const AppHeader: React.FC<{
                     <a href="https://klintstudios.com" target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors hidden sm:block">
                         Klint Studios
                     </a>
+                    {/* My Creations Button - Global */}
+                    <button
+                        onClick={onShowMyCreations}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-medium transition-colors border border-white/5 ml-4"
+                    >
+                        <ImageIcon size={14} />
+                        My Creations
+                    </button>
                 </div>
 
                 {/* --- CENTER GROUP (Absolutely positioned on mobile) --- */}
@@ -957,7 +969,6 @@ const AppHeader: React.FC<{
                             isPixelMuseActive={isPixelMuseActive}
                         />
                     </div>
-
                 </div>
 
                 {/* --- RIGHT GROUP --- */}
@@ -1002,6 +1013,7 @@ const AppContent: React.FC = () => {
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
     const [useSimplifiedUI, setUseSimplifiedUI] = useState(true); // Toggle for new simplified UI
     const [showPixelMuse, setShowPixelMuse] = useState(false); // PixelMuse view
+    const [showMyCreations, setShowMyCreations] = useState(false); // New state
 
     // Check subscription status when user logs in
     useEffect(() => {
@@ -1062,6 +1074,17 @@ const AppContent: React.FC = () => {
         }
     }, [activeMobilePanel]);
 
+    // Render MyCreations if active
+    if (showMyCreations) {
+        return (
+            <div className="bg-black h-full text-white font-sans flex flex-col">
+                <MyCreations
+                    onBack={() => setShowMyCreations(false)}
+                />
+            </div>
+        );
+    }
+
     // If user is logged in and simplified UI is enabled, show the new dashboard
     if (user && useSimplifiedUI) {
         return (
@@ -1103,6 +1126,7 @@ const AppContent: React.FC = () => {
                     onShowPixelMuse={() => setShowPixelMuse(true)}
                     onSwitchMode={() => setShowPixelMuse(false)}
                     isPixelMuseActive={true}
+                    onShowMyCreations={() => setShowMyCreations(true)}
                 />
                 <div className="flex-1 relative overflow-hidden">
                     <PixelMuseEditor
@@ -1121,6 +1145,7 @@ const AppContent: React.FC = () => {
                 onSwitchToSimple={() => setUseSimplifiedUI(true)}
                 studioMode={studioMode}
                 onShowPixelMuse={() => setShowPixelMuse(true)}
+                onShowMyCreations={() => setShowMyCreations(true)}
             />
             <main className="flex-grow flex-1 flex overflow-hidden relative">
                 {/* Feature Lock Overlay - shown when:

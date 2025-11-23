@@ -2,8 +2,10 @@ import React from 'react';
 import { ModelInfo } from './ModelInfo';
 import { DownloadIcon, CopyIcon, DeleteIcon, EditIcon } from './icons';
 
+import { UserImage } from '../../services/storageService';
+
 interface ImageGridProps {
-  images: string[];
+  images: UserImage[];
   isLoading: boolean;
   error: string | null;
   imageCount: number;
@@ -20,15 +22,14 @@ const SkeletonLoader: React.FC = () => (
 );
 
 const EmptyState: React.FC = () => (
-    <div className="col-span-full h-full flex flex-col items-center justify-center text-center text-gray-500">
-        <svg className="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        <h2 className="text-xl font-semibold text-gray-400">Your gallery is empty</h2>
-        <p className="mt-1">Generated images will appear here.</p>
-    </div>
+  <div className="col-span-full h-full flex flex-col items-center justify-center text-center text-gray-500">
+    <svg className="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+    <h2 className="text-xl font-semibold text-gray-400">Your gallery is empty</h2>
+    <p className="mt-1">Generated images will appear here.</p>
+  </div>
 );
-
 
 export const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading, error, imageCount, onDeleteImage, onEditImage }) => {
   const handleDownload = (src: string, index: number) => {
@@ -47,6 +48,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading, error, 
       const parts = src.split(',');
       const mimeMatch = parts[0].match(/:(.*?);/);
       if (!mimeMatch || !parts[1]) {
+        // If it's a URL (not data URL), try fetching it
+        if (src.startsWith('http')) {
+          const response = await fetch(src);
+          const blob = await response.blob();
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+          alert('Image copied to clipboard!');
+          return;
+        }
         throw new Error('Invalid data URL format for copying.');
       }
       const mimeType = mimeMatch[1];
@@ -77,19 +86,30 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading, error, 
       )}
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {isLoading && Array.from({ length: imageCount }).map((_, index) => <SkeletonLoader key={`loading-${index}`} />)}
-        
-        {images.length > 0 ? images.map((src, index) => (
-          <div key={`${index}-${src.slice(-10)}`} className="relative group aspect-[2/3] cursor-pointer" onClick={() => onEditImage(src)}>
-            <img src={src} alt={`Generated art ${index + 1}`} className="w-full h-full object-cover rounded-lg" loading="lazy" />
+
+        {images.length > 0 ? images.map((image, index) => (
+          <div key={image.id || `${index}-${image.cloudinary_url?.slice(-10)}`} className="relative group aspect-[2/3] cursor-pointer" onClick={() => onEditImage(image.cloudinary_url)}>
+            <img
+              src={image.cloudinary_url}
+              alt={`Generated art ${index + 1}`}
+              className="w-full h-full object-cover rounded-lg"
+              loading="lazy"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.onerror = null; // Prevent infinite loop
+                target.src = 'https://via.placeholder.com/400x600?text=Image+Not+Found'; // Fallback
+                target.parentElement?.classList.add('image-error');
+              }}
+            />
             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300 rounded-lg flex items-end justify-between p-3">
               <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-full">
-                  <ModelInfo />
+                <ModelInfo quality={image.metadata?.quality} feature={image.metadata?.feature} />
               </div>
               <div className="absolute top-3 right-3 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <button onClick={(e) => { e.stopPropagation(); onEditImage(src); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Edit image"><EditIcon /></button>
-                  <button onClick={(e) => { e.stopPropagation(); handleDownload(src, index); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Download image"><DownloadIcon /></button>
-                  <button onClick={(e) => { e.stopPropagation(); handleCopy(src); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Copy image"><CopyIcon /></button>
-                  <button onClick={(e) => { e.stopPropagation(); onDeleteImage(index); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Delete image"><DeleteIcon /></button>
+                <button onClick={(e) => { e.stopPropagation(); onEditImage(image.cloudinary_url); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Edit image"><EditIcon /></button>
+                <button onClick={(e) => { e.stopPropagation(); handleDownload(image.cloudinary_url, index); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Download image"><DownloadIcon /></button>
+                <button onClick={(e) => { e.stopPropagation(); handleCopy(image.cloudinary_url); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Copy image"><CopyIcon /></button>
+                <button onClick={(e) => { e.stopPropagation(); onDeleteImage(index); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Delete image"><DeleteIcon /></button>
               </div>
             </div>
           </div>

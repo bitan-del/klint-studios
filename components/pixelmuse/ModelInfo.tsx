@@ -1,14 +1,19 @@
 import React from 'react';
 
-export const ModelInfo: React.FC = () => {
+interface ModelInfoProps {
+    quality?: 'regular' | 'hd' | 'qhd';
+    feature?: string;
+}
+
+export const ModelInfo: React.FC<ModelInfoProps> = ({ quality = 'regular', feature = 'PixelMuse' }) => {
     return (
-        <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-full border-2 border-white/50 bg-gray-800 flex items-center justify-center">
-                <span className="text-xl font-serif font-bold text-white">K</span>
-            </div>
-            <div>
-                <p className="text-xs text-gray-300">Model</p>
-                <p className="font-semibold text-white">klint studios</p>
+        <div className="flex flex-col space-y-0.5 text-white">
+            <p className="text-xs text-gray-400">Model Name</p>
+            <p className="font-bold text-sm">Klint</p>
+            <div className="flex items-center gap-2 text-xs text-gray-300 mt-1">
+                <span className="capitalize">Category: {quality === 'regular' ? 'Regular' : quality.toUpperCase()}</span>
+                <span>•</span>
+                <span>Feature: {feature}</span>
             </div>
         </div>
     );
