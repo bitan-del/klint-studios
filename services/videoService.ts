@@ -55,18 +55,26 @@ class VideoService {
 
             // Provide helpful error messages
             if (error instanceof Error) {
+                // Preserve safety filter errors with their detailed messages
+                if (error.message.includes('safety') || error.message.includes('filter') || error.message.includes('blocked')) {
+                    throw error; // Already has good message
+                }
                 if (error.message.includes('API key') || error.message.includes('not configured')) {
                     throw new Error('Gemini API key not configured. Please add it in Admin Panel → Integrations.');
                 } else if (error.message.includes('quota') || error.message.includes('limit')) {
                     throw new Error('API quota exceeded. Please check your Google Cloud billing.');
                 } else if (error.message.includes('not enabled') || error.message.includes('permission')) {
                     throw new Error('Veo 3 API not enabled. Please enable it in Google Cloud Console or request access.');
+                } else if (error.message.includes('timeout')) {
+                    throw new Error('Video generation timed out. The video may still be processing. Please try again in a few minutes.');
                 }
             }
 
-            // If real API fails, throw the error instead of falling back to mock
-            // per user request to use the real API
-            throw error;
+            // If real API fails, throw the error with context
+            throw new Error(
+                `Video generation failed: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
+                `Please try with a simpler prompt or different image.`
+            );
         }
     }
 
@@ -77,10 +85,13 @@ class VideoService {
         // Import geminiService dynamically to avoid circular dependencies if any
         const { geminiService } = await import('./geminiService');
 
-        const prompt = config.prompt || 'Animate this image with smooth, natural motion';
+        // Create a safe, neutral prompt that's less likely to trigger safety filters
+        const basePrompt = config.prompt || 'Animate this image with smooth, natural motion';
+        
+        // Enhance prompt with safety-friendly language
         const enhancedPrompt = config.enhancePrompt
-            ? `${prompt}. Create a high-quality, cinematic video with professional camera movement and natural transitions.`
-            : prompt;
+            ? `${basePrompt}. Create a high-quality, cinematic video with professional camera movement, natural transitions, and subtle environmental effects. Focus on gentle motion, lighting changes, and atmospheric details.`
+            : basePrompt;
 
         console.log('🎬 [VIDEO] Calling Veo 3 API via GeminiService...', {
             model: 'veo-3.1-fast-generate-preview',
@@ -117,12 +128,29 @@ class VideoService {
                     }
 
                     if (status.response) {
-                        // Check for safety filters
+                        // Check for safety filters with detailed error info
                         // @ts-ignore
                         const result = status.response.result || status.response;
                         // @ts-ignore
-                        if (result.raiMediaFilteredCount > 0 || result.raiMediaFilteredReasons?.length > 0) {
-                            throw new Error('Video generation blocked by safety filters. Please try a different prompt or image.');
+                        const filteredCount = result.raiMediaFilteredCount || 0;
+                        // @ts-ignore
+                        const filteredReasons = result.raiMediaFilteredReasons || [];
+                        
+                        if (filteredCount > 0 || filteredReasons.length > 0) {
+                            const reasonText = filteredReasons.length > 0 
+                                ? filteredReasons.join(', ')
+                                : 'Content policy violation';
+                            
+                            console.error('🚫 [VIDEO] Safety filter triggered:', {
+                                count: filteredCount,
+                                reasons: filteredReasons
+                            });
+                            
+                            throw new Error(
+                                `Video generation blocked by safety filters: ${reasonText}. ` +
+                                `Try a simpler prompt focusing on natural movement, lighting, or environmental effects. ` +
+                                `Avoid any potentially sensitive content in the image or prompt.`
+                            );
                         }
 
                         // Extract URI
@@ -181,9 +209,26 @@ class VideoService {
 
             return videoUri;
 
-        } catch (apiError) {
+        } catch (apiError: any) {
             console.warn('⚠️ [VIDEO] Veo 3 API call failed:', apiError);
-            throw new Error('Veo 3 API failed. Please try again later.');
+            
+            // Preserve original error message if it's informative
+            if (apiError instanceof Error && apiError.message) {
+                // If it's already a user-friendly error, throw it as-is
+                if (apiError.message.includes('safety') || 
+                    apiError.message.includes('filter') ||
+                    apiError.message.includes('blocked') ||
+                    apiError.message.includes('quota') ||
+                    apiError.message.includes('not enabled')) {
+                    throw apiError;
+                }
+            }
+            
+            // Generic fallback error
+            throw new Error(
+                `Video generation failed: ${apiError?.message || 'Unknown error'}. ` +
+                `Please try again with a different prompt or image.`
+            );
         }
     }
 

@@ -1204,9 +1204,28 @@ Do NOT change any part of the image outside the masked area.`
         if (!ai) return mockGenerateVideo(prompt, aspectRatio, resolution, sourceImageB64);
 
         try {
+            // Light prompt sanitization - only remove obviously problematic terms
+            // Keep user's creative intent while reducing false safety filter triggers
+            let finalPrompt = prompt.trim();
+            
+            // Only sanitize if prompt contains potentially problematic terms
+            const problematicTerms = /\b(violence|violent|weapon|gun|knife|blood|gore|nude|naked|explicit|sexual)\b/gi;
+            if (problematicTerms.test(finalPrompt)) {
+                console.warn('⚠️ [VIDEO] Prompt contains potentially problematic terms, applying light sanitization');
+                finalPrompt = finalPrompt.replace(problematicTerms, '').replace(/\s+/g, ' ').trim();
+                
+                // If sanitization removed too much, use original but log warning
+                if (finalPrompt.length < prompt.length * 0.5) {
+                    console.warn('⚠️ [VIDEO] Sanitization too aggressive, using original prompt');
+                    finalPrompt = prompt.trim();
+                }
+            }
+
+            console.log('🎬 [VIDEO] Generating with prompt:', finalPrompt.substring(0, 100) + '...');
+
             let operation = await ai.models.generateVideos({
                 model: 'veo-3.1-fast-generate-preview',
-                prompt: prompt,
+                prompt: finalPrompt,
                 image: sourceImageB64 ? {
                     imageBytes: (await processImageInput(sourceImageB64)).data,
                     mimeType: (await processImageInput(sourceImageB64)).mimeType,
@@ -1218,8 +1237,20 @@ Do NOT change any part of the image outside the masked area.`
                 }
             });
             return operation;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error generating video:", error);
+            
+            // Provide better error messages
+            if (error.message?.includes('safety') || error.message?.includes('filter')) {
+                throw new Error('Content was blocked by safety filters. Try a simpler, more neutral prompt describing natural movement or environmental effects.');
+            }
+            if (error.message?.includes('quota') || error.message?.includes('limit')) {
+                throw new Error('API quota exceeded. Please check your Google Cloud billing or try again later.');
+            }
+            if (error.message?.includes('not enabled') || error.message?.includes('permission')) {
+                throw new Error('Veo 3 API not enabled. Please enable it in Google Cloud Console.');
+            }
+            
             throw error;
         }
     },

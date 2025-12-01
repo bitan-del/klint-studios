@@ -73,7 +73,24 @@ export const VideoGenerationModal: React.FC<VideoGenerationModalProps> = ({
             setGeneratedVideoUrl(videoUrl);
         } catch (error) {
             console.error('Video generation failed:', error);
-            alert(error instanceof Error ? error.message : 'Video generation failed');
+            
+            // Show user-friendly error message
+            let errorMessage = 'Video generation failed. Please try again.';
+            
+            if (error instanceof Error) {
+                errorMessage = error.message;
+                
+                // Provide helpful suggestions based on error type
+                if (error.message.includes('safety') || error.message.includes('filter') || error.message.includes('blocked')) {
+                    errorMessage += '\n\n💡 Tips:\n• Try a simpler, more neutral prompt\n• Focus on natural movement or environmental effects\n• Avoid potentially sensitive content in the image';
+                } else if (error.message.includes('quota') || error.message.includes('limit')) {
+                    errorMessage += '\n\n💡 Your API quota may be exceeded. Check your Google Cloud billing.';
+                } else if (error.message.includes('not enabled')) {
+                    errorMessage += '\n\n💡 Veo 3 API may not be enabled. Check Google Cloud Console.';
+                }
+            }
+            
+            alert(errorMessage);
         } finally {
             setIsGenerating(false);
         }
