@@ -240,9 +240,20 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onSelectWorkflow, 
                                             onLoad={() => {
                                                 setLoadedImages(prev => new Set(prev).add(workflow.id));
                                             }}
-                                            onError={() => {
-                                                // If image fails to load, still mark as loaded to hide placeholder
-                                                setLoadedImages(prev => new Set(prev).add(workflow.id));
+                                            onError={(e) => {
+                                                console.error(`❌ Failed to load workflow image: ${workflow.image}`, workflow.id);
+                                                // Try alternative path or show placeholder
+                                                const target = e.target as HTMLImageElement;
+                                                target.onerror = null; // Prevent infinite loop
+                                                
+                                                // Try with different case or path variations
+                                                const altPath = workflow.image?.replace('/workflow-images/', '/workflow-images/').toLowerCase();
+                                                if (altPath && altPath !== workflow.image) {
+                                                    target.src = altPath;
+                                                } else {
+                                                    // Mark as loaded to hide placeholder even if image failed
+                                                    setLoadedImages(prev => new Set(prev).add(workflow.id));
+                                                }
                                             }}
                                         />
                                     </div>
