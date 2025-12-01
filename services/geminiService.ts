@@ -265,65 +265,8 @@ const resizeImageToAspectRatio = async (imageDataUrl: string, aspectRatio: Aspec
     });
 };
 
-// Helper to add white padding to match target aspect ratio (no cropping)
-const addPaddingToAspectRatio = async (imageDataUrl: string, aspectRatio: AspectRatio['value']): Promise<string> => {
-    const dimensions: Record<string, { width: number; height: number }> = {
-        '1:1': { width: 1024, height: 1024 },
-        '3:4': { width: 1024, height: 1365 },
-        '4:3': { width: 1024, height: 768 },
-        '9:16': { width: 720, height: 1280 },
-        '16:9': { width: 1280, height: 720 },
-    };
-
-    const { width: targetWidth, height: targetHeight } = dimensions[aspectRatio] || dimensions['3:4'];
-    const targetRatio = targetWidth / targetHeight;
-
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            const sourceRatio = img.width / img.height;
-
-            // Calculate dimensions to fit image inside target canvas
-            let drawWidth = targetWidth;
-            let drawHeight = targetHeight;
-            let offsetX = 0;
-            let offsetY = 0;
-
-            if (sourceRatio > targetRatio) {
-                // Source is wider - fit to width, add padding top/bottom
-                drawHeight = targetWidth / sourceRatio;
-                offsetY = (targetHeight - drawHeight) / 2;
-            } else if (sourceRatio < targetRatio) {
-                // Source is taller - fit to height, add padding left/right
-                drawWidth = targetHeight * sourceRatio;
-                offsetX = (targetWidth - drawWidth) / 2;
-            }
-
-            // Create canvas with target dimensions
-            const canvas = document.createElement('canvas');
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                // Fill with white background
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fillRect(0, 0, targetWidth, targetHeight);
-
-                // Draw image centered with padding
-                ctx.drawImage(
-                    img,
-                    offsetX, offsetY, drawWidth, drawHeight
-                );
-                resolve(canvas.toDataURL('image/png'));
-            } else {
-                reject(new Error('Could not get canvas context'));
-            }
-        };
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = imageDataUrl;
-    });
-};
+// Note: resizeImageToAspectRatio above already implements padding (no cropping)
+// This duplicate function has been removed - use resizeImageToAspectRatio instead
 
 
 // --- MOCK FUNCTIONS for development without API KEY ---
@@ -1386,9 +1329,9 @@ Do NOT change any part of the image outside the masked area.`
             const parts: any[] = [];
 
             // CRITICAL: Pre-process the image to match target aspect ratio
-            // Crop and resize the source image to the exact output dimensions we want
+            // Resize with padding (no cropping) to preserve full image content
             if (sourceImageB64) {
-                console.log(`🔧 Preprocessing image from source to ${aspectRatio} aspect ratio...`);
+                console.log(`🔧 Preprocessing image from source to ${aspectRatio} aspect ratio (with padding, no cropping)...`);
                 const resizedImage = await resizeImageToAspectRatio(sourceImageB64, aspectRatio);
                 const imageParts = await processImageInput(resizedImage);
                 parts.push({
@@ -1628,9 +1571,9 @@ Do NOT change any part of the image outside the masked area.`
                     styleImageDataUrl = await loadStyleImage(style);
                     if (styleImageDataUrl) {
                         // Add style image
-                        // CRITICAL: Resize style image to match target aspect ratio too!
+                        // CRITICAL: Resize style image to match target aspect ratio with padding (no cropping)!
                         // If style image is square but target is 9:16, it confuses the model.
-                        console.log(`🎨 [GEMINI SERVICE] Resizing style image (${style}) to aspect ratio: ${aspectRatio}`);
+                        console.log(`🎨 [GEMINI SERVICE] Resizing style image (${style}) to aspect ratio: ${aspectRatio} (with padding, no cropping)`);
                         const resizedStyleImage = await resizeImageToAspectRatio(styleImageDataUrl, aspectRatio);
                         const { mimeType, data } = await processImageInput(resizedStyleImage);
                         parts.push({
@@ -1645,11 +1588,11 @@ Do NOT change any part of the image outside the masked area.`
 
             // For image editing, send user's image(s) AFTER style image
             // This allows Gemini to see the style reference first, then the content image
-            // Apply aspect ratio preprocessing to ensure output matches desired dimensions
+            // Apply aspect ratio preprocessing with padding (no cropping) to preserve full image content
             console.log('🎯 [GEMINI SERVICE] generateStyledImage called with aspect ratio:', aspectRatio);
             for (const imageDataUrl of referenceImages) {
-                // Resize image to match target aspect ratio
-                console.log('📐 [GEMINI SERVICE] Resizing image to aspect ratio:', aspectRatio);
+                // Resize image to match target aspect ratio with padding (preserves full image, no cropping)
+                console.log('📐 [GEMINI SERVICE] Resizing image to aspect ratio:', aspectRatio, '(with padding, no cropping)');
                 const resizedImage = await resizeImageToAspectRatio(imageDataUrl, aspectRatio);
                 const { mimeType, data } = await processImageInput(resizedImage);
                 parts.push({
