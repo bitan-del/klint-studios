@@ -150,6 +150,41 @@ const fetchGeminiApiKey = async (forceFresh: boolean = false): Promise<string | 
     }
 }
 
+// Helper to detect and handle HTTP referrer restriction errors
+const handleApiError = (error: any, context: string = 'API call'): never => {
+    // Check for HTTP referrer restriction error
+    const errorMessage = error?.message || error?.error?.message || '';
+    const errorCode = error?.code || error?.error?.code;
+    const errorDetails = error?.error?.details || error?.details || [];
+    
+    const hasReferrerError = 
+        errorMessage.includes('referer') || 
+        errorMessage.includes('referrer') || 
+        errorMessage.includes('API_KEY_HTTP_REFERRER_BLOCKED') ||
+        (errorCode === 403 && errorMessage.includes('blocked')) ||
+        errorDetails.some((d: any) => d.reason === 'API_KEY_HTTP_REFERRER_BLOCKED');
+
+    if (hasReferrerError) {
+        const fixMessage = 
+            '🔧 API Key HTTP Referrer Restriction Error\n\n' +
+            'Your Gemini API key has HTTP referrer restrictions enabled, but requests are coming with an empty referrer.\n\n' +
+            'To fix this:\n' +
+            '1. Go to https://aistudio.google.com/app/apikey\n' +
+            '2. Click on your API key to edit it\n' +
+            '3. Under "Application restrictions", select "None" (for development) OR\n' +
+            '   Add your domain (e.g., "localhost:5173/*" for local, "yourdomain.com/*" for production)\n' +
+            '4. Click "Save"\n' +
+            '5. Wait 1-2 minutes for changes to propagate\n' +
+            '6. Try again\n\n' +
+            'Note: For production, it\'s recommended to use a backend API proxy instead of frontend calls.';
+        
+        throw new Error(fixMessage);
+    }
+
+    // Re-throw original error if not a referrer issue
+    throw error;
+}
+
 // Helper to parse Data URL
 const parseDataUrl = (dataUrl: string) => {
     const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
@@ -570,7 +605,7 @@ QUESTION: ${question}`;
             return response.text;
         } catch (error) {
             console.error("Error getting chatbot response from Gemini:", error);
-            throw error;
+            handleApiError(error, 'chatbot response');
         }
     },
 
@@ -601,7 +636,7 @@ QUESTION: ${question}`;
             return response.text;
         } catch (error) {
             console.error("Error analyzing image with Gemini:", error);
-            throw error;
+            handleApiError(error, 'image analysis');
         }
     },
 
@@ -1240,14 +1275,42 @@ Do NOT change any part of the image outside the masked area.`
         } catch (error: any) {
             console.error("Error generating video:", error);
             
-            // Provide better error messages
-            if (error.message?.includes('safety') || error.message?.includes('filter')) {
+            // Check for HTTP referrer restriction first
+            const errorMessage = error?.message || error?.error?.message || '';
+            const errorCode = error?.code || error?.error?.code;
+            const errorDetails = error?.error?.details || error?.details || [];
+            
+            const hasReferrerError = 
+                errorMessage.includes('referer') || 
+                errorMessage.includes('referrer') || 
+                errorMessage.includes('API_KEY_HTTP_REFERRER_BLOCKED') ||
+                (errorCode === 403 && errorMessage.includes('blocked')) ||
+                errorDetails.some((d: any) => d?.reason === 'API_KEY_HTTP_REFERRER_BLOCKED');
+
+            if (hasReferrerError) {
+                throw new Error(
+                    '🔧 API Key HTTP Referrer Restriction Error\n\n' +
+                    'Your Gemini API key has HTTP referrer restrictions enabled, but requests are coming with an empty referrer.\n\n' +
+                    'To fix this:\n' +
+                    '1. Go to https://aistudio.google.com/app/apikey\n' +
+                    '2. Click on your API key to edit it\n' +
+                    '3. Under "Application restrictions", select "None" (for development) OR\n' +
+                    '   Add your domain (e.g., "localhost:5173/*" for local, "yourdomain.com/*" for production)\n' +
+                    '4. Click "Save"\n' +
+                    '5. Wait 1-2 minutes for changes to propagate\n' +
+                    '6. Try again\n\n' +
+                    'Note: For production, it\'s recommended to use a backend API proxy instead of frontend calls.'
+                );
+            }
+            
+            // Provide better error messages for other errors
+            if (errorMessage.includes('safety') || errorMessage.includes('filter')) {
                 throw new Error('Content was blocked by safety filters. Try a simpler, more neutral prompt describing natural movement or environmental effects.');
             }
-            if (error.message?.includes('quota') || error.message?.includes('limit')) {
+            if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
                 throw new Error('API quota exceeded. Please check your Google Cloud billing or try again later.');
             }
-            if (error.message?.includes('not enabled') || error.message?.includes('permission')) {
+            if (errorMessage.includes('not enabled') || errorMessage.includes('permission')) {
                 throw new Error('Veo 3 API not enabled. Please enable it in Google Cloud Console.');
             }
             

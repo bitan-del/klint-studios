@@ -81,7 +81,10 @@ export const VideoGenerationModal: React.FC<VideoGenerationModalProps> = ({
                 errorMessage = error.message;
                 
                 // Provide helpful suggestions based on error type
-                if (error.message.includes('safety') || error.message.includes('filter') || error.message.includes('blocked')) {
+                if (error.message.includes('Referrer') || error.message.includes('referer') || error.message.includes('API_KEY_HTTP_REFERRER_BLOCKED')) {
+                    // This error already has detailed instructions, just show it
+                    errorMessage = error.message;
+                } else if (error.message.includes('safety') || error.message.includes('filter') || error.message.includes('blocked')) {
                     errorMessage += '\n\n💡 Tips:\n• Try a simpler, more neutral prompt\n• Focus on natural movement or environmental effects\n• Avoid potentially sensitive content in the image';
                 } else if (error.message.includes('quota') || error.message.includes('limit')) {
                     errorMessage += '\n\n💡 Your API quota may be exceeded. Check your Google Cloud billing.';
@@ -90,7 +93,12 @@ export const VideoGenerationModal: React.FC<VideoGenerationModalProps> = ({
                 }
             }
             
-            alert(errorMessage);
+            // Use a more visible alert for referrer errors
+            if (errorMessage.includes('Referrer') || errorMessage.includes('referer')) {
+                alert(errorMessage); // Already formatted with instructions
+            } else {
+                alert(errorMessage);
+            }
         } finally {
             setIsGenerating(false);
         }

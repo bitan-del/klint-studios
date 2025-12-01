@@ -55,6 +55,14 @@ class VideoService {
 
             // Provide helpful error messages
             if (error instanceof Error) {
+                // Check for HTTP referrer restriction (most common issue)
+                if (error.message.includes('referer') || 
+                    error.message.includes('referrer') || 
+                    error.message.includes('API_KEY_HTTP_REFERRER_BLOCKED') ||
+                    error.message.includes('HTTP referrer restrictions')) {
+                    throw error; // Already has good message from geminiService
+                }
+                
                 // Preserve safety filter errors with their detailed messages
                 if (error.message.includes('safety') || error.message.includes('filter') || error.message.includes('blocked')) {
                     throw error; // Already has good message
