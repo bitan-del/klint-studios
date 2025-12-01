@@ -214,7 +214,67 @@ class StorageService {
       return [];
     }
 
-    return (data || []) as UserImage[];
+    // Validate and filter images with valid URLs, and normalize Cloudinary URLs
+    const validImages = (data || []).map((img: any) => {
+      // Check if cloudinary_url exists and is valid
+      if (!img.cloudinary_url) {
+        console.warn('⚠️ Image missing cloudinary_url:', img.id);
+        return null;
+      }
+      
+      // Validate URL format
+      if (typeof img.cloudinary_url !== 'string') {
+        console.warn('⚠️ Image has invalid cloudinary_url type:', img.id);
+        return null;
+      }
+      
+      // Normalize Cloudinary URLs - ensure HTTPS and proper format
+      let normalizedUrl = img.cloudinary_url;
+      
+      // Fix HTTP to HTTPS for Cloudinary
+      if (normalizedUrl.includes('res.cloudinary.com') && normalizedUrl.startsWith('http://')) {
+        normalizedUrl = normalizedUrl.replace('http://', 'https://');
+        console.log('🔧 Fixed HTTP to HTTPS for image:', img.id);
+      }
+      
+      // Ensure Cloudinary URLs are properly formatted
+      if (normalizedUrl.includes('res.cloudinary.com')) {
+        // Cloudinary URLs should have /upload/ in them
+        if (!normalizedUrl.includes('/upload/')) {
+          console.warn('⚠️ Invalid Cloudinary URL format (missing /upload/):', img.id, normalizedUrl);
+          return null;
+        }
+        
+        // Add fetch format for better compatibility if not present
+        if (!normalizedUrl.includes('/f_') && !normalizedUrl.includes('/v')) {
+          const parts = normalizedUrl.split('/upload/');
+          if (parts.length === 2) {
+            normalizedUrl = `${parts[0]}/upload/f_auto,q_auto/${parts[1]}`;
+            console.log('🔧 Added auto format to Cloudinary URL:', img.id);
+          }
+        }
+      }
+      
+      // Check if it's a valid HTTP/HTTPS URL or data URL
+      const isValidUrl = 
+        normalizedUrl.startsWith('http://') || 
+        normalizedUrl.startsWith('https://') ||
+        normalizedUrl.startsWith('data:');
+      
+      if (!isValidUrl) {
+        console.warn('⚠️ Image has invalid URL format:', img.id, normalizedUrl);
+        return null;
+      }
+      
+      // Return image with normalized URL
+      return {
+        ...img,
+        cloudinary_url: normalizedUrl
+      };
+    }).filter((img: any) => img !== null) as UserImage[];
+
+    console.log(`✅ Loaded ${validImages.length} valid images (${(data || []).length - validImages.length} filtered out)`);
+    return validImages;
   }
 
   /**

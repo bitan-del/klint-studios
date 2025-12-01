@@ -99,7 +99,28 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading, error, 
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.onerror = null; // Prevent infinite loop
-                target.src = 'https://via.placeholder.com/400x600?text=Image+Not+Found'; // Fallback
+                console.error('❌ Failed to load image:', image.cloudinary_url);
+                
+                // Try to fix common Cloudinary URL issues
+                if (image.cloudinary_url && image.cloudinary_url.includes('res.cloudinary.com')) {
+                  // Ensure HTTPS
+                  const fixedUrl = image.cloudinary_url.replace('http://', 'https://');
+                  if (fixedUrl !== image.cloudinary_url) {
+                    target.src = fixedUrl;
+                    return;
+                  }
+                  // Try adding transformation for better compatibility
+                  if (image.cloudinary_url.includes('/upload/')) {
+                    const parts = image.cloudinary_url.split('/upload/');
+                    if (parts.length === 2 && !image.cloudinary_url.includes('/f_')) {
+                      target.src = `${parts[0]}/upload/f_auto/${parts[1]}`;
+                      return;
+                    }
+                  }
+                }
+                
+                // Fallback placeholder
+                target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="600"%3E%3Crect fill="%23171717" width="400" height="600"/%3E%3Ctext fill="%239ca3af" font-family="sans-serif" font-size="16" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E';
                 target.parentElement?.classList.add('image-error');
               }}
             />

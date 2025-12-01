@@ -315,6 +315,34 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
                     alt={image.prompt || 'Generated image'}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null; // Prevent infinite loop
+                      console.error('❌ Failed to load image:', image.cloudinary_url);
+                      // Try to fix common Cloudinary URL issues
+                      if (image.cloudinary_url && image.cloudinary_url.includes('res.cloudinary.com')) {
+                        // Ensure HTTPS
+                        const fixedUrl = image.cloudinary_url.replace('http://', 'https://');
+                        if (fixedUrl !== image.cloudinary_url) {
+                          target.src = fixedUrl;
+                          return;
+                        }
+                        // Try adding transformation for better compatibility
+                        if (!image.cloudinary_url.includes('/upload/')) {
+                          return; // Invalid URL format
+                        }
+                        // Add fetch format if missing
+                        if (!image.cloudinary_url.includes('/f_')) {
+                          const parts = image.cloudinary_url.split('/upload/');
+                          if (parts.length === 2) {
+                            target.src = `${parts[0]}/upload/f_auto/${parts[1]}`;
+                            return;
+                          }
+                        }
+                      }
+                      // Fallback placeholder
+                      target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23171717" width="400" height="400"/%3E%3Ctext fill="%239ca3af" font-family="sans-serif" font-size="16" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E';
+                    }}
                   />
                   {/* Overlay on hover */}
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 px-4">
