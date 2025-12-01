@@ -12,6 +12,8 @@ import { compressImage } from '../../utils/imageCompressor';
 import { DEFAULT_STYLE } from './stylePresets';
 import type { AspectRatio } from '../../types';
 import type { ImageQuality, QualityUsage } from '../../types/quality';
+import { VideoGenerationModal } from '../shared/VideoGenerationModal';
+import type { VideoGenerationConfig } from '../../types/video';
 
 interface PixelMuseEditorProps {
   onBack?: () => void;
@@ -38,16 +40,13 @@ const generateImage = async (
       .map(async () => {
         // For text-to-image, images array is empty
         // For image-to-image/editing, images array contains the input image(s)
-        const result = await geminiService.generateStyledImage(prompt, images, quality, style);
+        // Pass aspectRatio to generateStyledImage so it can create proper template dimensions
+        const result = await geminiService.generateStyledImage(prompt, images, quality, style, aspectRatio as AspectRatio['value']);
 
-        // Resize if needed (though Nano Banana usually handles aspect ratio well via prompt, 
-        // we keep this for consistency if the output needs cropping)
-        if (aspectRatio) {
-          // Note: resizeImageToAspectRatio expects a full data URL
-          const resized = await resizeImageToAspectRatio(result, aspectRatio as AspectRatio['value']);
-          return resized.includes(',') ? resized.split(',')[1] : resized;
-        }
-
+        // DO NOT resize/crop after generation - the model already respects the aspect ratio
+        // The generateStyledImage function handles aspect ratio internally via template
+        // Post-generation cropping was causing images to be cut off
+        
         // Return base64 data without prefix if it was added by generateStyledImage
         return result.includes(',') ? result.split(',')[1] : result;
       });
@@ -100,6 +99,8 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
   const [selectedQuality, setSelectedQuality] = useState<ImageQuality>('regular');
   const [qualityUsage, setQualityUsage] = useState<QualityUsage>({ hd: 0, qhd: 0 });
   const [selectedStyle, setSelectedStyle] = useState<string>(DEFAULT_STYLE.id);
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [selectedImageForVideo, setSelectedImageForVideo] = useState<string>('');
 
   // Clean up old localStorage data on mount to prevent quota errors
   useEffect(() => {
@@ -213,7 +214,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       // Track quality usage for HD/QHD
       if (selectedQuality !== 'regular') {
         try {
-          for (let i = 0; i < newImages.length; i++) {
+          for (let i = 0; i < newImagesData.length; i++) {
             await storageService.incrementQualityUsage(user.id, selectedQuality);
           }
           // Reload usage to update UI
@@ -419,7 +420,7 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
       // Track quality usage for HD/QHD
       if (selectedQuality !== 'regular') {
         try {
-          for (let i = 0; i < newImages.length; i++) {
+          for (let i = 0; i < newImagesData.length; i++) {
             await storageService.incrementQualityUsage(user.id, selectedQuality);
           }
           // Reload usage to update UI
@@ -463,6 +464,10 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
           imageCount={imageCount}
           onDeleteImage={handleDeleteImage}
           onEditImage={handleEditImage}
+          onVideoGenerate={(src) => {
+            setSelectedImageForVideo(src);
+            setShowVideoModal(true);
+          }}
         />
       </main>
       <PromptBar
@@ -494,6 +499,22 @@ export const PixelMuseEditor: React.FC<PixelMuseEditorProps> = ({ onBack }) => {
           aspectRatio={aspectRatio}
         />
       )}
+
+      {/* Video Generation Modal */}
+      <VideoGenerationModal
+        isOpen={showVideoModal}
+        onClose={() => {
+          setShowVideoModal(false);
+          setSelectedImageForVideo('');
+        }}
+        sourceImage={selectedImageForVideo}
+        user={user}
+        onGenerate={async (config: VideoGenerationConfig) => {
+          console.log('Generating video with config:', config);
+          // TODO: Implement video generation service
+          alert('Video generation will be implemented soon!');
+        }}
+      />
     </div>
   );
 };

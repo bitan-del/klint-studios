@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useStudio } from './context/StudioContext';
 import { initializeCloudinaryFromDatabase } from './services/cloudinaryInit';
+import { storageService } from './services/storageService';
+import { VIDEO_PLAN_LIMITS } from './types/video';
 import { InputPanel } from './components/shared/InputPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { StudioView } from './components/studio/StudioView';
@@ -98,6 +100,9 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
     const [userPlanChanges, setUserPlanChanges] = useState<Record<string, UserPlan>>({});
     const [savingPlan, setSavingPlan] = useState<string | null>(null);
 
+    // Track quality usage for each user
+    const [qualityUsage, setQualityUsage] = useState<Record<string, { hd: number; qhd: number }>>({});
+
     // Effect to reset local state when modal is opened
     useEffect(() => {
         if (isOpen) {
@@ -126,6 +131,31 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
             console.log('👥 Admin Panel - Total users:', users.length);
             console.log('👥 Users data:', users);
         }
+    }, [isOpen, users]);
+
+    // Fetch quality usage for all users when admin panel opens
+    useEffect(() => {
+        const fetchQualityUsage = async () => {
+            if (!isOpen || users.length === 0) return;
+
+            console.log('📊 Fetching quality usage for all users...');
+            const usageMap: Record<string, { hd: number; qhd: number }> = {};
+
+            for (const user of users) {
+                try {
+                    const usage = await storageService.getQualityUsage(user.id);
+                    usageMap[user.id] = usage;
+                } catch (error) {
+                    console.error(`Failed to fetch quality usage for ${user.email}: `, error);
+                    usageMap[user.id] = { hd: 0, qhd: 0 };
+                }
+            }
+
+            setQualityUsage(usageMap);
+            console.log('✅ Quality usage loaded:', usageMap);
+        };
+
+        fetchQualityUsage();
     }, [isOpen, users]);
 
     // Auto-refresh users every 5 seconds when Admin Panel is open
@@ -231,6 +261,17 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         setTimeout(() => setSavedCanva(false), 3000);
     };
 
+    const handleResetUserUsage = async (userId: string) => {
+        await resetUserUsage(userId);
+        // Refresh quality usage for this user
+        try {
+            const usage = await storageService.getQualityUsage(userId);
+            setQualityUsage(prev => ({ ...prev, [userId]: usage }));
+        } catch (error) {
+            console.error('Failed to refresh quality usage:', error);
+        }
+    };
+
     const handlePlanChange = (userId: string, newPlan: UserPlan) => {
         setUserPlanChanges(prev => ({ ...prev, [userId]: newPlan }));
     };
@@ -239,7 +280,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         const newPlan = userPlanChanges[userId];
         if (!newPlan) return;
 
-        console.log(`💾 Saving plan change: ${userId} → ${newPlan}`);
+        console.log(`💾 Saving plan change: ${userId} → ${newPlan} `);
         setSavingPlan(userId);
         await updateUserPlan(userId, newPlan);
 
@@ -279,9 +320,9 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
 
                 {/* Tabs */}
                 <div className="flex border-b border-zinc-700 mb-6 overflow-x-auto">
-                    <button onClick={() => setActiveTab('users')} className={`flex-shrink-0 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'users' ? 'text-white border-b-2 border-emerald-500' : 'text-zinc-400 hover:text-white'}`}>User Management</button>
-                    <button onClick={() => setActiveTab('payments')} className={`flex-shrink-0 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'payments' ? 'text-white border-b-2 border-emerald-500' : 'text-zinc-400 hover:text-white'}`}>Payments & Plans</button>
-                    <button onClick={() => setActiveTab('integrations')} className={`flex-shrink-0 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'integrations' ? 'text-white border-b-2 border-emerald-500' : 'text-zinc-400 hover:text-white'}`}>Integrations</button>
+                    <button onClick={() => setActiveTab('users')} className={`flex-shrink-0 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'users' ? 'text-white border-b-2 border-emerald-500' : 'text-zinc-400 hover:text-white'} `}>User Management</button>
+                    <button onClick={() => setActiveTab('payments')} className={`flex-shrink-0 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'payments' ? 'text-white border-b-2 border-emerald-500' : 'text-zinc-400 hover:text-white'} `}>Payments & Plans</button>
+                    <button onClick={() => setActiveTab('integrations')} className={`flex-shrink-0 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'integrations' ? 'text-white border-b-2 border-emerald-500' : 'text-zinc-400 hover:text-white'} `}>Integrations</button>
                 </div>
 
                 <div className="max-h-[60vh] overflow-y-auto pr-2">
@@ -341,7 +382,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                     <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin'
                                                         ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-500/30'
                                                         : 'bg-zinc-700 text-zinc-300'
-                                                        }`}>
+                                                        } `}>
                                                         {user.role}
                                                     </span>
                                                 </td>
@@ -351,7 +392,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                         <span>{user.generationsUsed} / {monthlyLimit}</span>
                                                         <div className="flex gap-1">
                                                             <button
-                                                                onClick={() => resetUserUsage(user.id)}
+                                                                onClick={() => handleResetUserUsage(user.id)}
                                                                 className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400 transition-colors"
                                                                 title="Reset to 0"
                                                             >
@@ -372,14 +413,26 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span>Images: {user.dailyGenerationsUsed} / {dailyImageLimit}</span>
                                                             <button
-                                                                onClick={() => resetUserUsage(user.id)}
+                                                                onClick={() => handleResetUserUsage(user.id)}
                                                                 className="p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-emerald-400 transition-colors"
                                                                 title="Reset daily usage"
                                                             >
                                                                 <RotateCcw size={12} />
                                                             </button>
                                                         </div>
-                                                        <p>Videos: {user.dailyVideosUsed} / 10</p>
+                                                        <p className="text-zinc-400">
+                                                            HD: {qualityUsage[user.id]?.hd || 0} | UHD: {qualityUsage[user.id]?.qhd || 0}
+                                                        </p>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span>Videos: {user.videosGeneratedMonthly || 0} / {VIDEO_PLAN_LIMITS[user.plan].monthly} (Daily: {user.videosGeneratedDaily || 0}/{VIDEO_PLAN_LIMITS[user.plan].daily})</span>
+                                                            <button
+                                                                onClick={() => handleResetUserUsage(user.id)}
+                                                                className="p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-emerald-400 transition-colors"
+                                                                title="Reset video usage"
+                                                            >
+                                                                <RotateCcw size={12} />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="p-3">{new Date(user.lastGenerationDate).toLocaleDateString()}</td>
@@ -672,7 +725,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                                             console.error('❌ Error stack:', error.stack);
                                                             button.disabled = false;
                                                             button.innerHTML = originalText;
-                                                            alert(`Failed to start Canva authentication:\n\n${error.message}\n\nPlease check the browser console (F12) for more details.`);
+                                                            alert(`Failed to start Canva authentication: \n\n${error.message} \n\nPlease check the browser console(F12) for more details.`);
                                                         }
                                                     }}
                                                     className="w-full sm:w-auto text-sm font-semibold bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md transition-all flex items-center justify-center gap-2 mt-2"
@@ -800,19 +853,19 @@ const LanguageSwitcher: React.FC = () => {
             >
                 <Globe size={18} />
                 <span className="hidden sm:inline text-sm font-medium uppercase">{language}</span>
-                <ChevronDown size={16} className={`text-zinc-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={16} className={`text-zinc-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} `} />
             </button>
             {isOpen && (
                 <div className="absolute left-0 lg:left-auto lg:right-0 mt-2 w-32 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl z-50 p-1 animate-fade-in duration-150">
                     <button
                         onClick={() => { setLanguage('en'); setIsOpen(false); }}
-                        className={`w-full text-left px-3 py-1.5 text-sm rounded transition-colors ${language === 'en' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-700'}`}
+                        className={`w-full text-left px-3 py-1.5 text-sm rounded transition-colors ${language === 'en' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-700'} `}
                     >
                         English
                     </button>
                     <button
                         onClick={() => { setLanguage('hinglish'); setIsOpen(false); }}
-                        className={`w-full text-left px-3 py-1.5 text-sm rounded transition-colors ${language === 'hinglish' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-700'}`}
+                        className={`w-full text-left px-3 py-1.5 text-sm rounded transition-colors ${language === 'hinglish' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-700'} `}
                     >
                         Hinglish
                     </button>
@@ -885,7 +938,7 @@ const UserMenu: React.FC = () => {
                     {userInitial}
                 </div>
                 <span className="hidden sm:inline text-sm font-medium">{user.email}</span>
-                <ChevronDown size={16} className={`text-zinc-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={16} className={`text-zinc-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} `} />
             </button>
             {isOpen && (
                 <div className="absolute left-0 lg:left-auto lg:right-0 mt-2 w-72 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl z-50 p-4 animate-fade-in duration-150">
@@ -905,7 +958,7 @@ const UserMenu: React.FC = () => {
                                 <span>{user.dailyGenerationsUsed} / {dailyLimit} {t('images')}</span>
                             </div>
                             <div className="w-full bg-zinc-700 rounded-full h-1.5 mt-1">
-                                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${dailyGenerationsPercentage}%` }}></div>
+                                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${dailyGenerationsPercentage}% ` }}></div>
                             </div>
                         </div>
                         <button
@@ -1170,8 +1223,8 @@ const AppContent: React.FC = () => {
                     </aside>
                 )}
 
-                <section className={`min-w-0 flex-1 flex flex-col ${(studioMode === 'design' || studioMode === 'reimagine' || studioMode === 'chason') ? 'p-0' : 'p-3'}`}>
-                    <StudioView />
+                <section className={`min-w-0 flex-1 flex flex-col ${(studioMode === 'design' || studioMode === 'reimagine' || studioMode === 'chason') ? 'p-0' : 'p-3'} `}>
+                    <StudioView onExit={() => setUseSimplifiedUI(true)} />
                 </section>
 
                 {/* --- XL+ DESKTOP SETTINGS PANEL (PERMANENT) --- */}
@@ -1210,10 +1263,10 @@ const AppContent: React.FC = () => {
                         <div
                             className={`
                                 absolute top-0 right-0 h-full w-[420px] bg-zinc-925/90 backdrop-blur-xl border-l border-white/10 z-20 
-                                transform transition-transform duration-300 ease-in-out 
+                                transform transition-transform duration-300 ease-in-out
                                 lg:flex xl:hidden flex-col
                                 ${isLgSettingsPanelOpen ? 'translate-x-0' : 'translate-x-full'}
-                            `}
+`}
                         >
                             <SettingsPanel onClose={() => setLgSettingsPanelOpen(false)} isMobileView={true} />
                         </div>
@@ -1224,11 +1277,11 @@ const AppContent: React.FC = () => {
             {/* --- MOBILE FULL-SCREEN PANELS --- */}
             {studioMode !== 'design' && studioMode !== 'reimagine' && studioMode !== 'chason' && (
                 <>
-                    <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'inputs' ? 'translate-x-0' : '-translate-x-full'}`}>
+                    <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'inputs' ? 'translate-x-0' : '-translate-x-full'} `}>
                         <InputPanel onClose={() => setActiveMobilePanel(null)} isMobileView={true} />
                     </div>
 
-                    <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'}`}>
+                    <div className={`fixed inset-0 z-50 bg-zinc-950 transform transition-transform duration-300 ease-in-out lg:hidden ${activeMobilePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'} `}>
                         <SettingsPanel onClose={() => setActiveMobilePanel(null)} isMobileView={true} />
                     </div>
                 </>

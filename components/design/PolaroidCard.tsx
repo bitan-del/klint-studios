@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2, Download, RotateCw } from 'lucide-react';
+import { Loader2, Download, RotateCw, Video } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface PolaroidCardProps {
@@ -9,6 +9,7 @@ interface PolaroidCardProps {
     error?: string;
     onRetry: () => void;
     onDownload: () => void;
+    onVideoGenerate?: () => void;
     isHighlighted?: boolean;
 }
 
@@ -19,6 +20,7 @@ const PolaroidCard: React.FC<PolaroidCardProps> = ({
     error,
     onRetry,
     onDownload,
+    onVideoGenerate,
     isHighlighted = false
 }) => {
     return (
@@ -45,9 +47,9 @@ const PolaroidCard: React.FC<PolaroidCardProps> = ({
                     </div>
                 )}
                 {status === 'done' && imageUrl && (
-                    <img 
-                        src={imageUrl} 
-                        alt={conceptName} 
+                    <img
+                        src={imageUrl}
+                        alt={conceptName}
                         className="w-full h-full object-cover"
                     />
                 )}
@@ -60,6 +62,15 @@ const PolaroidCard: React.FC<PolaroidCardProps> = ({
                         >
                             <Download className="h-4 w-4 text-zinc-800" />
                         </button>
+                        {onVideoGenerate && (
+                            <button
+                                onClick={onVideoGenerate}
+                                className="p-2 bg-emerald-900/60 hover:bg-emerald-900/80 backdrop-blur-md border border-emerald-500/30 text-emerald-100 hover:text-white rounded-full shadow-lg shadow-emerald-900/20 transition-all"
+                                aria-label="Generate Video"
+                            >
+                                <Video className="h-4 w-4" />
+                            </button>
+                        )}
                         <button
                             onClick={onRetry}
                             className="p-2 bg-white/90 rounded-full shadow-lg hover:bg-white transition-colors"

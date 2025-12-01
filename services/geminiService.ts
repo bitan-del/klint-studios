@@ -162,7 +162,50 @@ const parseDataUrl = (dataUrl: string) => {
     };
 };
 
-// Helper to resize/crop an image to match target aspect ratio
+// Helper to process image input (Data URL or HTTP URL)
+const processImageInput = async (input: string): Promise<{ mimeType: string; data: string }> => {
+    // Check if it's already a data URL
+    const match = input.match(/^data:(.*?);base64,(.*)$/);
+    if (match) {
+        return {
+            mimeType: match[1],
+            data: match[2],
+        };
+    }
+
+    // If it's a URL, fetch it
+    if (input.startsWith('http')) {
+        try {
+            const response = await fetch(input);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64data = reader.result as string;
+                    const match = base64data.match(/^data:(.*?);base64,(.*)$/);
+                    if (match) {
+                        resolve({
+                            mimeType: match[1],
+                            data: match[2],
+                        });
+                    } else {
+                        reject(new Error("Failed to convert fetched image to base64"));
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch (error) {
+            console.error("Error fetching image URL:", error);
+            throw new Error(`Failed to fetch image from URL: ${input}`);
+        }
+    }
+
+    throw new Error("Invalid image input: must be data URL or http URL");
+};
+
+// Helper to resize an image to match target aspect ratio by PADDING (no cropping)
+// Preserves the entire image content by adding white padding
 const resizeImageToAspectRatio = async (imageDataUrl: string, aspectRatio: AspectRatio['value']): Promise<string> => {
     const dimensions: Record<string, { width: number; height: number }> = {
         '1:1': { width: 1024, height: 1024 },
@@ -180,17 +223,20 @@ const resizeImageToAspectRatio = async (imageDataUrl: string, aspectRatio: Aspec
         img.onload = () => {
             const sourceRatio = img.width / img.height;
 
-            let sourceX = 0, sourceY = 0, sourceWidth = img.width, sourceHeight = img.height;
+            // Calculate dimensions to fit image inside target canvas (preserve full image)
+            let drawWidth = targetWidth;
+            let drawHeight = targetHeight;
+            let offsetX = 0;
+            let offsetY = 0;
 
-            // Crop to match target aspect ratio (center crop)
             if (sourceRatio > targetRatio) {
-                // Source is wider - crop width
-                sourceWidth = img.height * targetRatio;
-                sourceX = (img.width - sourceWidth) / 2;
+                // Source is wider - fit to width, add padding top/bottom
+                drawHeight = targetWidth / sourceRatio;
+                offsetY = (targetHeight - drawHeight) / 2;
             } else if (sourceRatio < targetRatio) {
-                // Source is taller - crop height
-                sourceHeight = img.width / targetRatio;
-                sourceY = (img.height - sourceHeight) / 2;
+                // Source is taller - fit to height, add padding left/right
+                drawWidth = targetHeight * sourceRatio;
+                offsetX = (targetWidth - drawWidth) / 2;
             }
 
             // Create canvas with target dimensions
@@ -200,11 +246,74 @@ const resizeImageToAspectRatio = async (imageDataUrl: string, aspectRatio: Aspec
 
             const ctx = canvas.getContext('2d');
             if (ctx) {
-                // Draw cropped and resized image
+                // Fill with white background (padding)
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+                // Draw image centered with padding (preserves full image, no cropping)
                 ctx.drawImage(
                     img,
-                    sourceX, sourceY, sourceWidth, sourceHeight, // Source rectangle
-                    0, 0, targetWidth, targetHeight              // Destination rectangle
+                    offsetX, offsetY, drawWidth, drawHeight
+                );
+                resolve(canvas.toDataURL('image/png'));
+            } else {
+                reject(new Error('Could not get canvas context'));
+            }
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = imageDataUrl;
+    });
+};
+
+// Helper to add white padding to match target aspect ratio (no cropping)
+const addPaddingToAspectRatio = async (imageDataUrl: string, aspectRatio: AspectRatio['value']): Promise<string> => {
+    const dimensions: Record<string, { width: number; height: number }> = {
+        '1:1': { width: 1024, height: 1024 },
+        '3:4': { width: 1024, height: 1365 },
+        '4:3': { width: 1024, height: 768 },
+        '9:16': { width: 720, height: 1280 },
+        '16:9': { width: 1280, height: 720 },
+    };
+
+    const { width: targetWidth, height: targetHeight } = dimensions[aspectRatio] || dimensions['3:4'];
+    const targetRatio = targetWidth / targetHeight;
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const sourceRatio = img.width / img.height;
+
+            // Calculate dimensions to fit image inside target canvas
+            let drawWidth = targetWidth;
+            let drawHeight = targetHeight;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            if (sourceRatio > targetRatio) {
+                // Source is wider - fit to width, add padding top/bottom
+                drawHeight = targetWidth / sourceRatio;
+                offsetY = (targetHeight - drawHeight) / 2;
+            } else if (sourceRatio < targetRatio) {
+                // Source is taller - fit to height, add padding left/right
+                drawWidth = targetHeight * sourceRatio;
+                offsetX = (targetWidth - drawWidth) / 2;
+            }
+
+            // Create canvas with target dimensions
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                // Fill with white background
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+                // Draw image centered with padding
+                ctx.drawImage(
+                    img,
+                    offsetX, offsetY, drawWidth, drawHeight
                 );
                 resolve(canvas.toDataURL('image/png'));
             } else {
@@ -530,7 +639,7 @@ QUESTION: ${question}`;
         }
 
         try {
-            const { mimeType, data } = parseDataUrl(imageB64);
+            const { mimeType, data } = await processImageInput(imageB64);
             const imagePart = {
                 inlineData: {
                     mimeType,
@@ -639,7 +748,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
         if (!ai) return mockAnalyzeApparel(imageB64);
 
         try {
-            const { mimeType, data } = parseDataUrl(imageB64);
+            const { mimeType, data } = await processImageInput(imageB64);
             const imagePart = { inlineData: { mimeType, data } };
             const textPart = { text: "You are an expert at classifying items for photoshoots. Analyze the image of the item. Classify it into ONE of the following categories: Upper Body, Lower Body, Full Body, Outerwear, Accessory, Footwear, Handheld. If it doesn't fit, use Uncategorized. Return ONLY the JSON object." };
 
@@ -713,7 +822,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
         if (!ai) return mockDescribeModel(imageB64);
 
         try {
-            const { mimeType, data } = parseDataUrl(imageB64);
+            const { mimeType, data } = await processImageInput(imageB64);
             const imagePart = { inlineData: { mimeType, data } };
             const textPart = { text: "You are an expert model casting director. Analyze the image of the person. Generate a detailed, professional description suitable for recreating this person with an AI image generator. The description should include gender, estimated age, ethnicity, hair style and color, facial features (eyes, nose, jawline, etc.), and body type. Also suggest a plausible first name for the model. Return ONLY a JSON object with the required properties." };
 
@@ -748,7 +857,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
         if (!ai) return mockGetSceneSuggestions(imageB64);
 
         try {
-            const { mimeType, data } = parseDataUrl(imageB64);
+            const { mimeType, data } = await processImageInput(imageB64);
             const imagePart = { inlineData: { mimeType, data } };
             const textPart = {
                 text: `You are an expert product photographer and prop stylist for luxury brands, specializing in jewelry. Analyze the provided product image. Generate 4 unique, professional, and distinct scene concepts suitable for high-end marketing.
@@ -794,7 +903,7 @@ Return ONLY the JSON object.` };
         const ai = await getAI();
         if (!ai) return mockRemoveBackground(imageB64);
         try {
-            const { mimeType, data } = parseDataUrl(imageB64);
+            const { mimeType, data } = await processImageInput(imageB64);
             const imagePart = { inlineData: { mimeType, data } };
             const textPart = { text: "Your task is to act as an expert photo editor. You will be given an image of a product. Your sole mission is to perfectly isolate the main product from its background. Return a new image where the isolated product is placed on a pure white background (#FFFFFF). The output image MUST have the exact same dimensions as the input image. Do not add any shadows or effects. The product itself must not be altered." };
 
@@ -827,7 +936,7 @@ Return ONLY the JSON object.` };
         if (!ai) return mockDescribeImageStyle(imageB64);
 
         try {
-            const { mimeType, data } = parseDataUrl(imageB64);
+            const { mimeType, data } = await processImageInput(imageB64);
             const imagePart = {
                 inlineData: {
                     mimeType,
@@ -864,7 +973,7 @@ Return ONLY the JSON object.` };
         const validColorGradeIds = COLOR_GRADING_PRESETS.map(c => c.id);
 
         try {
-            const { mimeType, data } = parseDataUrl(garmentImageB64);
+            const { mimeType, data } = await processImageInput(garmentImageB64);
             const imagePart = { inlineData: { mimeType, data } };
             const textPart = {
                 text: `As an expert Art Director, analyze the provided item image. Based on its style, suggest FIVE distinct and varied photoshoot concepts.
@@ -1079,8 +1188,8 @@ Return ONLY a JSON array of 4 objects.`;
         try {
             const { originalImageB64, maskImageB64, prompt, apparelImageB64 } = params;
 
-            const originalImageParts = parseDataUrl(originalImageB64);
-            const maskImageParts = parseDataUrl(maskImageB64);
+            const originalImageParts = await processImageInput(originalImageB64);
+            const maskImageParts = await processImageInput(maskImageB64);
 
             const parts = [];
 
@@ -1090,7 +1199,7 @@ Return ONLY a JSON array of 4 objects.`;
 
             if (apparelImageB64) {
                 // SCENARIO 1: Inpainting with Apparel Reference
-                const apparelImageParts = parseDataUrl(apparelImageB64);
+                const apparelImageParts = await processImageInput(apparelImageB64);
                 const apparelReferencePart = { inlineData: { mimeType: apparelImageParts.mimeType, data: apparelImageParts.data } };
 
                 const textPart = {
@@ -1156,8 +1265,8 @@ Do NOT change any part of the image outside the masked area.`
                 model: 'veo-3.1-fast-generate-preview',
                 prompt: prompt,
                 image: sourceImageB64 ? {
-                    imageBytes: parseDataUrl(sourceImageB64).data,
-                    mimeType: parseDataUrl(sourceImageB64).mimeType,
+                    imageBytes: (await processImageInput(sourceImageB64)).data,
+                    mimeType: (await processImageInput(sourceImageB64)).mimeType,
                 } : undefined,
                 config: {
                     numberOfVideos: 1,
@@ -1187,16 +1296,38 @@ Do NOT change any part of the image outside the masked area.`
         const ai = await getAI();
         if (!ai) return mockFetchVideo(url);
         try {
-            const apiKey = localStorage.getItem('geminiApiKey') || process.env.API_KEY;
-            if (!apiKey) throw new Error("API key is not available for fetching video.");
-            const response = await fetch(`${url}&key=${apiKey}`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch video: ${response.statusText}`);
+            let apiKey = localStorage.getItem('geminiApiKey');
+            // Validate key from storage
+            if (!apiKey || apiKey === 'undefined' || apiKey.length < 10) {
+                apiKey = import.meta.env.VITE_GEMINI_API_KEY;
             }
-            const blob = await response.blob();
-            return URL.createObjectURL(blob);
+
+            if (!apiKey) throw new Error("API key is not available for fetching video.");
+
+            // Clean API key
+            apiKey = apiKey.trim().replace(/['"]/g, '');
+
+            // Remove :download suffix if present, as it might conflict with key param or redirect
+            let cleanUrl = url.replace(':download', '');
+
+            const separator = cleanUrl.includes('?') ? '&' : '?';
+            const videoUrlWithKey = `${cleanUrl}${separator}key=${apiKey}`;
+
+            try {
+                const response = await fetch(videoUrlWithKey);
+                if (!response.ok) {
+                    console.warn(`Failed to fetch video blob (${response.status}), falling back to direct URL.`);
+                    return videoUrlWithKey;
+                }
+                const blob = await response.blob();
+                return URL.createObjectURL(blob);
+            } catch (fetchError) {
+                console.warn("Error fetching video blob, falling back to direct URL:", fetchError);
+                return videoUrlWithKey;
+            }
         } catch (error) {
-            console.error("Error fetching video blob:", error);
+            console.error("Error in fetchVideoAsBlobUrl:", error);
+            // Even in outer catch, try to return a usable URL if possible, or rethrow
             throw error;
         }
     },
@@ -1206,7 +1337,7 @@ Do NOT change any part of the image outside the masked area.`
         if (!ai) return mockSuggestVideoPrompts(imageB64);
 
         try {
-            const { mimeType, data } = parseDataUrl(imageB64);
+            const { mimeType, data } = await processImageInput(imageB64);
             const imagePart = { inlineData: { mimeType, data } };
             const textPart = { text: "You are a film director. Look at this image and suggest 4 different, short, and evocative video prompts that could animate this scene. The prompts should describe subtle movements or environmental effects. Return ONLY a JSON array of 4 strings." };
 
@@ -1259,7 +1390,7 @@ Do NOT change any part of the image outside the masked area.`
             if (sourceImageB64) {
                 console.log(`🔧 Preprocessing image from source to ${aspectRatio} aspect ratio...`);
                 const resizedImage = await resizeImageToAspectRatio(sourceImageB64, aspectRatio);
-                const imageParts = parseDataUrl(resizedImage);
+                const imageParts = await processImageInput(resizedImage);
                 parts.push({
                     inlineData: {
                         mimeType: imageParts.mimeType,
@@ -1312,7 +1443,7 @@ Do NOT change any part of the image outside the masked area.`
     /**
      * Simple AI upscaling - takes the image and enhances it directly
      */
-    upscaleImage: async (imageDataUrl: string, enhancementPrompt: string = 'Enhance image quality, sharpen details, improve clarity'): Promise<string> => {
+    upscaleImage: async (imageDataUrl: string, enhancementPrompt: string = 'Enhance image quality, sharpen details, improve clarity', aspectRatio: AspectRatio['value'] = '1:1'): Promise<string> => {
         try {
             console.log('🔍 Starting AI upscaling...');
 
@@ -1321,25 +1452,69 @@ Do NOT change any part of the image outside the masked area.`
                 throw new Error('AI service not available');
             }
 
-            const { mimeType, data } = parseDataUrl(imageDataUrl);
+            const { mimeType, data } = await processImageInput(imageDataUrl);
+
+            // Determine target resolution based on prompt keywords and aspect ratio
+            const is4K = enhancementPrompt.includes('4K');
+            const baseSize = is4K ? 4096 : 2048;
+
+            let width = baseSize;
+            let height = baseSize;
+
+            // Adjust dimensions based on aspect ratio
+            switch (aspectRatio) {
+                case '9:16':
+                    width = Math.round(baseSize * (9 / 16));
+                    height = baseSize;
+                    break;
+                case '16:9':
+                    width = baseSize;
+                    height = Math.round(baseSize * (9 / 16));
+                    break;
+                case '3:4':
+                    width = Math.round(baseSize * (3 / 4));
+                    height = baseSize;
+                    break;
+                case '4:3':
+                    width = baseSize;
+                    height = Math.round(baseSize * (3 / 4));
+                    break;
+                case '1:1':
+                default:
+                    width = baseSize;
+                    height = baseSize;
+                    break;
+            }
+
+            const resolutionInstruction = `resolution: ${width}x${height}`;
 
             const enhancementParts = [
                 {
                     inlineData: { mimeType, data }
                 },
                 {
-                    text: `Upscale and enhance this image. ${enhancementPrompt}. Improve resolution, sharpness, and detail quality. Maintain the exact composition, colors, and appearance. Return the enhanced high-quality version.`
+                    text: `Upscale and enhance this image. ${enhancementPrompt}. Output ${resolutionInstruction}. Improve resolution, sharpness, and detail quality. Maintain the exact composition, colors, and appearance. Return the enhanced high-quality version.`
                 }
             ];
 
-            console.log('🎨 Enhancing image with AI...');
+            console.log(`🎨 Enhancing image with AI using model: gemini-3-pro-image-preview. Target: ${resolutionInstruction}`);
 
             const result = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
+                model: 'gemini-3-pro-image-preview',
                 contents: { parts: enhancementParts },
                 config: {
-                    temperature: 0.1,
-                    safetySettings: []
+                    // temperature: 0.1,
+                    safetySettings: [],
+                    // @ts-ignore - imageConfig types might be missing in some SDK versions
+                    imageConfig: {
+                        imageSize: enhancementPrompt.includes('4K') ? '4K' : '2K',
+                    } as any,
+                    // @ts-ignore - generationConfig types might be missing in some SDK versions
+                    generationConfig: {
+                        sampleCount: 1,
+                        // REMOVED: aspectRatio in config causes Gemini Flash/Pro to default to square
+                        // We rely on the input image dimensions (template + content) to define aspect ratio
+                    }
                 }
             });
 
@@ -1350,7 +1525,11 @@ Do NOT change any part of the image outside the masked area.`
                 for (const part of result.candidates[0].content.parts) {
                     if (part.inlineData?.mimeType?.startsWith('image/')) {
                         enhancedDataUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                        console.log('✅ Image enhanced successfully');
+
+                        // Log approximate size
+                        const sizeInBytes = Math.ceil((enhancedDataUrl.length - 22) * 3 / 4);
+                        console.log(`✅ Image enhanced successfully. Size: ${(sizeInBytes / 1024).toFixed(2)} KB`);
+
                         break;
                     }
                 }
@@ -1373,8 +1552,9 @@ Do NOT change any part of the image outside the masked area.`
              * Uses style transfer: applies style from style image to user's image
              * @param quality - Image quality tier: 'regular', 'hd' (2K), or 'qhd' (4K)
              * @param style - Visual style ID to apply (default: 'realistic')
+             * @param aspectRatio - Target aspect ratio for the output image
              */
-    generateStyledImage: async (prompt: string, referenceImages: string[], quality: 'regular' | 'hd' | 'qhd' = 'regular', style: string = 'realistic'): Promise<string> => {
+    generateStyledImage: async (prompt: string, referenceImages: string[], quality: 'regular' | 'hd' | 'qhd' = 'regular', style: string = 'realistic', aspectRatio: AspectRatio['value'] = '3:4'): Promise<string> => {
         const ai = await getAI();
         if (!ai) {
             throw new Error('AI service not available');
@@ -1386,6 +1566,59 @@ Do NOT change any part of the image outside the masked area.`
             // Import style image loader
             const { loadStyleImage } = await import('../utils/styleImageLoader');
 
+            // HELPER: Create blank template on the fly
+            // Scale dimensions based on quality: regular (1x), HD (2x), QHD (4x)
+            const createBlankTemplate = async (ratio: AspectRatio['value'], quality: 'regular' | 'hd' | 'qhd'): Promise<string> => {
+                // Base dimensions for regular quality
+                const baseDimensions: Record<string, { width: number; height: number }> = {
+                    '1:1': { width: 1024, height: 1024 },
+                    '3:4': { width: 1024, height: 1365 },
+                    '4:3': { width: 1024, height: 768 },
+                    '9:16': { width: 720, height: 1280 },
+                    '16:9': { width: 1280, height: 720 },
+                };
+                
+                // Scale factor based on quality
+                let scaleFactor = 1;
+                if (quality === 'hd') {
+                    scaleFactor = 2; // 2K resolution (approximately 2x)
+                } else if (quality === 'qhd') {
+                    scaleFactor = 4; // 4K resolution (approximately 4x)
+                }
+                
+                const base = baseDimensions[ratio] || baseDimensions['1:1'];
+                const width = Math.round(base.width * scaleFactor);
+                const height = Math.round(base.height * scaleFactor);
+
+                console.log(`📐 [GEMINI SERVICE] Creating template: ${ratio}, Quality: ${quality}, Dimensions: ${width}x${height} (scale: ${scaleFactor}x)`);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, width, height);
+                    return canvas.toDataURL('image/png');
+                }
+                throw new Error('Could not create canvas context');
+            };
+
+            // LOAD TEMPLATE IMAGE FOR ASPECT RATIO
+            try {
+                console.log(`📏 [GEMINI SERVICE] Generating blank template for aspect ratio: ${aspectRatio}, quality: ${quality}`);
+                const templateB64 = await createBlankTemplate(aspectRatio, quality);
+                const { mimeType, data } = await processImageInput(templateB64);
+
+                // Add template as the VERY FIRST image
+                parts.push({
+                    inlineData: { mimeType, data }
+                });
+                console.log(`✅ [GEMINI SERVICE] Added generated blank template as first image`);
+            } catch (error) {
+                console.warn(`⚠️ Error generating aspect ratio template:`, error);
+            }
+
             // Load style image for style transfer (skip for 'auto' and 'realistic')
             // 'auto' means use reference images as style guide (no style transfer)
             // 'realistic' is just a placeholder for photo-realistic enhancement
@@ -1394,12 +1627,16 @@ Do NOT change any part of the image outside the masked area.`
                 try {
                     styleImageDataUrl = await loadStyleImage(style);
                     if (styleImageDataUrl) {
-                        // Add style image FIRST as reference for style transfer
-                        const { mimeType, data } = parseDataUrl(styleImageDataUrl);
+                        // Add style image
+                        // CRITICAL: Resize style image to match target aspect ratio too!
+                        // If style image is square but target is 9:16, it confuses the model.
+                        console.log(`🎨 [GEMINI SERVICE] Resizing style image (${style}) to aspect ratio: ${aspectRatio}`);
+                        const resizedStyleImage = await resizeImageToAspectRatio(styleImageDataUrl, aspectRatio);
+                        const { mimeType, data } = await processImageInput(resizedStyleImage);
                         parts.push({
                             inlineData: { mimeType, data }
                         });
-                        console.log(`🎨 Loaded style image for: ${style}`);
+                        console.log(`🎨 Loaded and resized style image for: ${style}`);
                     }
                 } catch (error) {
                     console.warn(`⚠️ Could not load style image for ${style}:`, error);
@@ -1408,8 +1645,13 @@ Do NOT change any part of the image outside the masked area.`
 
             // For image editing, send user's image(s) AFTER style image
             // This allows Gemini to see the style reference first, then the content image
+            // Apply aspect ratio preprocessing to ensure output matches desired dimensions
+            console.log('🎯 [GEMINI SERVICE] generateStyledImage called with aspect ratio:', aspectRatio);
             for (const imageDataUrl of referenceImages) {
-                const { mimeType, data } = parseDataUrl(imageDataUrl);
+                // Resize image to match target aspect ratio
+                console.log('📐 [GEMINI SERVICE] Resizing image to aspect ratio:', aspectRatio);
+                const resizedImage = await resizeImageToAspectRatio(imageDataUrl, aspectRatio);
+                const { mimeType, data } = await processImageInput(resizedImage);
                 parts.push({
                     inlineData: { mimeType, data }
                 });
@@ -1424,16 +1666,18 @@ Do NOT change any part of the image outside the masked area.`
             if (!prompt || prompt.trim() === '') {
                 if (style !== 'realistic' && style !== 'auto') {
                     // Pure style transfer: Combine explicit text description with visual reference
-                    finalPrompt = `Transform the content image (second image) to match this specific artistic style: "${styleDescription}".
+                    finalPrompt = `Transform the content image to match this specific artistic style: "${styleDescription}".
 
 Instructions:
-1. Analyze the visual style shown in the first image (style reference).
-2. Apply this exact style to the content of the second image.
-3. CRITICAL: Keep the subject, pose, composition, and facial features of the second image EXACTLY the same.
-4. Change ONLY the artistic rendering, colors, lighting, and texture to match the style description and reference image.`;
+1. The FIRST image is a layout template. Use its aspect ratio but IGNORE its visual content.
+2. Analyze the visual style shown in the SECOND image (style reference).
+3. Apply this exact style to the content of the THIRD image (content image).
+4. CRITICAL: Keep the subject, pose, composition, and facial features of the content image EXACTLY the same.
+5. CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image (template).
+6. Change ONLY the artistic rendering, colors, lighting, and texture to match the style description and reference image.`;
                 } else if (referenceImages.length > 0) {
                     // No style, no prompt - just enhance
-                    finalPrompt = `Enhance image quality while preserving all content.`;
+                    finalPrompt = `Enhance image quality while preserving all content and maintaining the exact aspect ratio of the first input image (template).`;
                 }
             } else {
                 // Text prompt provided
@@ -1443,25 +1687,37 @@ Instructions:
 
 Style Instructions:
 Render the result in this specific style: "${styleDescription}".
-Use the first reference image as a visual guide for this style.`;
+The FIRST image is a layout template. Use its aspect ratio but IGNORE its visual content.
+Use the SECOND image as a visual guide for this style.
+CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image.`;
                 } else {
                     // Just use the prompt
                     finalPrompt = prompt;
 
                     if (style === 'realistic') {
-                        finalPrompt += `\n\nPhotorealistic rendering.`;
+                        finalPrompt += `\n\nPhotorealistic rendering. Maintain the exact aspect ratio of the first image (template).`;
                     } else if (style === 'auto' && referenceImages.length > 0) {
-                        finalPrompt += `\n\nMatch reference style.`;
+                        finalPrompt += `\n\nMatch reference style. Maintain the exact aspect ratio of the first image (template).`;
                     }
                 }
             }
 
             // Add resolution hints based on quality
             if (quality === 'hd') {
-                finalPrompt += '\n\n2K resolution.';
+                finalPrompt += `\n\n**RESOLUTION REQUIREMENT: Generate at 2K (2048px) resolution. The output MUST match the exact dimensions of the first template image.`;
             } else if (quality === 'qhd') {
-                finalPrompt += '\n\n4K resolution.';
+                finalPrompt += `\n\n**RESOLUTION REQUIREMENT: Generate at 4K (4096px) resolution. The output MUST match the exact dimensions of the first template image.`;
             }
+
+            // Add aspect ratio instruction
+            finalPrompt += `\n\n**CRITICAL TECHNICAL REQUIREMENTS:**
+- Output Aspect Ratio: ${aspectRatio} (MUST match the FIRST template image exactly)
+- CRITICAL: The output image MUST have the EXACT same pixel dimensions and aspect ratio as the FIRST reference image (template).
+- DO NOT crop, resize, or modify the aspect ratio of the output.
+- DO NOT make the output square if the template is not square.
+- Fill the ENTIRE canvas from edge to edge - no white padding, no black bars, no empty space.
+- The output must fill 100% of the template dimensions - every pixel should contain image content.
+- Maintain the full content and composition - do not crop any parts of the image.`;
 
             // Add text prompt AFTER images so Gemini sees style reference and content images first
             parts.push({ text: finalPrompt });
@@ -1476,6 +1732,12 @@ Use the first reference image as a visual guide for this style.`;
                 contents: { parts },
                 config: {
                     responseModalities: [Modality.IMAGE],
+                    // @ts-ignore - imageConfig types might be missing in some SDK versions
+                    ...(quality !== 'regular' && {
+                        imageConfig: {
+                            imageSize: quality === 'qhd' ? '4K' : '2K',
+                        } as any
+                    }),
                 },
             });
 
@@ -1485,8 +1747,24 @@ Use the first reference image as a visual guide for this style.`;
                     if (part.inlineData) {
                         const base64ImageBytes: string = part.inlineData.data;
                         const mimeType = part.inlineData.mimeType;
-                        const imageB64 = `data:${mimeType};base64,${base64ImageBytes}`;
+                        let imageB64 = `data:${mimeType};base64,${base64ImageBytes}`;
                         console.log(`✅ ${quality.toUpperCase()} quality image generated successfully`);
+
+                        // Perform upscale pass if HD or QHD
+                        if (quality === 'hd' || quality === 'qhd') {
+                            console.log(`✨ Performing upscale pass for ${quality}...`);
+                            try {
+                                const upscalePrompt = quality === 'qhd'
+                                    ? 'Upscale to 4K resolution. Maximize sharpness, detail, and clarity.'
+                                    : 'Upscale to 2K resolution. Enhance details and sharpness.';
+
+                                // Use the same service instance to call upscaleImage, preserving aspect ratio
+                                imageB64 = await geminiService.upscaleImage(imageB64, upscalePrompt, aspectRatio);
+                            } catch (e) {
+                                console.warn('Upscale failed, returning original generation:', e);
+                            }
+                        }
+
                         return imageB64;
                     }
                 }
@@ -1513,7 +1791,7 @@ Use the first reference image as a visual guide for this style.`;
         }
 
         try {
-            const { mimeType, data } = parseDataUrl(imageB64);
+            const { mimeType, data } = await processImageInput(imageB64);
             const imagePart = { inlineData: { mimeType, data } };
             const textPart = {
                 text: `Analyze this image and suggest 2 creative photoshoot concepts. For each concept, provide:

@@ -38,7 +38,7 @@ const GroundingSources: React.FC<{ sources: { web: { uri: string; title: string;
 };
 
 
-export const StudioView: React.FC = () => {
+export const StudioView: React.FC<{ onExit?: () => void }> = ({ onExit }) => {
     const {
         generatedImages,
         isGenerating,
@@ -77,7 +77,7 @@ export const StudioView: React.FC = () => {
     // If in reimagine mode, show the Photoshoot component
     if (studioMode === 'reimagine') {
         return (
-            <div className="relative w-full h-full overflow-y-auto">
+            <div className="relative w-full h-full overflow-y-auto flex flex-col items-center">
                 <Photoshoot
                     onBack={() => setStudioMode('apparel')}
                 />
@@ -88,9 +88,15 @@ export const StudioView: React.FC = () => {
     // If in Chason mode (Design AGI), show the ChasonWorkflow component
     if (studioMode === 'chason') {
         return (
-            <div className="relative w-full h-full overflow-hidden">
+            <div className="relative w-full h-full overflow-hidden flex justify-center">
                 <ChasonWorkflow
-                    onBack={() => setStudioMode('apparel')}
+                    onBack={() => {
+                        if (onExit) {
+                            onExit();
+                        } else {
+                            setStudioMode('apparel');
+                        }
+                    }}
                 />
             </div>
         );

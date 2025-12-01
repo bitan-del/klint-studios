@@ -1,6 +1,7 @@
 import React from 'react';
 import { ModelInfo } from './ModelInfo';
 import { DownloadIcon, CopyIcon, DeleteIcon, EditIcon } from './icons';
+import { Video } from 'lucide-react';
 
 import { UserImage } from '../../services/storageService';
 
@@ -11,6 +12,7 @@ interface ImageGridProps {
   imageCount: number;
   onDeleteImage: (index: number) => void;
   onEditImage: (src: string) => void;
+  onVideoGenerate?: (src: string) => void;
 }
 
 const SkeletonLoader: React.FC = () => (
@@ -31,7 +33,7 @@ const EmptyState: React.FC = () => (
   </div>
 );
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading, error, imageCount, onDeleteImage, onEditImage }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading, error, imageCount, onDeleteImage, onEditImage, onVideoGenerate }) => {
   const handleDownload = (src: string, index: number) => {
     const a = document.createElement('a');
     a.href = src;
@@ -107,6 +109,16 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading, error, 
               </div>
               <div className="absolute top-3 right-3 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <button onClick={(e) => { e.stopPropagation(); onEditImage(image.cloudinary_url); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Edit image"><EditIcon /></button>
+                {onVideoGenerate && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onVideoGenerate(image.cloudinary_url); }}
+                    className="p-1.5 bg-emerald-900/60 hover:bg-emerald-900/80 backdrop-blur-md border border-emerald-500/30 text-emerald-100 hover:text-white rounded-md transition-all shadow-lg shadow-emerald-900/20"
+                    aria-label="Generate video"
+                    title="Generate Video"
+                  >
+                    <Video size={16} />
+                  </button>
+                )}
                 <button onClick={(e) => { e.stopPropagation(); handleDownload(image.cloudinary_url, index); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Download image"><DownloadIcon /></button>
                 <button onClick={(e) => { e.stopPropagation(); handleCopy(image.cloudinary_url); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Copy image"><CopyIcon /></button>
                 <button onClick={(e) => { e.stopPropagation(); onDeleteImage(index); }} className="p-1.5 bg-black/50 rounded-md hover:bg-black/80" aria-label="Delete image"><DeleteIcon /></button>

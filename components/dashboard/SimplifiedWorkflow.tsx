@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Upload, Wand2, Download, Image as ImageIcon, Sparkles, X, Check, Zap, Loader2, ChevronDown, FolderOpen, XCircle, Bot, Send, Download as DownloadIcon } from 'lucide-react';
+import { ArrowLeft, Upload, Wand2, Download, Image as ImageIcon, Sparkles, X, Check, Zap, Loader2, ChevronDown, FolderOpen, XCircle, Bot, Send, Download as DownloadIcon, Video, Menu } from 'lucide-react';
 import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../context/AuthContext';
 import { useClipboardPaste } from '../../hooks/useClipboardPaste';
@@ -11,6 +11,9 @@ import { QualitySelector } from '../shared/QualitySelector';
 import { SimpleModeSidebar } from './SimpleModeSidebar';
 import { StyleLibraryModal } from './StyleLibraryModal';
 import type { ImageQuality, QualityUsage } from '../../types/quality';
+import { VideoGenerationModal } from '../shared/VideoGenerationModal';
+import type { VideoGenerationConfig } from '../../types/video';
+import { videoService } from '../../services/videoService';
 
 interface SimplifiedWorkflowProps {
     workflowId: string;
@@ -23,7 +26,7 @@ type AspectRatioType = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
 const ASPECT_RATIOS: { value: AspectRatioType; label: string; css: string }[] = [
     { value: '1:1', label: 'Square (1:1)', css: 'aspect-square' },
     { value: '3:4', label: 'Portrait (3:4)', css: 'aspect-[3/4]' },
-    { value: '4:3', label: 'Landscape (4:3)', css: 'aspect-[4/3]' },
+    // { value: '4:3', label: 'Landscape (4:3)', css: 'aspect-[4/3]' }, // Removed as requested
     { value: '9:16', label: 'Stories (9:16)', css: 'aspect-[9/16]' },
     { value: '16:9', label: 'Wide (16:9)', css: 'aspect-[16/9]' },
 ];
@@ -60,6 +63,9 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
     const multipleImagesInputRef = useRef<HTMLInputElement>(null);
+    const [showVideoModal, setShowVideoModal] = useState(false);
+    const [selectedImageForVideo, setSelectedImageForVideo] = useState<string | null>(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     // Check for gallery image from localStorage on mount
     useEffect(() => {
@@ -261,7 +267,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
         console.log('📸 [REFERENCE] Image select triggered, files:', files?.length || 0);
 
         if (files && files.length > 0) {
-            const fileArray = Array.from(files);
+            const fileArray = Array.from(files) as File[];
             const loadPromises = fileArray.map((file) => {
                 return new Promise<string>((resolve, reject) => {
                     const reader = new FileReader();
@@ -324,7 +330,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
         const files = e.target.files;
         if (files) {
             const newImages: string[] = [];
-            Array.from(files).forEach(file => {
+            (Array.from(files) as File[]).forEach(file => {
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     const dataUrl = reader.result as string;
@@ -422,7 +428,8 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                         // 3. An uploaded image exists
                         if (uploadedImages.length > 0 || selectedStyle !== 'realistic' || uploadedImage) {
                             const allImages = [uploadedImage, ...uploadedImages].filter(Boolean) as string[];
-                            const imageB64 = await geminiService.generateStyledImage(prompt || '', allImages, selectedQuality, selectedStyle);
+                            console.log('🎨 [SIMPLIFIED] Generating with aspect ratio:', aspectRatio);
+                            const imageB64 = await geminiService.generateStyledImage(prompt || '', allImages, selectedQuality, selectedStyle, aspectRatio);
                             return imageB64;
                         } else {
                             // Otherwise use standard generation (text-to-image only)
@@ -529,12 +536,20 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 multipleImagesInputRef={multipleImagesInputRef}
                 selectedStyle={selectedStyle}
                 onStyleClick={() => setShowStyleModal(true)}
+                isOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
             />
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-zinc-950">
                 {/* Top Navigation Bar */}
-                <div className="h-24 border-b border-zinc-800 flex items-center justify-end px-6 bg-zinc-950/80 backdrop-blur-xl z-10 flex-shrink-0">
+                <div className="h-24 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-950/80 backdrop-blur-xl z-10 flex-shrink-0">
+                    <button
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="lg:hidden p-2 -ml-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                    >
+                        <Menu className="w-6 h-6" />
+                    </button>
                     <div className="flex items-center gap-4">
                         {/* User Credits / Profile could go here */}
                     </div>
@@ -598,6 +613,16 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                                                     title="Upscale"
                                                 >
                                                     <Zap className="w-3 h-3" />
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedImageForVideo(img);
+                                                        setShowVideoModal(true);
+                                                    }}
+                                                    className="p-2 bg-emerald-900/60 hover:bg-emerald-900/80 backdrop-blur-md border border-emerald-500/30 text-emerald-100 hover:text-white rounded-lg shadow-lg shadow-emerald-900/20 transition-all"
+                                                    title="Generate Video"
+                                                >
+                                                    <Video className="w-3 h-3" />
                                                 </button>
                                             </div>
                                         </div>
@@ -689,6 +714,35 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 }}
                 currentStyleId={selectedStyle}
             />
+            {showVideoModal && selectedImageForVideo && (
+                <VideoGenerationModal
+                    isOpen={showVideoModal}
+                    onClose={() => {
+                        setShowVideoModal(false);
+                        setSelectedImageForVideo(null);
+                    }}
+                    sourceImage={selectedImageForVideo}
+                    onGenerate={async (config: VideoGenerationConfig) => {
+                        if (!user) return;
+                        try {
+                            console.log('Generating video with config:', config);
+                            const videoUrl = await videoService.generateVideo(user.id, config, user.plan);
+                            // Refresh usage
+                            const newUsage = await storageService.getVideoUsage(user.id);
+                            // You might want to update some local state here if needed
+
+                            // Show success (VideoGenerationModal handles the alert, but we can do more here if needed)
+                        } catch (error) {
+                            console.error('Video generation failed:', error);
+                            throw error; // Re-throw so modal can handle it
+                        } finally {
+                            setShowVideoModal(false);
+                            setSelectedImageForVideo(null);
+                        }
+                    }}
+                    userTier={user?.plan || 'free'}
+                />
+            )}
         </div>
     );
 };

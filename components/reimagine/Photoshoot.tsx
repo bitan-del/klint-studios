@@ -15,6 +15,9 @@ import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storageService';
 import { QualitySelector } from '../shared/QualitySelector';
 import type { ImageQuality, QualityUsage } from '../../types/quality';
+import { VideoGenerationModal } from '../shared/VideoGenerationModal';
+import type { VideoGenerationConfig } from '../../types/video';
+import { videoService } from '../../services/videoService';
 
 const PHOTO_STYLE_CATEGORIES = {
     'Portraits & Close-ups': [
@@ -277,7 +280,11 @@ export default function Photoshoot({ onBack }: { onBack: () => void }) {
     const [aspectRatio, setAspectRatio] = useState<string>('1:1');
     const [generatedImages, setGeneratedImages] = useState<Record<string, GeneratedImage>>({});
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [isDownloading, setIsDownloading] = useState<boolean>(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [showVideoModal, setShowVideoModal] = useState(false);
+    const [selectedImageForVideo, setSelectedImageForVideo] = useState<string | null>(null);
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [appState, setAppState] = useState<'config' | 'generating' | 'results-shown'>('config');
     const [openAccordion, setOpenAccordion] = useState<string | null>('step2');
     const [refinePrompt, setRefinePrompt] = useState('');
@@ -594,7 +601,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
             try {
                 console.log(`🔄 [PHOTOSHOOT] Processing style: ${style.id}`);
                 const { finalPrompt, imageUrls } = await constructApiPayload(style.prompt);
-                const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls, selectedQuality);
+                const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls, selectedQuality, 'realistic', aspectRatio);
 
                 // Track usage for HD/QHD
                 if (user && (selectedQuality === 'hd' || selectedQuality === 'qhd')) {
@@ -791,7 +798,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
         }));
         try {
             const { finalPrompt, imageUrls } = await constructApiPayload(style.prompt, refinePrompt);
-            const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls, selectedQuality);
+            const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls, selectedQuality, 'realistic', aspectRatio);
 
             // Track usage for HD/QHD
             if (user && (selectedQuality === 'hd' || selectedQuality === 'qhd')) {
@@ -1349,6 +1356,12 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                                                 error={generatedImages[style.id]?.error}
                                                 onRetry={() => handleRegeneratePhoto(style.id)}
                                                 onDownload={() => handleDownloadIndividualImage(style.id)}
+                                                onVideoGenerate={() => {
+                                                    if (generatedImages[style.id]?.url) {
+                                                        setSelectedImageForVideo(generatedImages[style.id].url);
+                                                        setShowVideoModal(true);
+                                                    }
+                                                }}
                                             />
                                         </motion.div>
                                     ))}
@@ -1387,6 +1400,36 @@ Your single most important, critical, and unbreakable task is to perfectly prese
                     </>
                 )}
             </div>
+
+            {showVideoModal && selectedImageForVideo && (
+                <VideoGenerationModal
+                    isOpen={showVideoModal}
+                    onClose={() => {
+                        setShowVideoModal(false);
+                        setSelectedImageForVideo(null);
+                    }}
+                    sourceImage={selectedImageForVideo}
+                    onGenerate={async (config: VideoGenerationConfig) => {
+                        if (!user) return;
+                        try {
+                            console.log('Generating video with config:', config);
+                            const videoUrl = await videoService.generateVideo(user.id, config, user.plan);
+                            // Refresh usage
+                            const newUsage = await storageService.getVideoUsage(user.id);
+                            // You might want to update some local state here if needed
+
+                            // Show success (VideoGenerationModal handles the alert, but we can do more here if needed)
+                        } catch (error) {
+                            console.error('Video generation failed:', error);
+                            throw error; // Re-throw so modal can handle it
+                        } finally {
+                            setShowVideoModal(false);
+                            setSelectedImageForVideo(null);
+                        }
+                    }}
+                    userTier={user?.plan || 'free'}
+                />
+            )}
         </main>
     );
 }

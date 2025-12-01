@@ -45,3 +45,4 @@ lerna-debug.log*
 # Temporary files
 *.log
 .cache/
+vertex-ai-key.json

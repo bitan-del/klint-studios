@@ -6,9 +6,45 @@ interface ChatBubbleProps {
     message: string;
     isUser?: boolean;
     delay?: number;
+    onAction?: (action: string) => void;
 }
 
-export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isUser = false, delay = 0 }) => {
+export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isUser = false, delay = 0, onAction }) => {
+    // Helper to parse links like [Label](action:mode)
+    const renderMessage = (text: string) => {
+        const parts = text.split(/(\[.*?\]\(.*?\))/g);
+        return parts.map((part, index) => {
+            const match = part.match(/^\[(.*?)\]\((.*?)\)$/);
+            if (match) {
+                const [_, label, url] = match;
+                if (url.startsWith('action:')) {
+                    const action = url.replace('action:', '');
+                    return (
+                        <button
+                            key={index}
+                            onClick={() => onAction?.(action)}
+                            className="text-emerald-400 hover:text-emerald-300 underline font-medium transition-colors mx-1"
+                        >
+                            {label}
+                        </button>
+                    );
+                }
+                return (
+                    <a
+                        key={index}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-400 hover:text-emerald-300 underline transition-colors mx-1"
+                    >
+                        {label}
+                    </a>
+                );
+            }
+            return <span key={index}>{part}</span>;
+        });
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -25,11 +61,11 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isUser = false,
 
                 <div
                     className={`p-4 rounded-2xl text-base leading-relaxed shadow-sm ${isUser
-                            ? 'bg-zinc-800 text-white rounded-br-none border border-zinc-700'
-                            : 'bg-white/5 text-zinc-100 rounded-bl-none border border-white/10 backdrop-blur-sm'
+                        ? 'bg-zinc-800 text-white rounded-br-none border border-zinc-700'
+                        : 'bg-white/5 text-zinc-100 rounded-bl-none border border-white/10 backdrop-blur-sm'
                         }`}
                 >
-                    {message}
+                    {renderMessage(message)}
                 </div>
             </div>
         </motion.div>

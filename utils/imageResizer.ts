@@ -47,7 +47,8 @@ export const resizeImage = (base64Str: string, scale: number): Promise<string> =
 };
 
 /**
- * Resizes an image to match a specific aspect ratio
+ * Resizes an image to match a specific aspect ratio by PADDING (no cropping)
+ * Preserves the entire image content by adding white padding
  */
 export const resizeImageToAspectRatio = async (
   imageDataUrl: string, 
@@ -70,17 +71,20 @@ export const resizeImageToAspectRatio = async (
     img.onload = () => {
       const sourceRatio = img.width / img.height;
       
-      let sourceX = 0, sourceY = 0, sourceWidth = img.width, sourceHeight = img.height;
-      
-      // Crop to match target aspect ratio (center crop)
+      // Calculate dimensions to fit image inside target canvas (preserve full image)
+      let drawWidth = targetWidth;
+      let drawHeight = targetHeight;
+      let offsetX = 0;
+      let offsetY = 0;
+
       if (sourceRatio > targetRatio) {
-        // Source is wider - crop width
-        sourceWidth = img.height * targetRatio;
-        sourceX = (img.width - sourceWidth) / 2;
+        // Source is wider - fit to width, add padding top/bottom
+        drawHeight = targetWidth / sourceRatio;
+        offsetY = (targetHeight - drawHeight) / 2;
       } else if (sourceRatio < targetRatio) {
-        // Source is taller - crop height
-        sourceHeight = img.width / targetRatio;
-        sourceY = (img.height - sourceHeight) / 2;
+        // Source is taller - fit to height, add padding left/right
+        drawWidth = targetHeight * sourceRatio;
+        offsetX = (targetWidth - drawWidth) / 2;
       }
 
       // Create canvas with target dimensions
@@ -90,11 +94,14 @@ export const resizeImageToAspectRatio = async (
 
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Draw cropped and resized image
+        // Fill with white background (padding)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+        // Draw image centered with padding (preserves full image, no cropping)
         ctx.drawImage(
           img,
-          sourceX, sourceY, sourceWidth, sourceHeight, // Source rectangle
-          0, 0, targetWidth, targetHeight              // Destination rectangle
+          offsetX, offsetY, drawWidth, drawHeight
         );
         resolve(canvas.toDataURL('image/png'));
       } else {

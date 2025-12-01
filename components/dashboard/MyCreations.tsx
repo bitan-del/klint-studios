@@ -10,11 +10,14 @@ import {
   HardDrive,
   Calendar,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Video
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { storageService, type UserImage } from '../../services/storageService';
 import { getPlanDisplayName } from '../../services/permissionsService';
+import { VideoGenerationModal } from '../shared/VideoGenerationModal';
+import type { VideoGenerationConfig } from '../../types/video';
 
 interface MyCreationsProps {
   onBack?: () => void;
@@ -48,6 +51,8 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showCanvaInstructions, setShowCanvaInstructions] = useState(false);
   const [canvaImageUrl, setCanvaImageUrl] = useState<string>('');
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [selectedImageForVideo, setSelectedImageForVideo] = useState<string>('');
 
   useEffect(() => {
     if (user) {
@@ -179,7 +184,7 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
     const workflows = Array.from(new Set(images.map(img => img.workflow_id).filter(Boolean)));
     return workflows.map(wf => ({
       value: wf as FilterType,
-      label: WORKFLOW_NAMES[wf || ''] || wf,
+      label: WORKFLOW_NAMES[String(wf) || ''] || String(wf),
     }));
   };
 
@@ -312,70 +317,89 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
                     loading="lazy"
                   />
                   {/* Overlay on hover */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-4">
-                    {/* Canva Button */}
-                    <button
-                      onClick={async () => {
-                        try {
-                          // Copy image URL to clipboard
-                          await navigator.clipboard.writeText(image.cloudinary_url);
-
-                          // Try to use Canva API to import image
-                          const { importImageToCanva, isCanvaAuthenticated } = await import('../../services/canvaService');
-
-                          if (isCanvaAuthenticated()) {
-                            const result = await importImageToCanva(image.cloudinary_url);
-                            if (result.method === 'api' && result.designId) {
-                              // API method: Open the design directly in editor
-                              window.open(result.editUrl, '_blank');
-                              return;
-                            }
-                          }
-
-                          // Fallback: Open Canva and show instructions modal
-                          setCanvaImageUrl(image.cloudinary_url);
-                          window.open('https://www.canva.com/create', '_blank');
-                          setShowCanvaInstructions(true);
-                        } catch (err) {
-                          console.error('Error opening Canva:', err);
-                          // Final fallback
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 px-4">
+                    {/* Top Row: Edit and Video */}
+                    <div className="flex gap-2 w-full">
+                      {/* Canva Button */}
+                      <button
+                        onClick={async () => {
                           try {
+                            // Copy image URL to clipboard
                             await navigator.clipboard.writeText(image.cloudinary_url);
+
+                            // Try to use Canva API to import image
+                            const { importImageToCanva, isCanvaAuthenticated } = await import('../../services/canvaService');
+
+                            if (isCanvaAuthenticated()) {
+                              const result = await importImageToCanva(image.cloudinary_url);
+                              if (result.method === 'api' && result.designId) {
+                                // API method: Open the design directly in editor
+                                window.open(result.editUrl, '_blank');
+                                return;
+                              }
+                            }
+
+                            // Fallback: Open Canva and show instructions modal
                             setCanvaImageUrl(image.cloudinary_url);
                             window.open('https://www.canva.com/create', '_blank');
                             setShowCanvaInstructions(true);
-                          } catch (e) {
-                            console.error('Failed to copy URL:', e);
-                            alert('Failed to copy URL. Please manually copy the image URL and upload it to Canva.');
+                          } catch (err) {
+                            console.error('Error opening Canva:', err);
+                            // Final fallback
+                            try {
+                              await navigator.clipboard.writeText(image.cloudinary_url);
+                              setCanvaImageUrl(image.cloudinary_url);
+                              window.open('https://www.canva.com/create', '_blank');
+                              setShowCanvaInstructions(true);
+                            } catch (e) {
+                              console.error('Failed to copy URL:', e);
+                              alert('Failed to copy URL. Please manually copy the image URL and upload it to Canva.');
+                            }
                           }
-                        }
-                      }}
-                      className="flex-1 px-2 py-0.5 bg-gray-900/80 hover:bg-gray-800/90 border border-gray-600/50 rounded-lg transition-all flex items-center justify-center backdrop-blur-sm shadow-lg h-[34px]"
-                      title="Edit image in Canva"
-                    >
-                      {/* Canva Logo */}
-                      <img
-                        src="/icons/canva-logo.png"
-                        alt="Canva"
-                        className="w-9 h-9 rounded-full flex-shrink-0 object-contain brightness-0 invert"
-                        style={{ filter: 'brightness(0) invert(1)' }}
-                      />
-                    </button>
+                        }}
+                        className="flex-1 px-2 py-0.5 bg-gray-900/80 hover:bg-gray-800/90 border border-gray-600/50 rounded-lg transition-all flex items-center justify-center backdrop-blur-sm shadow-lg h-[34px]"
+                        title="Edit image in Canva"
+                      >
+                        {/* Canva Logo */}
+                        <img
+                          src="/icons/canva-logo.png"
+                          alt="Canva"
+                          className="w-9 h-9 rounded-full flex-shrink-0 object-contain brightness-0 invert"
+                          style={{ filter: 'brightness(0) invert(1)' }}
+                        />
+                      </button>
 
-                    <button
-                      onClick={() => handleDownload(image.cloudinary_url, image.id)}
-                      className="flex-1 p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors flex items-center justify-center h-[34px]"
-                      title="Download"
-                    >
-                      <Download size={18} />
-                    </button>
-                    <button
-                      onClick={() => setShowDeleteConfirm(image.id)}
-                      className="flex-1 p-2 bg-red-600 hover:bg-red-500 rounded-lg transition-colors flex items-center justify-center h-[34px]"
-                      title="Delete"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                      {/* Video Button */}
+                      <button
+                        onClick={() => {
+                          setSelectedImageForVideo(image.cloudinary_url);
+                          setShowVideoModal(true);
+                        }}
+                        className="flex-1 p-2 bg-emerald-900/60 hover:bg-emerald-900/80 backdrop-blur-md border border-emerald-500/30 text-white rounded-lg transition-all flex items-center justify-center gap-1 h-[34px] shadow-lg shadow-emerald-900/20 group/video"
+                        title="Generate Video"
+                      >
+                        <Video size={18} className="text-emerald-100 group-hover/video:text-white transition-colors" />
+                        <span className="text-xs font-medium text-emerald-100 group-hover/video:text-white">Video</span>
+                      </button>
+                    </div>
+
+                    {/* Bottom Row: Download and Delete */}
+                    <div className="flex gap-2 w-full">
+                      <button
+                        onClick={() => handleDownload(image.cloudinary_url, image.id)}
+                        className="flex-1 p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors flex items-center justify-center h-[34px]"
+                        title="Download"
+                      >
+                        <Download size={18} />
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(image.id)}
+                        className="flex-1 p-2 bg-red-600 hover:bg-red-500 rounded-lg transition-colors flex items-center justify-center h-[34px]"
+                        title="Delete"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -507,6 +531,22 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
           </div>
         </div>
       )}
+
+      {/* Video Generation Modal */}
+      <VideoGenerationModal
+        isOpen={showVideoModal}
+        onClose={() => {
+          setShowVideoModal(false);
+          setSelectedImageForVideo('');
+        }}
+        sourceImage={selectedImageForVideo}
+        user={user}
+        onGenerate={async (config: VideoGenerationConfig) => {
+          console.log('Generating video with config:', config);
+          // TODO: Implement video generation service
+          alert('Video generation will be implemented soon!');
+        }}
+      />
     </div>
   );
 };

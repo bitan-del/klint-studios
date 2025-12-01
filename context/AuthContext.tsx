@@ -4,6 +4,7 @@ import type { User, UserPlan, UserRole, PaymentSettings, PlanPrices, Currency, P
 import { hasPermission as checkPermission, Feature, PLAN_DETAILS } from '../services/permissionsService';
 import { supabase } from '../services/supabaseClient';
 import { databaseService } from '../services/databaseService';
+import { storageService } from '../services/storageService';
 import type { Session } from '@supabase/supabase-js';
 
 interface AuthState {
@@ -44,6 +45,13 @@ const convertProfileToUser = (profile: any): User => {
     generationsUsed: profile.generations_used,
     dailyGenerationsUsed: profile.daily_generations_used,
     dailyVideosUsed: profile.daily_videos_used,
+    hdGenerationsUsed: profile.hd_generations_used || 0,
+    uhdGenerationsUsed: profile.uhd_generations_used || 0,
+    dailyHdUsed: profile.daily_hd_used || 0,
+    dailyUhdUsed: profile.daily_uhd_used || 0,
+    videosGeneratedMonthly: profile.videos_generated_monthly || 0,
+    videosGeneratedDaily: profile.videos_generated_daily || 0,
+    lastVideoGenerationDate: profile.last_video_generation_date || new Date().toISOString().split('T')[0],
     lastGenerationDate: profile.last_generation_date || new Date().toISOString().split('T')[0],
   };
 };
@@ -347,6 +355,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           generationsUsed: 0,
           dailyGenerationsUsed: 0,
           dailyVideosUsed: 0,
+          hdGenerationsUsed: 0,
+          uhdGenerationsUsed: 0,
+          dailyHdUsed: 0,
+          dailyUhdUsed: 0,
           lastGenerationDate: new Date().toISOString().split('T')[0],
         };
 
@@ -376,6 +388,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         generationsUsed: 0,
         dailyGenerationsUsed: 0,
         dailyVideosUsed: 0,
+        hdGenerationsUsed: 0,
+        uhdGenerationsUsed: 0,
+        dailyHdUsed: 0,
+        dailyUhdUsed: 0,
+        videosGeneratedMonthly: 0,
+        videosGeneratedDaily: 0,
+        lastVideoGenerationDate: new Date().toISOString().split('T')[0],
         lastGenerationDate: new Date().toISOString().split('T')[0],
       };
       console.log('⚠️ Using fallback user due to error:', fallbackUser);
@@ -690,6 +709,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Supabase settings are in environment variables, not changeable at runtime
   };
 
+  // Increment video generation usage
+  const incrementVideoGeneration = async (): Promise<{ success: boolean; limitHit?: boolean; message?: string }> => {
+    if (!user) return { success: false };
+
+    try {
+      // Check limits first
+      const { videoService } = await import('../services/videoService');
+      const check = await videoService.canGenerateVideo(user.id, user.plan);
+
+      if (!check.allowed) {
+        return { success: false, limitHit: true, message: check.reason };
+      }
+
+      // Increment usage
+      await storageService.incrementVideoUsage(user.id);
+
+      // Reload user profile to get updated counts
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        await loadUserProfile(authUser);
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('Error incrementing video usage:', error);
+      return { success: false, message: 'Failed to track usage' };
+    }
+  };
+
   // Reset user usage to 0 (admin only)
   const resetUserUsage = async (userId: string) => {
     if (user?.role !== 'admin') {
@@ -698,18 +745,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      const { error } = await supabase
+      // Reset user_profiles usage
+      const { error: profileError } = await supabase
         .from('user_profiles')
         .update({
           generations_used: 0,
           daily_generations_used: 0,
           daily_videos_used: 0,
+          videos_generated_monthly: 0,
+          videos_generated_daily: 0,
         })
         .eq('id', userId);
 
-      if (error) {
-        console.error('Error resetting user usage:', error);
+      if (profileError) {
+        console.error('Error resetting user profile usage:', profileError);
         return;
+      }
+
+      // Reset quality usage in user_quality_usage table
+      const monthYear = new Date().toISOString().slice(0, 7);
+      const { error: qualityError } = await supabase
+        .from('user_quality_usage')
+        .update({
+          hd_count: 0,
+          qhd_count: 0,
+        })
+        .eq('user_id', userId)
+        .eq('month_year', monthYear);
+
+      if (qualityError) {
+        console.error('Error resetting quality usage:', qualityError);
+        // Don't return - continue to update local state even if quality reset fails
       }
 
       console.log('✅ User usage reset to 0');
@@ -718,7 +784,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUsers(currentUsers =>
         currentUsers.map(u =>
           u.id === userId
-            ? { ...u, generationsUsed: 0, dailyGenerationsUsed: 0, dailyVideosUsed: 0 }
+            ? {
+              ...u,
+              generationsUsed: 0,
+              dailyGenerationsUsed: 0,
+              dailyVideosUsed: 0,
+              hdGenerationsUsed: 0,
+              uhdGenerationsUsed: 0,
+              dailyHdUsed: 0,
+              dailyUhdUsed: 0,
+              videosGeneratedMonthly: 0,
+              videosGeneratedDaily: 0
+            }
             : u
         )
       );
@@ -778,6 +855,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     doubleUserCredits,
     hasPermission,
     incrementGenerationsUsed,
+    incrementVideoGeneration,
     logout,
     paymentSettings,
     planPrices,

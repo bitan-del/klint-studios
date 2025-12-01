@@ -358,6 +358,14 @@ export interface User {
   dailyGenerationsUsed: number;
   // FIX: Add missing property for daily video usage tracking to resolve type errors in AuthContext.tsx.
   dailyVideosUsed: number;
+  // HD/UHD tracking fields
+  hdGenerationsUsed: number;
+  uhdGenerationsUsed: number;
+  dailyHdUsed: number;
+  dailyUhdUsed: number;
+  videosGeneratedMonthly: number;
+  videosGeneratedDaily: number;
+  lastVideoGenerationDate: string;
   lastGenerationDate: string;
 }
 // FIX: Add missing ReimagineCreativeControls interface.
@@ -409,6 +417,7 @@ export interface PaymentSettings {
 export type Currency = 'USD' | 'EUR' | 'INR';
 
 export interface PlanPrices {
+  free?: number;
   solo: number;
   studio: number;
   brand: number;

@@ -38,7 +38,7 @@ class CloudinaryService {
       hasApiSecret: !!config.apiSecret
     });
   }
-  
+
   /**
    * Check if Cloudinary is initialized
    */
@@ -75,7 +75,7 @@ class CloudinaryService {
         throw new Error('Cloudinary not initialized. Please set up Cloudinary credentials in Admin Panel → Integrations.');
       }
     }
-    
+
     // Double-check after initialization attempt
     if (!this.isInitialized()) {
       throw new Error('Cloudinary initialization failed. Please check your settings and refresh the page.');
@@ -86,21 +86,21 @@ class CloudinaryService {
     formData.append('upload_preset', this.config.uploadPreset);
     // Only add folder if it's a valid string (some presets don't allow folder)
     // formData.append('folder', `${folder}/${userId}`);
-    
+
     // Note: Minimal upload - only file and upload_preset
     // Folder and other settings should be configured in the upload preset itself
     // This avoids any context/metadata errors
 
     try {
       const uploadUrl = `https://api.cloudinary.com/v1_1/${this.config.cloudName}/image/upload`;
-      
+
       console.log('📤 Uploading to Cloudinary:', {
         url: uploadUrl,
         preset: this.config.uploadPreset,
         fileSize: file.size,
         fileName: file.name
       });
-      
+
       const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
@@ -172,6 +172,70 @@ class CloudinaryService {
       return match ? match[1] : null;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Upload video to Cloudinary
+   */
+  async uploadVideo(
+    videoBlob: Blob,
+    userId: string,
+    folder: string = 'videos'
+  ): Promise<CloudinaryUploadResponse> {
+    if (!this.isInitialized()) {
+      console.warn('⚠️ Cloudinary not initialized, attempting to initialize from database...');
+      try {
+        const { initializeCloudinaryFromDatabase } = await import('./cloudinaryInit');
+        const initialized = await initializeCloudinaryFromDatabase();
+        if (!initialized) {
+          throw new Error('Failed to initialize Cloudinary from database');
+        }
+      } catch (error) {
+        console.error('❌ Cloudinary not initialized!');
+        throw new Error('Cloudinary not initialized. Please set up Cloudinary credentials in Admin Panel → Integrations.');
+      }
+    }
+
+    if (!this.isInitialized()) {
+      throw new Error('Cloudinary initialization failed. Please check your settings and refresh the page.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', videoBlob, 'video.mp4');
+    formData.append('upload_preset', this.config.uploadPreset);
+    formData.append('resource_type', 'video');
+
+    try {
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${this.config.cloudName}/video/upload`;
+
+      console.log('📤 Uploading video to Cloudinary:', {
+        url: uploadUrl,
+        preset: this.config.uploadPreset,
+        fileSize: videoBlob.size
+      });
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Cloudinary video upload failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(errorData.error?.message || errorData.message || 'Failed to upload video');
+      }
+
+      const data: CloudinaryUploadResponse = await response.json();
+      console.log('✅ Video uploaded to Cloudinary:', data.secure_url);
+      return data;
+    } catch (error) {
+      console.error('❌ Cloudinary video upload error:', error);
+      throw error;
     }
   }
 

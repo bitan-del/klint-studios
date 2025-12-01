@@ -372,6 +372,76 @@ class StorageService {
         return { hd: 0, qhd: 0 };
     }
   }
+  /**
+   * Get video usage for current user
+   */
+  async getVideoUsage(userId: string): Promise<{ monthly: number; daily: number }> {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('videos_generated_monthly, videos_generated_daily, last_video_generation_date')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      return { monthly: 0, daily: 0 };
+    }
+
+    // Check if daily limit needs reset
+    const today = new Date().toISOString().split('T')[0];
+    const lastDate = data.last_video_generation_date;
+
+    let dailyCount = data.videos_generated_daily || 0;
+
+    if (lastDate !== today) {
+      dailyCount = 0;
+      // We don't update DB here to avoid side effects in a getter, 
+      // but the increment method should handle the reset.
+    }
+
+    return {
+      monthly: data.videos_generated_monthly || 0,
+      daily: dailyCount
+    };
+  }
+
+  /**
+   * Increment video usage counters
+   */
+  async incrementVideoUsage(userId: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+
+    // First get current usage to handle daily reset logic
+    const { data: currentData, error: fetchError } = await supabase
+      .from('user_profiles')
+      .select('videos_generated_monthly, videos_generated_daily, last_video_generation_date')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    let newDaily = (currentData?.videos_generated_daily || 0) + 1;
+    let newMonthly = (currentData?.videos_generated_monthly || 0) + 1;
+
+    // Reset daily count if date changed
+    if (currentData?.last_video_generation_date !== today) {
+      newDaily = 1;
+    }
+
+    // Update DB
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({
+        videos_generated_monthly: newMonthly,
+        videos_generated_daily: newDaily,
+        last_video_generation_date: today
+      })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Failed to increment video usage:', error);
+      throw error;
+    }
+  }
 }
 
 export const storageService = new StorageService();
