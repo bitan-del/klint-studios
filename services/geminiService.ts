@@ -300,6 +300,63 @@ const resizeImageToAspectRatio = async (imageDataUrl: string, aspectRatio: Aspec
     });
 };
 
+// Helper to crop an image to match target aspect ratio (center crop)
+// This ensures the output matches the exact aspect ratio by cropping from center
+const cropImageToAspectRatio = async (imageDataUrl: string, aspectRatio: AspectRatio['value']): Promise<string> => {
+    const dimensions: Record<string, { width: number; height: number }> = {
+        '1:1': { width: 1024, height: 1024 },
+        '3:4': { width: 1024, height: 1365 },
+        '4:3': { width: 1024, height: 768 },
+        '9:16': { width: 720, height: 1280 },
+        '16:9': { width: 1280, height: 720 },
+    };
+
+    const { width: targetWidth, height: targetHeight } = dimensions[aspectRatio] || dimensions['3:4'];
+    const targetRatio = targetWidth / targetHeight;
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const sourceRatio = img.width / img.height;
+            let cropX = 0;
+            let cropY = 0;
+            let cropWidth = img.width;
+            let cropHeight = img.height;
+
+            // Calculate crop dimensions to match target aspect ratio
+            if (sourceRatio > targetRatio) {
+                // Source is wider - crop width (center crop horizontally)
+                cropWidth = img.height * targetRatio;
+                cropX = (img.width - cropWidth) / 2;
+            } else if (sourceRatio < targetRatio) {
+                // Source is taller - crop height (center crop vertically)
+                cropHeight = img.width / targetRatio;
+                cropY = (img.height - cropHeight) / 2;
+            }
+
+            // Create canvas with target dimensions
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                // Draw cropped portion of image, scaled to target dimensions
+                ctx.drawImage(
+                    img,
+                    cropX, cropY, cropWidth, cropHeight,
+                    0, 0, targetWidth, targetHeight
+                );
+                resolve(canvas.toDataURL('image/png'));
+            } else {
+                reject(new Error('Could not get canvas context'));
+            }
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = imageDataUrl;
+    });
+};
+
 // Note: resizeImageToAspectRatio above already implements padding (no cropping)
 // This duplicate function has been removed - use resizeImageToAspectRatio instead
 
@@ -1896,7 +1953,17 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
                             }
                         }
 
-                        return imageB64;
+                        // CRITICAL: Post-process to ensure exact aspect ratio match
+                        // The model might generate in wrong aspect ratio, so we crop/resize to match exactly
+                        console.log(`📐 Post-processing image to ensure exact ${aspectRatio} aspect ratio...`);
+                        try {
+                            const processedImage = await cropImageToAspectRatio(imageB64, aspectRatio);
+                            console.log(`✅ Image post-processed to exact ${aspectRatio} aspect ratio`);
+                            return processedImage;
+                        } catch (e) {
+                            console.warn('Post-processing failed, returning original generation:', e);
+                            return imageB64;
+                        }
                     }
                 }
             }
