@@ -1776,48 +1776,21 @@ Do NOT change any part of the image outside the masked area.`
                 throw new Error('Could not create canvas context');
             };
 
-            // LOAD TEMPLATE IMAGE FOR ASPECT RATIO
-            // For regular quality (gemini-2.5-flash-image), use template approach as it has known aspect ratio issues
-            // For HD/QHD (gemini-3-pro-image-preview), template is optional but kept for extra reinforcement
-            if (quality === 'regular') {
-                // CRITICAL: For regular quality, we MUST use template approach as gemini-2.5-flash-image
-                // has known issues with imageConfig.aspectRatio parameter
-                try {
-                    console.log(`📏 [GEMINI SERVICE] Generating template for regular quality (gemini-2.5-flash-image) - aspect ratio: ${aspectRatio}`);
-                    const templateB64 = await createBlankTemplate(aspectRatio, quality);
-                    const { mimeType, data } = await processImageInput(templateB64);
-
-                    // Add template as the VERY FIRST image (most important position)
-                    parts.push({
-                        inlineData: { mimeType, data }
-                    });
-                    
-                    // Add template AGAIN as second image to reinforce the aspect ratio
-                    parts.push({
-                        inlineData: { mimeType, data }
-                    });
-                    
-                    console.log(`✅ [GEMINI SERVICE] Added template image twice for regular quality to enforce aspect ratio`);
-                } catch (error) {
-                    console.warn(`⚠️ Error generating aspect ratio template:`, error);
-                }
-            } else {
-                // For HD/QHD, template is optional but we'll add it once for consistency
-                try {
-                    console.log(`📏 [GEMINI SERVICE] Generating template for ${quality} quality (gemini-3-pro-image-preview) - aspect ratio: ${aspectRatio}`);
-                    const templateB64 = await createBlankTemplate(aspectRatio, quality);
-                    const { mimeType, data } = await processImageInput(templateB64);
-
-                    // Add template as the FIRST image
-                    parts.push({
-                        inlineData: { mimeType, data }
-                    });
-                    
-                    console.log(`✅ [GEMINI SERVICE] Added template image for ${quality} quality`);
-                } catch (error) {
-                    console.warn(`⚠️ Error generating aspect ratio template:`, error);
-                }
+            // Since we're now using gemini-3-pro-image-preview for all quality levels,
+            // the native imageConfig.aspectRatio should work correctly
+            // Template is optional but we can skip it since the API parameter works
+            // (Keeping template code commented out in case we need it as fallback)
+            /*
+            try {
+                console.log(`📏 [GEMINI SERVICE] Generating template for ${quality} quality - aspect ratio: ${aspectRatio}`);
+                const templateB64 = await createBlankTemplate(aspectRatio, quality);
+                const { mimeType, data } = await processImageInput(templateB64);
+                parts.push({ inlineData: { mimeType, data } });
+                console.log(`✅ [GEMINI SERVICE] Added template image`);
+            } catch (error) {
+                console.warn(`⚠️ Error generating aspect ratio template:`, error);
             }
+            */
 
             // Load style image for style transfer (skip for 'auto' and 'realistic')
             // 'auto' means use reference images as style guide (no style transfer)
@@ -1968,32 +1941,33 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
             parts.push({ text: finalPrompt });
 
             // Select model based on quality
-            const model = quality === 'regular' ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
+            // NOTE: gemini-2.5-flash-image has known issues with aspect ratio, so for regular quality
+            // we'll use gemini-3-pro-image-preview with 1K size to ensure aspect ratio works correctly
+            // This ensures consistent aspect ratio behavior across all quality levels
+            const model = quality === 'regular' 
+                ? 'gemini-3-pro-image-preview'  // Use gemini-3-pro even for regular to fix aspect ratio issues
+                : 'gemini-3-pro-image-preview';
 
             console.log(`🎨 Generating ${quality.toUpperCase()} quality image with ${model}...`);
 
-            // Configure based on model type
-            // gemini-2.5-flash-image (regular) and gemini-3-pro-image-preview (HD/QHD) use different config structures
+            // Configure imageConfig - now using gemini-3-pro-image-preview for all quality levels
+            // Map quality to imageSize: regular=1K, hd=2K, qhd=4K
+            const imageSizeMap = {
+                'regular': '1K',
+                'hd': '2K',
+                'qhd': '4K'
+            } as const;
+            
             let config: any = {
                 responseModalities: [Modality.IMAGE],
+                // @ts-ignore - imageConfig types might be missing in some SDK versions
+                imageConfig: {
+                    aspectRatio: aspectRatio,
+                    imageSize: imageSizeMap[quality],
+                } as any
             };
             
-            if (quality === 'regular') {
-                // For gemini-2.5-flash-image, use imageConfig with only aspectRatio (no imageSize)
-                // @ts-ignore - imageConfig types might be missing in some SDK versions
-                config.imageConfig = {
-                    aspectRatio: aspectRatio,
-                } as any;
-                console.log(`📐 [GEMINI SERVICE] Regular quality config (gemini-2.5-flash-image): aspectRatio=${aspectRatio}`);
-            } else {
-                // For gemini-3-pro-image-preview (HD/QHD), set both aspectRatio and imageSize
-                // @ts-ignore - imageConfig types might be missing in some SDK versions
-                config.imageConfig = {
-                    aspectRatio: aspectRatio,
-                    imageSize: quality === 'qhd' ? '4K' : '2K',
-                } as any;
-                console.log(`📐 [GEMINI SERVICE] ${quality.toUpperCase()} quality config (gemini-3-pro-image-preview): aspectRatio=${aspectRatio}, imageSize=${quality === 'qhd' ? '4K' : '2K'}`);
-            }
+            console.log(`📐 [GEMINI SERVICE] Config for ${model} (${quality}): aspectRatio=${aspectRatio}, imageSize=${imageSizeMap[quality]}`);
             
             const response = await ai.models.generateContent({
                 model,
