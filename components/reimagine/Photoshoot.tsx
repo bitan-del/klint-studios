@@ -8,7 +8,6 @@ import { geminiService } from '../../services/geminiService';
 import PolaroidCard from '../design/PolaroidCard';
 import JSZip from 'jszip';
 import { cn } from '../../lib/utils';
-import { resizeImageToAspectRatio } from '../../utils/imageResizer';
 import { useStudio } from '../../context/StudioContext';
 import { Camera, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -466,14 +465,14 @@ export default function Photoshoot({ onBack }: { onBack: () => void }) {
     const constructApiPayload = async (stylePrompt: string, additionalInstructions?: string): Promise<{ finalPrompt: string, imageUrls: string[] }> => {
         if (!uploadedImage) throw new Error("Main image is not uploaded.");
 
-        const resizedMainImage = await resizeImageToAspectRatio(uploadedImage, aspectRatio as '1:1' | '4:5' | '16:9' | '9:16' | '3:4' | '4:3');
-        const mainImageIsResized = resizedMainImage !== uploadedImage;
+        // Send images as-is - no resizing with white padding
+        // The generateStyledImage function will use a template for aspect ratio guidance
         const identityLockRule = `
 **PRIMARY DIRECTIVE: ABSOLUTE IDENTITY PRESERVATION (NON-NEGOTIABLE)**
 Your single most important, critical, and unbreakable task is to perfectly preserve the identity of the person from the first image. The final generated face MUST be a photorealistic, 100% identical replica. Do not change their facial features, age, or structure. This rule overrides all other instructions.
 `;
 
-        const imageUrls: string[] = [resizedMainImage];
+        const imageUrls: string[] = [uploadedImage];
         let basePrompt = stylePrompt;
         const promptFragments: string[] = [];
         let imageCounter = 1;
@@ -506,42 +505,19 @@ Your single most important, critical, and unbreakable task is to perfectly prese
         if (backgroundImage) {
             const personImagePosition = "first";
             const backgroundImagePosition = getImagePosition();
-            const resizedBackgroundImage = await resizeImageToAspectRatio(backgroundImage, aspectRatio as '1:1' | '4:5' | '16:9' | '9:16' | '3:4' | '4:3');
-            const backgroundImageIsResized = resizedBackgroundImage !== backgroundImage;
+            // Send background image as-is (no resizing) to avoid white borders
             basePrompt = basePrompt
                 .replace(/Maintain the exact same background,/g, ' ')
                 .replace(/, lighting,/g, ' ');
-            let advancedCompositionPrompt;
-            if (backgroundImageIsResized) {
-                advancedCompositionPrompt = `
-                    **Primary Task: Outpainting the Background.** The ${backgroundImagePosition} image (the background) has black bars. Your first and most important job is to **replace all black areas** by photorealistically extending the background scene. The extended background must seamlessly match the lighting and textures of the original.
-                    **Secondary Task: Composition.** Once the background is fully extended into a complete scene, perform a photorealistic composition using the person from the ${personImagePosition} image.
-                    To achieve realism, you MUST follow these critical steps:
-                    1.  **Relight the Person:** Completely change the lighting on the person to match the direction, color, and quality of the light sources in the newly extended background.
-                    2.  **Ensure Correct Scale:** The person's size must be realistically proportional to the perspective and elements in the extended background.
-                    3.  **Seamless Blending:** The final image's color grading, contrast, and focus must be harmonized between the person and the background to create a single, cohesive photograph.
-                `;
-            } else {
-                advancedCompositionPrompt = `
-                    Perform a photorealistic composition. The person is in the ${personImagePosition} image, and the new environment is the ${backgroundImagePosition} image.
-                    To achieve realism, you MUST follow these critical steps:
-                    1.  **Relight the Person:** Completely change the lighting on the person to match the direction, color, and quality of the light sources in the new background.
-                    2.  **Ensure Correct Scale:** The person's size must be realistically proportional to the perspective and elements in the background.
-                    3.  **Seamless Blending:** The final image's color grading, contrast, and focus must be harmonized between the person and the background to create a single, cohesive photograph.
-                `;
-            }
-            promptFragments.push(advancedCompositionPrompt);
-            imageUrls.push(resizedBackgroundImage);
-        } else if (mainImageIsResized) {
-            const sanitizedStylePrompt = basePrompt
-                .replace(/Maintain the exact same background, clothing, lighting, and overall style as the original image./g, 'The person must wear the same clothing and have the same identity. The overall photographic style must be preserved.')
-                .replace(/Maintain the exact same background, lighting, and overall style as the original image./g, 'The person must have the same identity. The overall photographic style must be preserved.');
-            basePrompt = `
-                **Primary Task: Outpainting.** The provided image has black bars. Your main job is to **replace all black areas** by photorealistically extending the background of the original photo.
-                The final result MUST be a full-bleed image with NO black borders, perfectly filling the ${aspectRatio} canvas.
-                The extended background must seamlessly match the lighting and textures of the original.
-                **Secondary Task: Pose Change.** While outpainting, also apply this modification: "${sanitizedStylePrompt}"
+            const advancedCompositionPrompt = `
+                Perform a photorealistic composition. The person is in the ${personImagePosition} image, and the new environment is the ${backgroundImagePosition} image.
+                To achieve realism, you MUST follow these critical steps:
+                1.  **Relight the Person:** Completely change the lighting on the person to match the direction, color, and quality of the light sources in the new background.
+                2.  **Ensure Correct Scale:** The person's size must be realistically proportional to the perspective and elements in the background.
+                3.  **Seamless Blending:** The final image's color grading, contrast, and focus must be harmonized between the person and the background to create a single, cohesive photograph.
             `;
+            promptFragments.push(advancedCompositionPrompt);
+            imageUrls.push(backgroundImage);
         }
 
         let aspectRatioDescription = '';

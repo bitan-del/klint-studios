@@ -1634,8 +1634,14 @@ Do NOT change any part of the image outside the masked area.`
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
-                    ctx.fillStyle = '#FFFFFF';
+                    // Create a subtle template pattern to make it clear this is a template
+                    // Use a very light gray instead of pure white to distinguish from white borders
+                    ctx.fillStyle = '#F8F8F8';
                     ctx.fillRect(0, 0, width, height);
+                    // Add a subtle border pattern to mark this as a template
+                    ctx.strokeStyle = '#E0E0E0';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(1, 1, width - 2, height - 2);
                     return canvas.toDataURL('image/png');
                 }
                 throw new Error('Could not create canvas context');
@@ -1682,13 +1688,14 @@ Do NOT change any part of the image outside the masked area.`
 
             // For image editing, send user's image(s) AFTER style image
             // This allows Gemini to see the style reference first, then the content image
-            // Apply aspect ratio preprocessing with padding (no cropping) to preserve full image content
+            // DO NOT resize reference images - send them as-is to avoid white borders in output
+            // The template (first image) already provides aspect ratio guidance
             console.log('🎯 [GEMINI SERVICE] generateStyledImage called with aspect ratio:', aspectRatio);
             for (const imageDataUrl of referenceImages) {
-                // Resize image to match target aspect ratio with padding (preserves full image, no cropping)
-                console.log('📐 [GEMINI SERVICE] Resizing image to aspect ratio:', aspectRatio, '(with padding, no cropping)');
-                const resizedImage = await resizeImageToAspectRatio(imageDataUrl, aspectRatio);
-                const { mimeType, data } = await processImageInput(resizedImage);
+                // Send reference images as-is (no resizing) to prevent white borders in generated images
+                // The template image (first image) already sets the correct aspect ratio
+                console.log('📐 [GEMINI SERVICE] Sending reference image as-is (no resizing)');
+                const { mimeType, data } = await processImageInput(imageDataUrl);
                 parts.push({
                     inlineData: { mimeType, data }
                 });
@@ -1706,15 +1713,20 @@ Do NOT change any part of the image outside the masked area.`
                     finalPrompt = `Transform the content image to match this specific artistic style: "${styleDescription}".
 
 Instructions:
-1. The FIRST image is a layout template. Use its aspect ratio but IGNORE its visual content.
-2. Analyze the visual style shown in the SECOND image (style reference).
-3. Apply this exact style to the content of the THIRD image (content image).
+1. The FIRST image is a layout template (light gray with border). Use its aspect ratio but IGNORE its visual content. This is the ONLY source of truth for output dimensions.
+2. Analyze the visual style shown in the SECOND image (style reference). IGNORE its aspect ratio and any white borders - only use its style.
+3. Apply this exact style to the content of the THIRD image (content image). IGNORE its aspect ratio and any white borders - only use its content.
 4. CRITICAL: Keep the subject, pose, composition, and facial features of the content image EXACTLY the same.
-5. CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image (template).
-6. Change ONLY the artistic rendering, colors, lighting, and texture to match the style description and reference image.`;
+5. CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image (template). Output must match template dimensions exactly.
+6. Change ONLY the artistic rendering, colors, lighting, and texture to match the style description and reference image.
+7. IGNORE the aspect ratio of ALL reference images (second, third, etc.) - adapt their content to fit the template's aspect ratio.
+8. ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 } else if (referenceImages.length > 0) {
                     // No style, no prompt - just enhance
-                    finalPrompt = `Enhance image quality while preserving all content and maintaining the exact aspect ratio of the first input image (template).`;
+                    finalPrompt = `Enhance image quality while preserving all content. 
+CRITICAL: The FIRST image is a template - use its aspect ratio and IGNORE the aspect ratio of all other reference images.
+Output must match the template's exact dimensions.
+ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 }
             } else {
                 // Text prompt provided
@@ -1724,17 +1736,23 @@ Instructions:
 
 Style Instructions:
 Render the result in this specific style: "${styleDescription}".
-The FIRST image is a layout template. Use its aspect ratio but IGNORE its visual content.
-Use the SECOND image as a visual guide for this style.
-CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image.`;
+The FIRST image is a layout template (light gray with border). Use its aspect ratio but IGNORE its visual content.
+Use the SECOND image as a visual guide for this style. IGNORE any white borders in the style image.
+CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image (template).
+IGNORE the aspect ratio of all other reference images - only use their visual content.
+ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 } else {
                     // Just use the prompt
                     finalPrompt = prompt;
 
                     if (style === 'realistic') {
-                        finalPrompt += `\n\nPhotorealistic rendering. Maintain the exact aspect ratio of the first image (template).`;
+                        finalPrompt += `\n\nPhotorealistic rendering. 
+CRITICAL: The FIRST image is a template - use its aspect ratio. IGNORE the aspect ratio of all reference images.
+ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                     } else if (style === 'auto' && referenceImages.length > 0) {
-                        finalPrompt += `\n\nMatch reference style. Maintain the exact aspect ratio of the first image (template).`;
+                        finalPrompt += `\n\nMatch reference style. 
+CRITICAL: The FIRST image is a template - use its aspect ratio. IGNORE the aspect ratio of all reference images.
+ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                     }
                 }
             }
@@ -1746,15 +1764,39 @@ CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image.`;
                 finalPrompt += `\n\n**RESOLUTION REQUIREMENT: Generate at 4K (4096px) resolution. The output MUST match the exact dimensions of the first template image.`;
             }
 
-            // Add aspect ratio instruction
-            finalPrompt += `\n\n**CRITICAL TECHNICAL REQUIREMENTS:**
-- Output Aspect Ratio: ${aspectRatio} (MUST match the FIRST template image exactly)
-- CRITICAL: The output image MUST have the EXACT same pixel dimensions and aspect ratio as the FIRST reference image (template).
-- DO NOT crop, resize, or modify the aspect ratio of the output.
-- DO NOT make the output square if the template is not square.
-- Fill the ENTIRE canvas from edge to edge - no white padding, no black bars, no empty space.
-- The output must fill 100% of the template dimensions - every pixel should contain image content.
-- Maintain the full content and composition - do not crop any parts of the image.`;
+            // Add aspect ratio instruction - CRITICAL: Template is the ONLY source of truth
+            const aspectRatioDimensions = {
+                '1:1': '1024x1024 pixels (square)',
+                '3:4': '1024x1365 pixels (portrait)',
+                '4:3': '1024x768 pixels (landscape)',
+                '9:16': '720x1280 pixels (vertical portrait)',
+                '16:9': '1280x720 pixels (horizontal landscape)',
+            };
+            const dimensionText = aspectRatioDimensions[aspectRatio] || 'matching the template';
+            
+            finalPrompt += `\n\n**CRITICAL ASPECT RATIO & NO WHITE SPACE REQUIREMENTS (HIGHEST PRIORITY - NON-NEGOTIABLE):**
+- The FIRST image is a TEMPLATE (light gray with border) that defines the output aspect ratio. It is the ONLY source of truth for dimensions.
+- IGNORE the aspect ratio of ALL other reference images (second, third, fourth, etc.). Their aspect ratios are IRRELEVANT.
+- Extract ONLY the CONTENT from reference images, but output it in the template's aspect ratio.
+- Output Aspect Ratio: ${aspectRatio} (${dimensionText})
+- CRITICAL: The output image MUST have the EXACT same pixel dimensions and aspect ratio as the FIRST template image.
+- DO NOT use the aspect ratio from any reference image - they may be square, landscape, or portrait - IGNORE their dimensions.
+- DO NOT crop, resize, or modify the aspect ratio of the output to match reference images.
+- DO NOT make the output square if the template is not square (and vice versa).
+
+**ABSOLUTELY NO WHITE SPACES, BORDERS, OR PADDING (CRITICAL):**
+- ZERO white spaces allowed anywhere in the output image - not at edges, not in corners, not anywhere.
+- ZERO white borders, white padding, white margins, or white bars of any kind.
+- ZERO empty space - every single pixel from edge to edge must contain image content.
+- If reference images have white borders or padding, IGNORE them completely - do NOT replicate white spaces in the output.
+- Fill the ENTIRE canvas from the very first pixel (0,0) to the very last pixel with image content - every single pixel must be filled.
+- The output must fill 100% of the template dimensions - every pixel from top-left to bottom-right must contain image content.
+- NO white background visible anywhere - extend or adapt the image content to fill the entire canvas.
+- If reference images have different aspect ratios, adapt the content to fit the template's aspect ratio while preserving all important elements - but NEVER add white spaces to fill gaps.`;
+
+            // Add final reinforcement about no white spaces
+            finalPrompt += `\n\n**FINAL REMINDER - THIS IS CRITICAL:**
+The output image must be a complete, full-bleed image with ZERO white spaces anywhere. Every pixel from the absolute top-left corner to the absolute bottom-right corner must contain image content. If you see white in any reference image, do NOT include it in the output. The template shows the exact dimensions - fill them completely with image content only.`;
 
             // Add text prompt AFTER images so Gemini sees style reference and content images first
             parts.push({ text: finalPrompt });
