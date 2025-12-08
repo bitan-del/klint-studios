@@ -1663,7 +1663,7 @@ Do NOT change any part of the image outside the masked area.`
             // HELPER: Create blank template on the fly
             // Scale dimensions based on quality: regular (1x), HD (2x), QHD (4x)
             const createBlankTemplate = async (ratio: AspectRatio['value'], quality: 'regular' | 'hd' | 'qhd'): Promise<string> => {
-                // Base dimensions for regular quality
+                // Base dimensions for regular quality - use larger sizes for better model recognition
                 const baseDimensions: Record<string, { width: number; height: number }> = {
                     '1:1': { width: 1024, height: 1024 },
                     '3:4': { width: 1024, height: 1365 },
@@ -1691,59 +1691,84 @@ Do NOT change any part of the image outside the masked area.`
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
-                    // Create a visually distinct template with aspect ratio clearly marked
-                    // Use a light gray background to distinguish from white borders
-                    ctx.fillStyle = '#F0F0F0';
+                    // Create a very visually distinct template with strong visual markers
+                    // Use a medium gray background with high contrast to make it unmistakable
+                    ctx.fillStyle = '#E8E8E8';
                     ctx.fillRect(0, 0, width, height);
                     
-                    // Add a prominent border to mark this as a template
-                    ctx.strokeStyle = '#CCCCCC';
-                    ctx.lineWidth = 4;
-                    ctx.strokeRect(2, 2, width - 4, height - 4);
+                    // Add a very prominent border
+                    ctx.strokeStyle = '#888888';
+                    ctx.lineWidth = 8;
+                    ctx.strokeRect(4, 4, width - 8, height - 8);
                     
-                    // Add diagonal corner markers to make it clear this is a template
-                    const cornerSize = Math.min(width, height) * 0.1;
-                    ctx.strokeStyle = '#999999';
-                    ctx.lineWidth = 3;
+                    // Add a second inner border for extra emphasis
+                    ctx.strokeStyle = '#AAAAAA';
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(12, 12, width - 24, height - 24);
+                    
+                    // Add large corner markers
+                    const cornerSize = Math.min(width, height) * 0.15;
+                    ctx.strokeStyle = '#666666';
+                    ctx.lineWidth = 6;
                     // Top-left corner
                     ctx.beginPath();
-                    ctx.moveTo(10, 10);
-                    ctx.lineTo(10 + cornerSize, 10);
-                    ctx.moveTo(10, 10);
-                    ctx.lineTo(10, 10 + cornerSize);
+                    ctx.moveTo(20, 20);
+                    ctx.lineTo(20 + cornerSize, 20);
+                    ctx.moveTo(20, 20);
+                    ctx.lineTo(20, 20 + cornerSize);
                     ctx.stroke();
                     // Top-right corner
                     ctx.beginPath();
-                    ctx.moveTo(width - 10, 10);
-                    ctx.lineTo(width - 10 - cornerSize, 10);
-                    ctx.moveTo(width - 10, 10);
-                    ctx.lineTo(width - 10, 10 + cornerSize);
+                    ctx.moveTo(width - 20, 20);
+                    ctx.lineTo(width - 20 - cornerSize, 20);
+                    ctx.moveTo(width - 20, 20);
+                    ctx.lineTo(width - 20, 20 + cornerSize);
                     ctx.stroke();
                     // Bottom-left corner
                     ctx.beginPath();
-                    ctx.moveTo(10, height - 10);
-                    ctx.lineTo(10 + cornerSize, height - 10);
-                    ctx.moveTo(10, height - 10);
-                    ctx.lineTo(10, height - 10 - cornerSize);
+                    ctx.moveTo(20, height - 20);
+                    ctx.lineTo(20 + cornerSize, height - 20);
+                    ctx.moveTo(20, height - 20);
+                    ctx.lineTo(20, height - 20 - cornerSize);
                     ctx.stroke();
                     // Bottom-right corner
                     ctx.beginPath();
-                    ctx.moveTo(width - 10, height - 10);
-                    ctx.lineTo(width - 10 - cornerSize, height - 10);
-                    ctx.moveTo(width - 10, height - 10);
-                    ctx.lineTo(width - 10, height - 10 - cornerSize);
+                    ctx.moveTo(width - 20, height - 20);
+                    ctx.lineTo(width - 20 - cornerSize, height - 20);
+                    ctx.moveTo(width - 20, height - 20);
+                    ctx.lineTo(width - 20, height - 20 - cornerSize);
                     ctx.stroke();
                     
-                    // Add aspect ratio text in the center (if canvas is large enough)
+                    // Add large, prominent text in the center
                     if (width > 200 && height > 200) {
-                        ctx.fillStyle = '#666666';
-                        ctx.font = `bold ${Math.min(width, height) * 0.08}px Arial`;
+                        const fontSize = Math.min(width, height) * 0.12;
+                        ctx.fillStyle = '#333333';
+                        ctx.font = `bold ${fontSize}px Arial`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        const ratioText = `ASPECT RATIO: ${ratio}`;
-                        const dimText = `${width}×${height}`;
-                        ctx.fillText(ratioText, width / 2, height / 2 - 20);
-                        ctx.fillText(dimText, width / 2, height / 2 + 20);
+                        const ratioText = `OUTPUT SIZE: ${ratio}`;
+                        const dimText = `${width} × ${height}`;
+                        const instructionText = 'MATCH THIS EXACT SIZE';
+                        
+                        // Add text with background for better visibility
+                        const textMetrics1 = ctx.measureText(ratioText);
+                        const textMetrics2 = ctx.measureText(dimText);
+                        const textMetrics3 = ctx.measureText(instructionText);
+                        const maxWidth = Math.max(textMetrics1.width, textMetrics2.width, textMetrics3.width);
+                        const padding = 20;
+                        
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                        ctx.fillRect(
+                            width / 2 - maxWidth / 2 - padding,
+                            height / 2 - fontSize * 2 - padding,
+                            maxWidth + padding * 2,
+                            fontSize * 3 + padding * 2
+                        );
+                        
+                        ctx.fillStyle = '#000000';
+                        ctx.fillText(ratioText, width / 2, height / 2 - fontSize * 1.2);
+                        ctx.fillText(dimText, width / 2, height / 2);
+                        ctx.fillText(instructionText, width / 2, height / 2 + fontSize * 1.2);
                     }
                     
                     return canvas.toDataURL('image/png');
@@ -1752,16 +1777,24 @@ Do NOT change any part of the image outside the masked area.`
             };
 
             // LOAD TEMPLATE IMAGE FOR ASPECT RATIO
+            // Add template MULTIPLE times to ensure model recognizes it
             try {
                 console.log(`📏 [GEMINI SERVICE] Generating blank template for aspect ratio: ${aspectRatio}, quality: ${quality}`);
                 const templateB64 = await createBlankTemplate(aspectRatio, quality);
                 const { mimeType, data } = await processImageInput(templateB64);
 
-                // Add template as the VERY FIRST image
+                // Add template as the VERY FIRST image (most important position)
                 parts.push({
                     inlineData: { mimeType, data }
                 });
-                console.log(`✅ [GEMINI SERVICE] Added generated blank template as first image`);
+                
+                // Add template AGAIN as second image to reinforce the aspect ratio
+                // This ensures the model sees the template dimensions clearly
+                parts.push({
+                    inlineData: { mimeType, data }
+                });
+                
+                console.log(`✅ [GEMINI SERVICE] Added template image twice as first and second images to reinforce aspect ratio`);
             } catch (error) {
                 console.warn(`⚠️ Error generating aspect ratio template:`, error);
             }
@@ -1828,7 +1861,7 @@ Instructions:
                 } else if (referenceImages.length > 0) {
                     // No style, no prompt - just enhance
                     finalPrompt = `Enhance image quality while preserving all content. 
-CRITICAL: The FIRST image is a template (gray with corner markers showing "${aspectRatio}") - use its aspect ratio. DO NOT default to square (1:1). The template shows ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all other reference images.
+CRITICAL: The FIRST and SECOND images are IDENTICAL templates (gray with corner markers showing "${aspectRatio}") - use their aspect ratio. DO NOT default to square (1:1). The templates show ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all other reference images.
 Output must match the template's exact dimensions.
 ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 }
@@ -1840,9 +1873,9 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
 
 Style Instructions:
 Render the result in this specific style: "${styleDescription}".
-The FIRST image is a layout template (gray with corner markers showing "${aspectRatio}"). This template shows the EXACT output dimensions you MUST use. DO NOT default to square (1:1) - the template clearly shows ${aspectRatio}.
-Use the SECOND image as a visual guide for this style. IGNORE any white borders in the style image.
-CRITICAL: Your output MUST match the FIRST image (template) dimensions exactly. The template shows ${aspectRatio} - your output MUST be ${aspectRatio}, NOT square.
+The FIRST and SECOND images are IDENTICAL layout templates (gray with corner markers showing "${aspectRatio}"). These templates show the EXACT output dimensions you MUST use. DO NOT default to square (1:1) - the templates clearly show ${aspectRatio}.
+Use the THIRD image as a visual guide for this style. IGNORE any white borders in the style image.
+CRITICAL: Your output MUST match the FIRST and SECOND images (templates) dimensions exactly. The templates show ${aspectRatio} - your output MUST be ${aspectRatio}, NOT square.
 IGNORE the aspect ratio of all other reference images - only use their visual content.
 ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 } else {
@@ -1851,11 +1884,11 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
 
                     if (style === 'realistic') {
                         finalPrompt += `\n\nPhotorealistic rendering. 
-CRITICAL: The FIRST image is a template (gray with corner markers showing "${aspectRatio}") - use its aspect ratio. DO NOT default to square (1:1). The template shows ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all reference images.
+CRITICAL: The FIRST and SECOND images are IDENTICAL templates (gray with corner markers showing "${aspectRatio}") - use their aspect ratio. DO NOT default to square (1:1). The templates show ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all reference images.
 ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                     } else if (style === 'auto' && referenceImages.length > 0) {
                         finalPrompt += `\n\nMatch reference style. 
-CRITICAL: The FIRST image is a template (gray with corner markers showing "${aspectRatio}") - use its aspect ratio. DO NOT default to square (1:1). The template shows ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all reference images.
+CRITICAL: The FIRST and SECOND images are IDENTICAL templates (gray with corner markers showing "${aspectRatio}") - use their aspect ratio. DO NOT default to square (1:1). The templates show ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all reference images.
 ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                     }
                 }
@@ -1870,27 +1903,31 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
 
             // Add aspect ratio instruction - CRITICAL: Template is the ONLY source of truth
             const aspectRatioDimensions = {
-                '1:1': '1024x1024 pixels (square)',
-                '3:4': '1024x1365 pixels (portrait)',
-                '4:3': '1024x768 pixels (landscape)',
-                '9:16': '720x1280 pixels (vertical portrait)',
-                '16:9': '1280x720 pixels (horizontal landscape)',
+                '1:1': { text: '1024x1024 pixels (square)', width: 1024, height: 1024 },
+                '3:4': { text: '1024x1365 pixels (portrait)', width: 1024, height: 1365 },
+                '4:3': { text: '1024x768 pixels (landscape)', width: 1024, height: 768 },
+                '9:16': { text: '720x1280 pixels (vertical portrait)', width: 720, height: 1280 },
+                '16:9': { text: '1280x720 pixels (horizontal landscape)', width: 1280, height: 720 },
             };
-            const dimensionText = aspectRatioDimensions[aspectRatio] || 'matching the template';
+            const dims = aspectRatioDimensions[aspectRatio] || aspectRatioDimensions['3:4'];
+            const dimensionText = dims.text;
+            const templateWidth = quality === 'hd' ? dims.width * 2 : quality === 'qhd' ? dims.width * 4 : dims.width;
+            const templateHeight = quality === 'hd' ? dims.height * 2 : quality === 'qhd' ? dims.height * 4 : dims.height;
             
             finalPrompt += `\n\n**CRITICAL ASPECT RATIO REQUIREMENTS (HIGHEST PRIORITY - THIS OVERRIDES EVERYTHING):**
-- The FIRST image is a TEMPLATE (gray background with corner markers and text showing "${aspectRatio}"). 
-- This template image shows the EXACT output dimensions you MUST use: ${dimensionText}
-- The template has corner markers and text clearly marking it as a layout guide.
-- YOU MUST generate an image with the EXACT same dimensions as this template: ${dimensionText}
-- The output MUST be ${aspectRatio} aspect ratio - NOT square, NOT any other ratio.
-- IGNORE the aspect ratio of ALL other reference images (second, third, fourth, etc.). Their aspect ratios are IRRELEVANT.
+- The FIRST and SECOND images are IDENTICAL TEMPLATES (gray background with corner markers and large text showing "${aspectRatio}"). 
+- These template images show the EXACT output dimensions you MUST use: ${dimensionText}
+- The templates have prominent corner markers and large text clearly marking the required size.
+- YOU MUST generate an image with the EXACT same pixel dimensions as these templates: ${templateWidth}x${templateHeight} (${aspectRatio}).
+- The output MUST be ${aspectRatio} aspect ratio - NOT square (1:1), NOT any other ratio.
+- CRITICAL: Look at the FIRST and SECOND images - they are ${templateWidth} pixels wide and ${templateHeight} pixels tall. Your output MUST be exactly ${templateWidth}x${templateHeight}.
+- IGNORE the aspect ratio of ALL other reference images (third, fourth, fifth, etc.). Their aspect ratios are IRRELEVANT.
 - Extract ONLY the CONTENT from reference images, but output it in the template's aspect ratio.
-- CRITICAL: If the template is ${aspectRatio}, your output MUST be ${aspectRatio} - do NOT default to square (1:1).
+- CRITICAL: If the templates show ${aspectRatio} (${templateWidth}x${templateHeight}), your output MUST be ${aspectRatio} (${templateWidth}x${templateHeight}) - do NOT default to square (1:1).
 - DO NOT use the aspect ratio from any reference image - they may be square, landscape, or portrait - IGNORE their dimensions completely.
 - DO NOT crop, resize, or modify the aspect ratio of the output to match reference images.
-- DO NOT make the output square (1:1) if the template is not square. The template clearly shows ${aspectRatio}.
-- Look at the FIRST image carefully - it shows ${dimensionText} dimensions. Match those EXACTLY.
+- DO NOT make the output square (1:1) if the templates are not square. The templates clearly show ${aspectRatio} (${templateWidth}x${templateHeight}).
+- Look at the FIRST and SECOND images very carefully - they show ${dimensionText} dimensions. Match those EXACTLY in your output.
 
 **ABSOLUTELY NO WHITE SPACES, BORDERS, OR PADDING (CRITICAL):**
 - ZERO white spaces allowed anywhere in the output image - not at edges, not in corners, not anywhere.
@@ -1953,17 +1990,7 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
                             }
                         }
 
-                        // CRITICAL: Post-process to ensure exact aspect ratio match
-                        // The model might generate in wrong aspect ratio, so we crop/resize to match exactly
-                        console.log(`📐 Post-processing image to ensure exact ${aspectRatio} aspect ratio...`);
-                        try {
-                            const processedImage = await cropImageToAspectRatio(imageB64, aspectRatio);
-                            console.log(`✅ Image post-processed to exact ${aspectRatio} aspect ratio`);
-                            return processedImage;
-                        } catch (e) {
-                            console.warn('Post-processing failed, returning original generation:', e);
-                            return imageB64;
-                        }
+                        return imageB64;
                     }
                 }
             }
