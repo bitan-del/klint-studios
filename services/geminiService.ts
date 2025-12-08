@@ -1634,14 +1634,61 @@ Do NOT change any part of the image outside the masked area.`
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
-                    // Create a subtle template pattern to make it clear this is a template
-                    // Use a very light gray instead of pure white to distinguish from white borders
-                    ctx.fillStyle = '#F8F8F8';
+                    // Create a visually distinct template with aspect ratio clearly marked
+                    // Use a light gray background to distinguish from white borders
+                    ctx.fillStyle = '#F0F0F0';
                     ctx.fillRect(0, 0, width, height);
-                    // Add a subtle border pattern to mark this as a template
-                    ctx.strokeStyle = '#E0E0E0';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(1, 1, width - 2, height - 2);
+                    
+                    // Add a prominent border to mark this as a template
+                    ctx.strokeStyle = '#CCCCCC';
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(2, 2, width - 4, height - 4);
+                    
+                    // Add diagonal corner markers to make it clear this is a template
+                    const cornerSize = Math.min(width, height) * 0.1;
+                    ctx.strokeStyle = '#999999';
+                    ctx.lineWidth = 3;
+                    // Top-left corner
+                    ctx.beginPath();
+                    ctx.moveTo(10, 10);
+                    ctx.lineTo(10 + cornerSize, 10);
+                    ctx.moveTo(10, 10);
+                    ctx.lineTo(10, 10 + cornerSize);
+                    ctx.stroke();
+                    // Top-right corner
+                    ctx.beginPath();
+                    ctx.moveTo(width - 10, 10);
+                    ctx.lineTo(width - 10 - cornerSize, 10);
+                    ctx.moveTo(width - 10, 10);
+                    ctx.lineTo(width - 10, 10 + cornerSize);
+                    ctx.stroke();
+                    // Bottom-left corner
+                    ctx.beginPath();
+                    ctx.moveTo(10, height - 10);
+                    ctx.lineTo(10 + cornerSize, height - 10);
+                    ctx.moveTo(10, height - 10);
+                    ctx.lineTo(10, height - 10 - cornerSize);
+                    ctx.stroke();
+                    // Bottom-right corner
+                    ctx.beginPath();
+                    ctx.moveTo(width - 10, height - 10);
+                    ctx.lineTo(width - 10 - cornerSize, height - 10);
+                    ctx.moveTo(width - 10, height - 10);
+                    ctx.lineTo(width - 10, height - 10 - cornerSize);
+                    ctx.stroke();
+                    
+                    // Add aspect ratio text in the center (if canvas is large enough)
+                    if (width > 200 && height > 200) {
+                        ctx.fillStyle = '#666666';
+                        ctx.font = `bold ${Math.min(width, height) * 0.08}px Arial`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        const ratioText = `ASPECT RATIO: ${ratio}`;
+                        const dimText = `${width}×${height}`;
+                        ctx.fillText(ratioText, width / 2, height / 2 - 20);
+                        ctx.fillText(dimText, width / 2, height / 2 + 20);
+                    }
+                    
                     return canvas.toDataURL('image/png');
                 }
                 throw new Error('Could not create canvas context');
@@ -1713,18 +1760,18 @@ Do NOT change any part of the image outside the masked area.`
                     finalPrompt = `Transform the content image to match this specific artistic style: "${styleDescription}".
 
 Instructions:
-1. The FIRST image is a layout template (light gray with border). Use its aspect ratio but IGNORE its visual content. This is the ONLY source of truth for output dimensions.
+1. The FIRST image is a layout template (gray with corner markers showing "${aspectRatio}"). This template shows the EXACT output dimensions you MUST use. This is the ONLY source of truth for output dimensions. DO NOT default to square (1:1) - the template clearly shows ${aspectRatio}.
 2. Analyze the visual style shown in the SECOND image (style reference). IGNORE its aspect ratio and any white borders - only use its style.
 3. Apply this exact style to the content of the THIRD image (content image). IGNORE its aspect ratio and any white borders - only use its content.
 4. CRITICAL: Keep the subject, pose, composition, and facial features of the content image EXACTLY the same.
-5. CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image (template). Output must match template dimensions exactly.
+5. CRITICAL: Your output MUST match the FIRST image (template) dimensions exactly. The template shows ${aspectRatio} - your output MUST be ${aspectRatio}, NOT square.
 6. Change ONLY the artistic rendering, colors, lighting, and texture to match the style description and reference image.
 7. IGNORE the aspect ratio of ALL reference images (second, third, etc.) - adapt their content to fit the template's aspect ratio.
 8. ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 } else if (referenceImages.length > 0) {
                     // No style, no prompt - just enhance
                     finalPrompt = `Enhance image quality while preserving all content. 
-CRITICAL: The FIRST image is a template - use its aspect ratio and IGNORE the aspect ratio of all other reference images.
+CRITICAL: The FIRST image is a template (gray with corner markers showing "${aspectRatio}") - use its aspect ratio. DO NOT default to square (1:1). The template shows ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all other reference images.
 Output must match the template's exact dimensions.
 ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 }
@@ -1736,9 +1783,9 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
 
 Style Instructions:
 Render the result in this specific style: "${styleDescription}".
-The FIRST image is a layout template (light gray with border). Use its aspect ratio but IGNORE its visual content.
+The FIRST image is a layout template (gray with corner markers showing "${aspectRatio}"). This template shows the EXACT output dimensions you MUST use. DO NOT default to square (1:1) - the template clearly shows ${aspectRatio}.
 Use the SECOND image as a visual guide for this style. IGNORE any white borders in the style image.
-CRITICAL: Maintain the exact aspect ratio and framing of the FIRST image (template).
+CRITICAL: Your output MUST match the FIRST image (template) dimensions exactly. The template shows ${aspectRatio} - your output MUST be ${aspectRatio}, NOT square.
 IGNORE the aspect ratio of all other reference images - only use their visual content.
 ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 } else {
@@ -1747,11 +1794,11 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
 
                     if (style === 'realistic') {
                         finalPrompt += `\n\nPhotorealistic rendering. 
-CRITICAL: The FIRST image is a template - use its aspect ratio. IGNORE the aspect ratio of all reference images.
+CRITICAL: The FIRST image is a template (gray with corner markers showing "${aspectRatio}") - use its aspect ratio. DO NOT default to square (1:1). The template shows ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all reference images.
 ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                     } else if (style === 'auto' && referenceImages.length > 0) {
                         finalPrompt += `\n\nMatch reference style. 
-CRITICAL: The FIRST image is a template - use its aspect ratio. IGNORE the aspect ratio of all reference images.
+CRITICAL: The FIRST image is a template (gray with corner markers showing "${aspectRatio}") - use its aspect ratio. DO NOT default to square (1:1). The template shows ${aspectRatio} - your output MUST be ${aspectRatio}. IGNORE the aspect ratio of all reference images.
 ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                     }
                 }
@@ -1774,15 +1821,19 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
             };
             const dimensionText = aspectRatioDimensions[aspectRatio] || 'matching the template';
             
-            finalPrompt += `\n\n**CRITICAL ASPECT RATIO & NO WHITE SPACE REQUIREMENTS (HIGHEST PRIORITY - NON-NEGOTIABLE):**
-- The FIRST image is a TEMPLATE (light gray with border) that defines the output aspect ratio. It is the ONLY source of truth for dimensions.
+            finalPrompt += `\n\n**CRITICAL ASPECT RATIO REQUIREMENTS (HIGHEST PRIORITY - THIS OVERRIDES EVERYTHING):**
+- The FIRST image is a TEMPLATE (gray background with corner markers and text showing "${aspectRatio}"). 
+- This template image shows the EXACT output dimensions you MUST use: ${dimensionText}
+- The template has corner markers and text clearly marking it as a layout guide.
+- YOU MUST generate an image with the EXACT same dimensions as this template: ${dimensionText}
+- The output MUST be ${aspectRatio} aspect ratio - NOT square, NOT any other ratio.
 - IGNORE the aspect ratio of ALL other reference images (second, third, fourth, etc.). Their aspect ratios are IRRELEVANT.
 - Extract ONLY the CONTENT from reference images, but output it in the template's aspect ratio.
-- Output Aspect Ratio: ${aspectRatio} (${dimensionText})
-- CRITICAL: The output image MUST have the EXACT same pixel dimensions and aspect ratio as the FIRST template image.
-- DO NOT use the aspect ratio from any reference image - they may be square, landscape, or portrait - IGNORE their dimensions.
+- CRITICAL: If the template is ${aspectRatio}, your output MUST be ${aspectRatio} - do NOT default to square (1:1).
+- DO NOT use the aspect ratio from any reference image - they may be square, landscape, or portrait - IGNORE their dimensions completely.
 - DO NOT crop, resize, or modify the aspect ratio of the output to match reference images.
-- DO NOT make the output square if the template is not square (and vice versa).
+- DO NOT make the output square (1:1) if the template is not square. The template clearly shows ${aspectRatio}.
+- Look at the FIRST image carefully - it shows ${dimensionText} dimensions. Match those EXACTLY.
 
 **ABSOLUTELY NO WHITE SPACES, BORDERS, OR PADDING (CRITICAL):**
 - ZERO white spaces allowed anywhere in the output image - not at edges, not in corners, not anywhere.
@@ -1794,9 +1845,10 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
 - NO white background visible anywhere - extend or adapt the image content to fill the entire canvas.
 - If reference images have different aspect ratios, adapt the content to fit the template's aspect ratio while preserving all important elements - but NEVER add white spaces to fill gaps.`;
 
-            // Add final reinforcement about no white spaces
+            // Add final reinforcement about aspect ratio and no white spaces
             finalPrompt += `\n\n**FINAL REMINDER - THIS IS CRITICAL:**
-The output image must be a complete, full-bleed image with ZERO white spaces anywhere. Every pixel from the absolute top-left corner to the absolute bottom-right corner must contain image content. If you see white in any reference image, do NOT include it in the output. The template shows the exact dimensions - fill them completely with image content only.`;
+1. ASPECT RATIO: The FIRST image is a template showing ${aspectRatio} (${dimensionText}). Your output MUST match these EXACT dimensions. Do NOT default to square (1:1). The template clearly shows ${aspectRatio} - follow it exactly.
+2. NO WHITE SPACES: The output image must be a complete, full-bleed image with ZERO white spaces anywhere. Every pixel from the absolute top-left corner to the absolute bottom-right corner must contain image content. If you see white in any reference image, do NOT include it in the output. The template shows the exact dimensions - fill them completely with image content only.`;
 
             // Add text prompt AFTER images so Gemini sees style reference and content images first
             parts.push({ text: finalPrompt });
