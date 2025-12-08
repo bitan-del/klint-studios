@@ -1777,26 +1777,46 @@ Do NOT change any part of the image outside the masked area.`
             };
 
             // LOAD TEMPLATE IMAGE FOR ASPECT RATIO
-            // Add template MULTIPLE times to ensure model recognizes it
-            try {
-                console.log(`📏 [GEMINI SERVICE] Generating blank template for aspect ratio: ${aspectRatio}, quality: ${quality}`);
-                const templateB64 = await createBlankTemplate(aspectRatio, quality);
-                const { mimeType, data } = await processImageInput(templateB64);
+            // For regular quality (gemini-2.5-flash-image), use template approach as it has known aspect ratio issues
+            // For HD/QHD (gemini-3-pro-image-preview), template is optional but kept for extra reinforcement
+            if (quality === 'regular') {
+                // CRITICAL: For regular quality, we MUST use template approach as gemini-2.5-flash-image
+                // has known issues with imageConfig.aspectRatio parameter
+                try {
+                    console.log(`📏 [GEMINI SERVICE] Generating template for regular quality (gemini-2.5-flash-image) - aspect ratio: ${aspectRatio}`);
+                    const templateB64 = await createBlankTemplate(aspectRatio, quality);
+                    const { mimeType, data } = await processImageInput(templateB64);
 
-                // Add template as the VERY FIRST image (most important position)
-                parts.push({
-                    inlineData: { mimeType, data }
-                });
-                
-                // Add template AGAIN as second image to reinforce the aspect ratio
-                // This ensures the model sees the template dimensions clearly
-                parts.push({
-                    inlineData: { mimeType, data }
-                });
-                
-                console.log(`✅ [GEMINI SERVICE] Added template image twice as first and second images to reinforce aspect ratio`);
-            } catch (error) {
-                console.warn(`⚠️ Error generating aspect ratio template:`, error);
+                    // Add template as the VERY FIRST image (most important position)
+                    parts.push({
+                        inlineData: { mimeType, data }
+                    });
+                    
+                    // Add template AGAIN as second image to reinforce the aspect ratio
+                    parts.push({
+                        inlineData: { mimeType, data }
+                    });
+                    
+                    console.log(`✅ [GEMINI SERVICE] Added template image twice for regular quality to enforce aspect ratio`);
+                } catch (error) {
+                    console.warn(`⚠️ Error generating aspect ratio template:`, error);
+                }
+            } else {
+                // For HD/QHD, template is optional but we'll add it once for consistency
+                try {
+                    console.log(`📏 [GEMINI SERVICE] Generating template for ${quality} quality (gemini-3-pro-image-preview) - aspect ratio: ${aspectRatio}`);
+                    const templateB64 = await createBlankTemplate(aspectRatio, quality);
+                    const { mimeType, data } = await processImageInput(templateB64);
+
+                    // Add template as the FIRST image
+                    parts.push({
+                        inlineData: { mimeType, data }
+                    });
+                    
+                    console.log(`✅ [GEMINI SERVICE] Added template image for ${quality} quality`);
+                } catch (error) {
+                    console.warn(`⚠️ Error generating aspect ratio template:`, error);
+                }
             }
 
             // Load style image for style transfer (skip for 'auto' and 'realistic')
@@ -1952,24 +1972,33 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
 
             console.log(`🎨 Generating ${quality.toUpperCase()} quality image with ${model}...`);
 
-            // Map quality to imageSize
-            const imageSizeMap = {
-                'regular': '1K',
-                'hd': '2K',
-                'qhd': '4K'
-            } as const;
+            // Configure based on model type
+            // gemini-2.5-flash-image (regular) and gemini-3-pro-image-preview (HD/QHD) use different config structures
+            let config: any = {
+                responseModalities: [Modality.IMAGE],
+            };
+            
+            if (quality === 'regular') {
+                // For gemini-2.5-flash-image, use imageConfig with only aspectRatio (no imageSize)
+                // @ts-ignore - imageConfig types might be missing in some SDK versions
+                config.imageConfig = {
+                    aspectRatio: aspectRatio,
+                } as any;
+                console.log(`📐 [GEMINI SERVICE] Regular quality config (gemini-2.5-flash-image): aspectRatio=${aspectRatio}`);
+            } else {
+                // For gemini-3-pro-image-preview (HD/QHD), set both aspectRatio and imageSize
+                // @ts-ignore - imageConfig types might be missing in some SDK versions
+                config.imageConfig = {
+                    aspectRatio: aspectRatio,
+                    imageSize: quality === 'qhd' ? '4K' : '2K',
+                } as any;
+                console.log(`📐 [GEMINI SERVICE] ${quality.toUpperCase()} quality config (gemini-3-pro-image-preview): aspectRatio=${aspectRatio}, imageSize=${quality === 'qhd' ? '4K' : '2K'}`);
+            }
             
             const response = await ai.models.generateContent({
                 model,
                 contents: { parts },
-                config: {
-                    responseModalities: [Modality.IMAGE],
-                    // @ts-ignore - imageConfig types might be missing in some SDK versions
-                    imageConfig: {
-                        aspectRatio: aspectRatio,
-                        imageSize: imageSizeMap[quality],
-                    } as any
-                },
+                config,
             });
 
             // Extract the generated image
