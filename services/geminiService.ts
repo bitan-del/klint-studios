@@ -1952,17 +1952,23 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
 
             console.log(`🎨 Generating ${quality.toUpperCase()} quality image with ${model}...`);
 
+            // Map quality to imageSize
+            const imageSizeMap = {
+                'regular': '1K',
+                'hd': '2K',
+                'qhd': '4K'
+            } as const;
+            
             const response = await ai.models.generateContent({
                 model,
                 contents: { parts },
                 config: {
                     responseModalities: [Modality.IMAGE],
                     // @ts-ignore - imageConfig types might be missing in some SDK versions
-                    ...(quality !== 'regular' && {
-                        imageConfig: {
-                            imageSize: quality === 'qhd' ? '4K' : '2K',
-                        } as any
-                    }),
+                    imageConfig: {
+                        aspectRatio: aspectRatio,
+                        imageSize: imageSizeMap[quality],
+                    } as any
                 },
             });
 
