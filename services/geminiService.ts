@@ -1850,13 +1850,13 @@ Do NOT change any part of the image outside the masked area.`
                     finalPrompt = `Transform the content image to match this specific artistic style: "${styleDescription}".
 
 Instructions:
-1. The FIRST image is a layout template (gray with corner markers showing "${aspectRatio}"). This template shows the EXACT output dimensions you MUST use. This is the ONLY source of truth for output dimensions. DO NOT default to square (1:1) - the template clearly shows ${aspectRatio}.
-2. Analyze the visual style shown in the SECOND image (style reference). IGNORE its aspect ratio and any white borders - only use its style.
-3. Apply this exact style to the content of the THIRD image (content image). IGNORE its aspect ratio and any white borders - only use its content.
+1. The FIRST and SECOND images are IDENTICAL layout templates (gray with corner markers showing "${aspectRatio}"). These templates show the EXACT output dimensions you MUST use. These are the ONLY source of truth for output dimensions. DO NOT default to square (1:1) - the templates clearly show ${aspectRatio}.
+2. Analyze the visual style shown in the THIRD image (style reference). IGNORE its aspect ratio and any white borders - only use its style.
+3. Apply this exact style to the content of the FOURTH image (content image). IGNORE its aspect ratio and any white borders - only use its content.
 4. CRITICAL: Keep the subject, pose, composition, and facial features of the content image EXACTLY the same.
-5. CRITICAL: Your output MUST match the FIRST image (template) dimensions exactly. The template shows ${aspectRatio} - your output MUST be ${aspectRatio}, NOT square.
+5. CRITICAL: Your output MUST match the FIRST and SECOND images (templates) dimensions exactly. The templates show ${aspectRatio} - your output MUST be ${aspectRatio}, NOT square.
 6. Change ONLY the artistic rendering, colors, lighting, and texture to match the style description and reference image.
-7. IGNORE the aspect ratio of ALL reference images (second, third, etc.) - adapt their content to fit the template's aspect ratio.
+7. IGNORE the aspect ratio of ALL reference images (third, fourth, etc.) - adapt their content to fit the template's aspect ratio.
 8. ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO white spaces, borders, or padding anywhere.`;
                 } else if (referenceImages.length > 0) {
                     // No style, no prompt - just enhance
