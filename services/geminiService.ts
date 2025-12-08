@@ -1591,12 +1591,14 @@ Do NOT change any part of the image outside the masked area.`
                 }
             ];
 
-            console.log(`🎨 Enhancing image with AI using model: gemini-3-pro-image-preview. Target: ${resolutionInstruction}`);
+            const primaryModel = 'gemini-3-pro-image-preview';
+            const fallbackModel = 'gemini-2.5-flash-image';
+            
+            console.log(`🎨 Enhancing image with AI using model: ${primaryModel}. Target: ${resolutionInstruction}`);
 
-            const result = await ai.models.generateContent({
-                model: 'gemini-3-pro-image-preview',
-                contents: { parts: enhancementParts },
-                config: {
+            // Helper to generate with a model
+            const enhanceWithModel = async (model: string): Promise<any> => {
+                let config: any = {
                     // temperature: 0.1,
                     safetySettings: [],
                     // @ts-ignore - imageConfig types might be missing in some SDK versions
@@ -1606,11 +1608,41 @@ Do NOT change any part of the image outside the masked area.`
                     // @ts-ignore - generationConfig types might be missing in some SDK versions
                     generationConfig: {
                         sampleCount: 1,
-                        // REMOVED: aspectRatio in config causes Gemini Flash/Pro to default to square
-                        // We rely on the input image dimensions (template + content) to define aspect ratio
                     }
+                };
+                
+                // Don't set imageSize for flash model
+                if (model === fallbackModel) {
+                    delete config.imageConfig.imageSize;
                 }
-            });
+                
+                return await ai.models.generateContent({
+                    model,
+                    contents: { parts: enhancementParts },
+                    config,
+                });
+            };
+            
+            let result: any;
+            try {
+                result = await enhanceWithModel(primaryModel);
+            } catch (error: any) {
+                // Check if it's a retryable error
+                const errorMessage = error?.message || error?.error?.message || '';
+                const errorCode = error?.code || error?.error?.code;
+                const isRetryable = 
+                    errorCode === 429 || errorCode === 503 || errorCode === 500 ||
+                    errorMessage.includes('rate limit') || errorMessage.includes('quota') ||
+                    errorMessage.includes('timeout') || errorMessage.includes('unavailable');
+                
+                if (isRetryable) {
+                    console.warn(`⚠️ [UPSCALE] ${primaryModel} failed, falling back to ${fallbackModel}:`, errorMessage);
+                    result = await enhanceWithModel(fallbackModel);
+                    console.log(`✅ [UPSCALE] Successfully enhanced with fallback model ${fallbackModel}`);
+                } else {
+                    throw error;
+                }
+            }
 
             // Extract the enhanced image
             let enhancedDataUrl = imageDataUrl;
@@ -1940,17 +1972,10 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
             // Add text prompt AFTER images so Gemini sees style reference and content images first
             parts.push({ text: finalPrompt });
 
-            // Select model based on quality
-            // NOTE: gemini-2.5-flash-image has known issues with aspect ratio, so for regular quality
-            // we'll use gemini-3-pro-image-preview with 1K size to ensure aspect ratio works correctly
-            // This ensures consistent aspect ratio behavior across all quality levels
-            const model = quality === 'regular' 
-                ? 'gemini-3-pro-image-preview'  // Use gemini-3-pro even for regular to fix aspect ratio issues
-                : 'gemini-3-pro-image-preview';
-
-            console.log(`🎨 Generating ${quality.toUpperCase()} quality image with ${model}...`);
-
-            // Configure imageConfig - now using gemini-3-pro-image-preview for all quality levels
+            // Try gemini-3-pro-image-preview first, fallback to gemini-2.5-flash-image if it fails
+            const primaryModel = 'gemini-3-pro-image-preview';
+            const fallbackModel = 'gemini-2.5-flash-image';
+            
             // Map quality to imageSize: regular=1K, hd=2K, qhd=4K
             const imageSizeMap = {
                 'regular': '1K',
@@ -1958,22 +1983,79 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
                 'qhd': '4K'
             } as const;
             
-            let config: any = {
-                responseModalities: [Modality.IMAGE],
-                // @ts-ignore - imageConfig types might be missing in some SDK versions
-                imageConfig: {
-                    aspectRatio: aspectRatio,
-                    imageSize: imageSizeMap[quality],
-                } as any
+            // Helper function to generate with a specific model
+            const generateWithModel = async (model: string, useImageSize: boolean = true): Promise<any> => {
+                let config: any = {
+                    responseModalities: [Modality.IMAGE],
+                    // @ts-ignore - imageConfig types might be missing in some SDK versions
+                    imageConfig: {
+                        aspectRatio: aspectRatio,
+                    } as any
+                };
+                
+                // Only add imageSize for gemini-3-pro (it supports it)
+                // gemini-2.5-flash-image doesn't support imageSize parameter
+                if (useImageSize && model === primaryModel) {
+                    config.imageConfig.imageSize = imageSizeMap[quality];
+                }
+                
+                console.log(`📐 [GEMINI SERVICE] Config for ${model} (${quality}): aspectRatio=${aspectRatio}${useImageSize && model === primaryModel ? `, imageSize=${imageSizeMap[quality]}` : ''}`);
+                
+                return await ai.models.generateContent({
+                    model,
+                    contents: { parts },
+                    config,
+                });
             };
             
-            console.log(`📐 [GEMINI SERVICE] Config for ${model} (${quality}): aspectRatio=${aspectRatio}, imageSize=${imageSizeMap[quality]}`);
+            // Try primary model first (gemini-3-pro-image-preview)
+            console.log(`🎨 Attempting ${quality.toUpperCase()} quality image with ${primaryModel}...`);
+            let response: any;
+            let usedFallback = false;
             
-            const response = await ai.models.generateContent({
-                model,
-                contents: { parts },
-                config,
-            });
+            try {
+                response = await generateWithModel(primaryModel, true);
+            } catch (error: any) {
+                // Check if it's a retryable error (rate limit, timeout, service unavailable, etc.)
+                const errorMessage = error?.message || error?.error?.message || '';
+                const errorCode = error?.code || error?.error?.code;
+                const isRetryable = 
+                    errorCode === 429 || // Rate limit
+                    errorCode === 503 || // Service unavailable
+                    errorCode === 500 || // Internal server error
+                    errorMessage.includes('rate limit') ||
+                    errorMessage.includes('quota') ||
+                    errorMessage.includes('timeout') ||
+                    errorMessage.includes('unavailable') ||
+                    errorMessage.includes('503') ||
+                    errorMessage.includes('429');
+                
+                if (isRetryable) {
+                    console.warn(`⚠️ [GEMINI SERVICE] ${primaryModel} failed with retryable error, falling back to ${fallbackModel}:`, errorMessage);
+                    usedFallback = true;
+                    
+                    // For fallback, add template images to help with aspect ratio (flash model needs more help)
+                    try {
+                        console.log(`📏 [GEMINI SERVICE] Adding template for fallback model - aspect ratio: ${aspectRatio}`);
+                        const templateB64 = await createBlankTemplate(aspectRatio, quality);
+                        const { mimeType, data } = await processImageInput(templateB64);
+                        
+                        // Add template at the start of parts for flash model
+                        parts.unshift({ inlineData: { mimeType, data } });
+                        parts.unshift({ inlineData: { mimeType, data } });
+                        console.log(`✅ [GEMINI SERVICE] Added template images for fallback model`);
+                    } catch (templateError) {
+                        console.warn(`⚠️ Error generating template for fallback:`, templateError);
+                    }
+                    
+                    // Retry with fallback model
+                    response = await generateWithModel(fallbackModel, false);
+                    console.log(`✅ [GEMINI SERVICE] Successfully generated with fallback model ${fallbackModel}`);
+                } else {
+                    // Non-retryable error, throw it
+                    throw error;
+                }
+            }
 
             // Extract the generated image
             if (response.candidates && response.candidates.length > 0) {
@@ -1982,7 +2064,8 @@ ABSOLUTE REQUIREMENT: Fill every pixel from edge to edge with image content. NO 
                         const base64ImageBytes: string = part.inlineData.data;
                         const mimeType = part.inlineData.mimeType;
                         let imageB64 = `data:${mimeType};base64,${base64ImageBytes}`;
-                        console.log(`✅ ${quality.toUpperCase()} quality image generated successfully`);
+                        const modelUsed = usedFallback ? fallbackModel : primaryModel;
+                        console.log(`✅ ${quality.toUpperCase()} quality image generated successfully with ${modelUsed}${usedFallback ? ' (fallback)' : ''}`);
 
                         // Perform upscale pass if HD or QHD
                         if (quality === 'hd' || quality === 'qhd') {
