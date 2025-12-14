@@ -604,25 +604,63 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
     
     console.error(`❌ Gemini 3 Pro Image error (${response.status}):`, errorText)
     
-    // Handle 429 (Rate Limit / Quota Exceeded) - try fallback
+    // Handle 429 (Rate Limit / Quota Exhausted) - retry with backoff before falling back
     if (response.status === 429) {
-      console.log('⚠️ Rate limit/quota exceeded for Gemini 3 Pro Image, falling back to Gemini 2.5 Flash Image')
-      model = 'gemini-2.5-flash-image'
-      // Remove imageSize for flash model and use regional location
-      if (requestBody.generationConfig.imageConfig) {
-        delete requestBody.generationConfig.imageConfig.imageSize
-      }
-      apiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`
-      console.log(`🔄 Fallback URL: ${apiUrl}`)
+      console.log('⚠️ Rate limit (429) detected, retrying with exponential backoff...')
       
-      response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      })
+      // Retry up to 3 times with exponential backoff (2s, 4s, 8s)
+      let retrySuccess = false
+      for (let retry = 0; retry < 3; retry++) {
+        const delay = Math.pow(2, retry + 1) * 1000 // 2s, 4s, 8s
+        console.log(`⏳ Retry ${retry + 1}/3: Waiting ${delay}ms before retry...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        
+        // Retry the same request
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        })
+        
+        if (response.ok) {
+          console.log(`✅ Retry ${retry + 1} successful!`)
+          retrySuccess = true
+          break
+        }
+        
+        // If still 429, continue to next retry
+        if (response.status === 429) {
+          const retryErrorText = await response.text().catch(() => '')
+          console.log(`⚠️ Retry ${retry + 1} still got 429, will retry again...`)
+        } else {
+          // Different error, break and handle below
+          break
+        }
+      }
+      
+      // If all retries failed, fall back to Gemini 2.5 Flash
+      if (!retrySuccess && response.status === 429) {
+        console.log('⚠️ All retries exhausted, falling back to Gemini 2.5 Flash Image')
+        model = 'gemini-2.5-flash-image'
+        // Remove imageSize for flash model and use regional location
+        if (requestBody.generationConfig.imageConfig) {
+          delete requestBody.generationConfig.imageConfig.imageSize
+        }
+        apiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`
+        console.log(`🔄 Fallback URL: ${apiUrl}`)
+        
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        })
+      }
     }
     // Try fallback if it's a 404 or 403
     else if (response.status === 404 || response.status === 403) {
