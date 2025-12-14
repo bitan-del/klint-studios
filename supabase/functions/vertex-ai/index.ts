@@ -9,34 +9,56 @@ const corsHeaders = {
 
 // Initialize Vertex AI client
 async function getVertexAIClient() {
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  )
+  console.log('🔧 Getting Vertex AI client configuration...')
+  
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('❌ Missing Supabase environment variables:', {
+      hasUrl: !!supabaseUrl,
+      hasKey: !!serviceRoleKey
+    })
+    throw new Error('Supabase environment variables not configured in Edge Function')
+  }
+  
+  console.log('✅ Supabase client initialized')
+  
+  const supabase = createClient(supabaseUrl, serviceRoleKey)
 
   // Get Vertex AI config from database
-  const { data: projectIdData } = await supabase
+  console.log('📊 Fetching Vertex AI config from database...')
+  const { data: projectIdData, error: projectIdError } = await supabase
     .from('admin_settings')
     .select('setting_value')
     .eq('setting_key', 'vertex_project_id')
     .single()
 
-  const { data: locationData } = await supabase
+  const { data: locationData, error: locationError } = await supabase
     .from('admin_settings')
     .select('setting_value')
     .eq('setting_key', 'vertex_location')
     .single()
 
+  if (projectIdError) {
+    console.warn('⚠️ Error fetching project_id from database:', projectIdError.message)
+  }
+  if (locationError) {
+    console.warn('⚠️ Error fetching location from database:', locationError.message)
+  }
+
   const projectId = projectIdData?.setting_value || Deno.env.get('VERTEX_PROJECT_ID')
   const location = locationData?.setting_value || Deno.env.get('VERTEX_LOCATION') || 'us-central1'
+
+  console.log('📋 Configuration:', {
+    projectId: projectId ? `${projectId.substring(0, 10)}...` : 'NOT SET',
+    location,
+    source: projectIdData ? 'database' : 'environment'
+  })
 
   if (!projectId) {
     throw new Error('Vertex AI project ID not configured. Set vertex_project_id in admin_settings or VERTEX_PROJECT_ID environment variable.')
   }
-
-  // Note: Vertex AI SDK for Node.js may not work directly in Deno
-  // We'll use the REST API instead or use a Deno-compatible approach
-  // For now, we'll make direct HTTP calls to Vertex AI REST API
   
   return { projectId, location }
 }
@@ -254,6 +276,8 @@ async function handleGenerateContent(projectId: string, location: string, body: 
 
 // Get access token for Vertex AI
 async function getAccessToken(): Promise<string> {
+  console.log('🔑 Getting access token...')
+  
   // Option 1: Try metadata server (if running on GCP)
   try {
     const metadataResponse = await fetch(
@@ -265,29 +289,44 @@ async function getAccessToken(): Promise<string> {
     
     if (metadataResponse.ok) {
       const tokenData = await metadataResponse.json()
+      console.log('✅ Got token from GCP metadata server')
       return tokenData.access_token
     }
   } catch (e) {
     // Not running on GCP, continue
+    console.log('ℹ️ Not running on GCP, trying service account JSON...')
   }
 
   // Option 2: Use service account JSON from environment variable (Supabase Edge Function secret)
   const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-  if (serviceAccountJson) {
-    try {
-      const serviceAccount = JSON.parse(serviceAccountJson)
-      const token = await getTokenFromServiceAccount(serviceAccount)
-      return token
-    } catch (e) {
-      console.error('Error parsing service account JSON:', e)
-    }
+  
+  if (!serviceAccountJson) {
+    console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON secret is not set!')
+    console.error('   Check: Supabase Dashboard → Edge Functions → Secrets')
+    throw new Error(
+      'Google Cloud credentials not configured. ' +
+      'Please set GOOGLE_SERVICE_ACCOUNT_JSON as an Edge Function secret in Supabase Dashboard → Edge Functions → Secrets. ' +
+      'The value should be the full JSON content of your service account key file.'
+    )
   }
-
-  throw new Error(
-    'Google Cloud credentials not configured. ' +
-    'Please set GOOGLE_SERVICE_ACCOUNT_JSON as an Edge Function secret in Supabase Dashboard → Edge Functions → Secrets. ' +
-    'The value should be the full JSON content of your service account key file.'
-  )
+  
+  console.log('✅ GOOGLE_SERVICE_ACCOUNT_JSON secret found, parsing...')
+  
+  try {
+    const serviceAccount = JSON.parse(serviceAccountJson)
+    console.log('✅ Service account parsed, client_email:', serviceAccount.client_email)
+    const token = await getTokenFromServiceAccount(serviceAccount)
+    console.log('✅ Access token obtained successfully')
+    return token
+  } catch (e: any) {
+    console.error('❌ Error parsing/using service account JSON:', e)
+    console.error('   Error message:', e?.message)
+    console.error('   Error stack:', e?.stack)
+    throw new Error(
+      `Failed to get access token from service account: ${e?.message || 'Unknown error'}. ` +
+      'Please verify that GOOGLE_SERVICE_ACCOUNT_JSON secret contains valid JSON.'
+    )
+  }
 }
 
 // Get access token from service account JSON using JWT
