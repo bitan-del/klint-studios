@@ -177,7 +177,7 @@ Required in `.env` file:
 ```env
 VITE_SUPABASE_URL=https://qayasxoiikjmkuuaphwd.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-VITE_GEMINI_API_KEY=AIzaSyAJOYH-NS0qvmFsZLR_NTR4grkJQss_jL4
+VITE_GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 VITE_APP_URL=http://localhost:3000
 ```
 

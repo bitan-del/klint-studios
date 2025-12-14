@@ -2,7 +2,7 @@
 
 import type { ProductCreativeControls, ProductEcommercePack, ProductSceneTemplate, StagedAsset, SceneSuggestion } from '../types';
 import { APERTURES_LIBRARY, CAMERA_ANGLES_LIBRARY_PRODUCT, COLOR_GRADING_PRESETS, FOCAL_LENGTHS_LIBRARY, LIGHTING_DIRECTIONS_LIBRARY, LIGHT_QUALITIES_LIBRARY, CATCHLIGHT_STYLES_LIBRARY, SURFACE_LIBRARY, PRODUCT_MATERIAL_LIBRARY, THEMED_SCENE_TEMPLATES, SHOT_TYPES_LIBRARY, EXPRESSIONS, PRODUCT_INTERACTION_LIBRARY } from '../constants';
-import { geminiService } from '../services/geminiService';
+import { vertexService } from '../services/vertexService';
 import type { StudioStoreSlice } from './StudioContext';
 import { getDominantColor } from '../utils/colorExtractor';
 import { getComplementaryColor, withRetry } from '../utils/colorUtils';
@@ -137,7 +137,7 @@ export const createProductSlice: StudioStoreSlice<ProductSlice> = (set, get) => 
 
       set({ isRemovingBackground: true, isCutout: false, stagedAssets: [] });
       try {
-          const cutoutB64 = await withRetry(() => geminiService.removeBackground(productImage));
+          const cutoutB64 = await withRetry(() => vertexService.removeBackground(productImage));
           const initialAsset: StagedAsset = { id: 'product', base64: cutoutB64, x: 50, y: 50, z: 1, scale: 50 };
           set({ productImageCutout: cutoutB64, isCutout: true, stagedAssets: [initialAsset] });
       } catch (e) {
@@ -176,14 +176,14 @@ export const createProductSlice: StudioStoreSlice<ProductSlice> = (set, get) => 
 
       set({ isSuggestingScenes: true, error: null, sceneSuggestions: [] });
       try {
-          const suggestions = await withRetry(() => geminiService.getSceneSuggestions(imageToAnalyze));
+          const suggestions = await withRetry(() => vertexService.getSceneSuggestions(imageToAnalyze));
           // Set suggestions first without previews to show placeholders
           set({ sceneSuggestions: suggestions.map(s => ({ ...s, previewImageB64: null })) });
 
           // Asynchronously generate and update previews
           suggestions.forEach(async (suggestion, index) => {
               try {
-                  const preview = await withRetry(() => geminiService.generateWithImagen(suggestion.previewPrompt, '1:1'));
+                  const preview = await withRetry(() => vertexService.generateWithImagen(suggestion.previewPrompt, '1:1'));
                   set(state => {
                       const newSuggestions = [...state.sceneSuggestions];
                       if (newSuggestions[index]) {

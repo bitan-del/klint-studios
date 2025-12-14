@@ -1,7 +1,7 @@
 import type { DesignInput, DesignPlacementControls } from '../types';
 import { getDominantColor } from '../utils/colorExtractor';
 import type { StudioStoreSlice } from './StudioContext';
-import { geminiService } from '../services/geminiService';
+import { vertexService } from '../services/vertexService';
 import { withRetry } from '../utils/colorUtils';
 
 export interface DesignState {
@@ -95,7 +95,7 @@ export const createDesignSlice: StudioStoreSlice<DesignSlice> = (set, get) => ({
     set({ isGeneratingDesign: true, error: null });
     try {
       // Design graphics are usually square.
-      const imageB64 = await withRetry(() => geminiService.generateWithImagen(prompt, '1:1'));
+      const imageB64 = await withRetry(() => vertexService.generateWithImagen(prompt, '1:1'));
       if (imageB64) {
         get().setDesignImage({
           id: `ai-design-${Date.now()}`,

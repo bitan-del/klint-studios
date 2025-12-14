@@ -4,7 +4,7 @@
  */
 import React, { useState, ChangeEvent, useRef, useEffect, DragEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { geminiService } from '../../services/geminiService';
+import { vertexService } from "../../services/vertexService";
 import PolaroidCard from '../design/PolaroidCard';
 import JSZip from 'jszip';
 import { cn } from '../../lib/utils';
@@ -385,7 +385,7 @@ export default function Photoshoot({ onBack }: { onBack: () => void }) {
         if (!modelGenPrompt) return;
         setIsGeneratingModel(true);
         try {
-            const imageUrl = await geminiService.generateWithImagen(modelGenPrompt, '3:4');
+            const imageUrl = await vertexService.generateWithImagen(modelGenPrompt, '3:4');
             setUploadedImage(imageUrl);
             setGeneratedImages({});
             setSelectedStyles([]);
@@ -442,7 +442,7 @@ export default function Photoshoot({ onBack }: { onBack: () => void }) {
         setIsGeneratingConcept(true);
         setConcept(null);
         try {
-            const concepts = await geminiService.generateConceptSuggestions(conceptImages[0]);
+            const concepts = await vertexService.generateConceptSuggestions(conceptImages[0]);
             const bestConcept = concepts[0] || { id: 'fallback', name: 'Fallback', description: 'A cool photo of the model.', prompt: 'A cool photo of the model.' };
             const newConcept: Concept = {
                 background: bestConcept.description,
@@ -577,7 +577,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
             try {
                 console.log(`🔄 [PHOTOSHOOT] Processing style: ${style.id}`);
                 const { finalPrompt, imageUrls } = await constructApiPayload(style.prompt);
-                const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls, selectedQuality, 'realistic', aspectRatio);
+                const resultUrl = await vertexService.generateStyledImage(finalPrompt, imageUrls, selectedQuality, 'realistic', aspectRatio);
 
                 // Track usage for HD/QHD
                 if (user && (selectedQuality === 'hd' || selectedQuality === 'qhd')) {
@@ -774,7 +774,7 @@ Your single most important, critical, and unbreakable task is to perfectly prese
         }));
         try {
             const { finalPrompt, imageUrls } = await constructApiPayload(style.prompt, refinePrompt);
-            const resultUrl = await geminiService.generateStyledImage(finalPrompt, imageUrls, selectedQuality, 'realistic', aspectRatio);
+            const resultUrl = await vertexService.generateStyledImage(finalPrompt, imageUrls, selectedQuality, 'realistic', aspectRatio);
 
             // Track usage for HD/QHD
             if (user && (selectedQuality === 'hd' || selectedQuality === 'qhd')) {

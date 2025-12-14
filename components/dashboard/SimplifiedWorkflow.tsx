@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Upload, Wand2, Download, Image as ImageIcon, Sparkles, X, Check, Zap, Loader2, ChevronDown, FolderOpen, XCircle, Bot, Send, Download as DownloadIcon, Video, Menu } from 'lucide-react';
-import { geminiService } from '../../services/geminiService';
+import { vertexService } from "../../services/vertexService";
 import { useAuth } from '../../context/AuthContext';
 import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 import { storageService } from '../../services/storageService';
@@ -212,7 +212,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
         setIsOptimizing(true);
         try {
             const context = `${config.title} - ${config.subtitle}`;
-            const optimized = await geminiService.optimizePrompt(prompt, context);
+            const optimized = await vertexService.optimizePrompt(prompt, context);
             setPrompt(optimized);
         } catch (error) {
             console.error('Failed to optimize prompt:', error);
@@ -397,7 +397,7 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
             // Special handling for upscale workflow
             if (workflowId === 'upscale' && uploadedImage) {
                 console.log('🚀 Starting intelligent upscaling process...');
-                const upscaledImage = await geminiService.upscaleImage(uploadedImage, prompt);
+                const upscaledImage = await vertexService.upscaleImage(uploadedImage, prompt);
                 setGeneratedImages([upscaledImage]);
 
                 // Save to Cloudinary storage
@@ -429,11 +429,11 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                         if (uploadedImages.length > 0 || selectedStyle !== 'realistic' || uploadedImage) {
                             const allImages = [uploadedImage, ...uploadedImages].filter(Boolean) as string[];
                             console.log('🎨 [SIMPLIFIED] Generating with aspect ratio:', aspectRatio);
-                            const imageB64 = await geminiService.generateStyledImage(prompt || '', allImages, selectedQuality, selectedStyle, aspectRatio);
+                            const imageB64 = await vertexService.generateStyledImage(prompt || '', allImages, selectedQuality, selectedStyle, aspectRatio);
                             return imageB64;
                         } else {
                             // Otherwise use standard generation (text-to-image only)
-                            const imageB64 = await geminiService.generateSimplifiedPhotoshoot(
+                            const imageB64 = await vertexService.generateSimplifiedPhotoshoot(
                                 prompt,
                                 aspectRatio,
                                 null // No image for pure text-to-image

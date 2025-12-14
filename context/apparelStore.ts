@@ -3,7 +3,7 @@
 import type { AIModel, ApparelCreativeControls, ApparelItem, ArtDirectorSuggestion, ShotType, CameraAngle, ApparelCategory, Scene, Look } from '../types';
 // FIX: Import BACKGROUNDS_LIBRARY to resolve reference error.
 import { APERTURES_LIBRARY, BACKGROUNDS_LIBRARY, CAMERA_ANGLES_LIBRARY, COLOR_GRADING_PRESETS, EXPRESSIONS, FABRIC_TYPES_LIBRARY, FOCAL_LENGTHS_LIBRARY, LIGHTING_PRESETS, SHOT_TYPES_LIBRARY, LIGHTING_DIRECTIONS_LIBRARY, LIGHT_QUALITIES_LIBRARY, CATCHLIGHT_STYLES_LIBRARY } from '../constants';
-import { geminiService } from '../services/geminiService';
+import { vertexService } from '../services/vertexService';
 import type { StudioStoreSlice } from './StudioContext';
 import { withRetry } from '../utils/colorUtils';
 
@@ -178,7 +178,7 @@ export const createApparelSlice: StudioStoreSlice<ApparelSlice> = (set, get) => 
   saveModel: async (imageB64) => {
     set({ isSavingModel: true, error: null });
     try {
-        const modelDetails = await withRetry(() => geminiService.describeModel(imageB64));
+        const modelDetails = await withRetry(() => vertexService.describeModel(imageB64));
         const newModel: AIModel = {
             id: `user-model-${Date.now()}`,
             name: modelDetails.name,
@@ -221,7 +221,7 @@ export const createApparelSlice: StudioStoreSlice<ApparelSlice> = (set, get) => 
       const finalPrompt = `Professional studio headshot portrait of a model. ${prompt}. Ultra-photorealistic, clean studio lighting, sharp focus on the face, plain white background.`;
       
       // Models are usually portrait aspect ratio
-      const imageB64 = await withRetry(() => geminiService.generateWithImagen(finalPrompt, '3:4'));
+      const imageB64 = await withRetry(() => vertexService.generateWithImagen(finalPrompt, '3:4'));
       if (imageB64) {
         // Now that we have the image, call saveModel to analyze it and add it to "My Agency"
         await get().saveModel(imageB64);
@@ -246,8 +246,8 @@ export const createApparelSlice: StudioStoreSlice<ApparelSlice> = (set, get) => 
       set(state => ({ apparel: [...state.apparel, newItem] }));
 
       // Run AI tasks in parallel
-      const artDirectorPromise = withRetry(() => geminiService.getArtDirectorSuggestions(base64));
-      const analysisPromise = withRetry(() => geminiService.analyzeApparel(base64));
+      const artDirectorPromise = withRetry(() => vertexService.getArtDirectorSuggestions(base64));
+      const analysisPromise = withRetry(() => vertexService.analyzeApparel(base64));
 
       try {
           const { description, category } = await analysisPromise;
@@ -298,7 +298,7 @@ export const createApparelSlice: StudioStoreSlice<ApparelSlice> = (set, get) => 
     set({ isSuggestingLayering: true, error: null });
     try {
       const itemsToLayer = apparel.map(({ id, description, category }) => ({ id, description, category }));
-      const orderedIds = await withRetry(() => geminiService.suggestLayering(itemsToLayer));
+      const orderedIds = await withRetry(() => vertexService.suggestLayering(itemsToLayer));
       
       const reorderedApparel = orderedIds.map(id => apparel.find(item => item.id === id)).filter(Boolean) as ApparelItem[];
       const remainingApparel = apparel.filter(item => !orderedIds.includes(item.id));
@@ -346,7 +346,7 @@ export const createApparelSlice: StudioStoreSlice<ApparelSlice> = (set, get) => 
 
       set({ isAnalyzingLighting: true, error: null });
       try {
-          const description = await withRetry(() => geminiService.describeImageStyle(uploadedModelImage));
+          const description = await withRetry(() => vertexService.describeImageStyle(uploadedModelImage));
           set({ modelLightingDescription: description });
           const matchModelLightingPreset = LIGHTING_PRESETS.find(p => p.isDynamic);
           if (matchModelLightingPreset) {

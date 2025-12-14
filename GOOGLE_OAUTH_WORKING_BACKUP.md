@@ -61,7 +61,7 @@ const loadUserProfile = (authUser?: any) => {
 ```
 VITE_SUPABASE_URL=https://qayasxoiikjmkuuaphwd.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFheWFzeG9paWtqbWt1dWFwaHdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MTEzMzIsImV4cCI6MjA3NjE4NzMzMn0.8MDjKOCsk7soGTqqk2cTiT47qg_crCWeIRJjaUrWvus
-VITE_GEMINI_API_KEY=AIzaSyAJOYH-NS0qvmFsZLR_NTR4grkJqss_jL4
+VITE_GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 VITE_APP_URL=http://localhost:3000
 ```
 

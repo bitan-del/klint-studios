@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useState, DragEvent, ChangeEvent } from 'react';
-import { geminiService } from '../../services/geminiService';
+import { vertexService } from "../../services/vertexService";
 import { cn } from '../../lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -169,7 +169,7 @@ export default function OneToManyProductSceneGenerator({ onBack }: { onBack: () 
 
             const finalPrompt = `${basePrompt}\n\n**Angle Instruction:** ${angle.prompt}`;
 
-            const resultUrl = await geminiService.generateStyledImage(finalPrompt, [uploadedImage]);
+            const resultUrl = await vertexService.generateStyledImage(finalPrompt, [uploadedImage]);
 
             setGeneratedImages(prev => ({ ...prev, [angleId]: { status: 'done', url: resultUrl } }));
             

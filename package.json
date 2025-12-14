@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase:functions:deploy": "supabase functions deploy vertex-ai",
+    "supabase:functions:serve": "supabase functions serve vertex-ai"
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.0",

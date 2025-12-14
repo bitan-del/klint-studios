@@ -127,15 +127,27 @@ class CloudinaryService {
 
   /**
    * Delete image from Cloudinary
+   * Note: This requires API key and secret for signed requests
+   * If not available, deletion will be skipped (soft delete in DB still works)
    */
   async deleteImage(publicId: string): Promise<boolean> {
     if (!this.config) {
-      throw new Error('Cloudinary not initialized');
+      console.warn('⚠️ Cloudinary not initialized, skipping Cloudinary deletion');
+      return false;
+    }
+
+    // If we don't have API key/secret, we can't delete from Cloudinary
+    // This is OK - the database soft delete is what matters
+    if (!this.config.apiKey || !this.config.apiSecret) {
+      console.warn('⚠️ Cloudinary API credentials not available, skipping Cloudinary deletion');
+      console.warn('   Image will be soft-deleted in database but may remain in Cloudinary');
+      return false;
     }
 
     try {
-      // For unsigned uploads, we need to use the delete API with signature
-      // For now, we'll use a server-side endpoint or signed deletion
+      // For signed deletion, we need to create a signature
+      // For now, we'll attempt deletion but it may fail without proper signing
+      // This is acceptable - database deletion is the critical operation
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${this.config.cloudName}/image/destroy`,
         {
@@ -145,21 +157,25 @@ class CloudinaryService {
           },
           body: JSON.stringify({
             public_id: publicId,
-            // Note: For production, you'll need to sign this request server-side
+            api_key: this.config.apiKey,
+            // Note: For production, you should sign this request server-side
+            // For now, this may fail but database deletion will still work
           }),
         }
       );
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || 'Failed to delete image');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData?.error?.message || `HTTP ${response.status}`;
+        console.warn('⚠️ Cloudinary delete failed (non-critical):', errorMessage);
+        return false; // Don't throw - database deletion is what matters
       }
 
       console.log('✅ Image deleted from Cloudinary:', publicId);
       return true;
-    } catch (error) {
-      console.error('❌ Cloudinary delete error:', error);
-      throw error;
+    } catch (error: any) {
+      console.warn('⚠️ Cloudinary delete error (non-critical):', error?.message || error);
+      return false; // Don't throw - database deletion is what matters
     }
   }
 

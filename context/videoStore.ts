@@ -1,7 +1,7 @@
 
 import type { VideoState, VideoCreativeControls } from '../types';
 import type { StudioStoreSlice } from './StudioContext';
-import { geminiService } from '../services/geminiService';
+import { vertexService } from '../services/vertexService';
 import { withRetry } from '../utils/colorUtils';
 
 export interface VideoActions {
@@ -63,7 +63,7 @@ export const createVideoSlice: StudioStoreSlice<VideoSlice> = (set, get) => ({
 
     set({ isSuggestingPrompts: true, promptSuggestions: [], error: null });
     try {
-      const suggestions = await withRetry(() => geminiService.suggestVideoPrompts(videoSourceImage));
+      const suggestions = await withRetry(() => vertexService.suggestVideoPrompts(videoSourceImage));
       set({ promptSuggestions: suggestions });
     } catch (e: any) {
       console.error("Failed to suggest video prompts:", e);

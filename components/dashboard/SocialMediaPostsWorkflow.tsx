@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ArrowLeft, Upload, Sparkles, Image as ImageIcon, X, Loader2, Download, FolderOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { geminiService } from '../../services/geminiService';
+import { vertexService } from "../../services/vertexService";
 import { useClipboardPaste } from '../../hooks/useClipboardPaste';
 import { storageService } from '../../services/storageService';
 import { ImageLibraryModal } from '../common/ImageLibraryModal';
@@ -138,7 +138,7 @@ export const SocialMediaPostsWorkflow: React.FC<SocialMediaPostsWorkflowProps> =
 
 Return ONLY the JSON, no markdown, no explanations.`;
 
-            const result = await geminiService.analyzeImage(referenceImage, analysisPrompt);
+            const result = await vertexService.analyzeImage(referenceImage, analysisPrompt);
             
             console.log('📊 Style analysis received:', result);
             
@@ -200,7 +200,7 @@ Make it Instagram-ready, visually appealing, and on-brand.`;
                 const prompt = `${styleDescription} Variation ${i + 1}: Create a unique social media composition featuring the product with the analyzed style aesthetic.`;
                 
                 try {
-                    const result = await geminiService.generateSimplifiedPhotoshoot(
+                    const result = await vertexService.generateSimplifiedPhotoshoot(
                         prompt,
                         aspectRatio,
                         productImage

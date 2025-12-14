@@ -214,7 +214,9 @@ CREATE POLICY "Users can insert their own images"
 -- Users can update their own images (for soft delete)
 CREATE POLICY "Users can update their own images"
   ON public.user_images FOR UPDATE
-  USING (auth.uid() = user_id);
+  TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 -- Users can delete their own images
 CREATE POLICY "Users can delete their own images"

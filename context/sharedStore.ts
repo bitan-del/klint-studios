@@ -29,7 +29,7 @@ import {
 } from '../constants';
 import { promptService } from '../services/promptService';
 import { storageService } from '../services/storageService';
-import { geminiService } from '../services/geminiService';
+import { vertexService } from '../services/vertexService';
 import type { StudioStoreSlice } from './StudioContext';
 import { withRetry } from '../utils/colorUtils';
 // FIX: Correctly import PLAN_DETAILS from permissionsService
@@ -814,7 +814,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
 
                     const { parts } = await promptService.generatePrompt(promptParams as any);
 
-                    await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
+                    await withRetry(() => vertexService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                         set(currentState => {
                             const newImages = [...(currentState.generatedImages || [])];
                             if (imageIndex < newImages.length) newImages[imageIndex] = imageB64;
@@ -842,7 +842,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
 
                         const { parts } = await promptService.generatePrompt(promptParams as any);
 
-                        await withRetry(() => geminiService.generatePhotoshootImage(parts, ar.value, 1, overriddenControls.negativePrompt, (imageB64) => {
+                        await withRetry(() => vertexService.generatePhotoshootImage(parts, ar.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                             set(currentState => {
                                 const newImages = [...(currentState.generatedImages || [])];
                                 if (imageIndex < newImages.length) newImages[imageIndex] = imageB64;
@@ -893,7 +893,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         });
                     }
 
-                    await withRetry(() => geminiService.generatePhotoshootImage(parts, aspectRatio.value, numberOfImages, "", (imageB64, index) => {
+                    await withRetry(() => vertexService.generatePhotoshootImage(parts, aspectRatio.value, numberOfImages, "", (imageB64, index) => {
                         set(currentState => {
                             const newImages = [...(currentState.generatedImages || [])];
                             if (index < newImages.length) newImages[index] = imageB64;
@@ -926,7 +926,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                             const overriddenControls = { ...state.apparelControls, shotType, expression, cameraAngle };
                             const { parts } = await promptService.generatePrompt({ ...state, studioMode: 'apparel', generationMode: 'image', apparelControls: overriddenControls, aspectRatio: state.aspectRatio.value });
 
-                            await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
+                            await withRetry(() => vertexService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                                 set(currentState => {
                                     const newImages = [...(currentState.generatedImages || [])];
                                     newImages[index] = imageB64;
@@ -940,7 +940,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     } else {
                         set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
                         const { parts } = await promptService.generatePrompt({ ...get(), studioMode: 'apparel', generationMode: 'image', aspectRatio: get().aspectRatio.value });
-                        await withRetry(() => geminiService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, apparelControls.negativePrompt, (imageB64, index) => {
+                        await withRetry(() => vertexService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, apparelControls.negativePrompt, (imageB64, index) => {
                             set(state => {
                                 const newImages = [...(state.generatedImages || Array(numberOfImages).fill(null))];
                                 newImages[index] = imageB64;
@@ -969,7 +969,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                             const overriddenControls = { ...state.productControls, shotType, expression, cameraAngle };
                             const { parts } = await promptService.generatePrompt({ ...state, studioMode: 'product', generationMode: 'image', productControls: overriddenControls, aspectRatio: state.aspectRatio.value });
 
-                            await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
+                            await withRetry(() => vertexService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                                 set(currentState => {
                                     const newImages = [...(currentState.generatedImages || [])];
                                     if (newImages.length > index) newImages[index] = imageB64;
@@ -993,7 +993,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                             const overriddenControls = { ...state.productControls, cameraAngle, focalLength };
                             const { parts } = await promptService.generatePrompt({ ...state, studioMode: 'product', generationMode: 'image', productControls: overriddenControls, aspectRatio: state.aspectRatio.value });
 
-                            await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
+                            await withRetry(() => vertexService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                                 set(currentState => {
                                     const newImages = [...(currentState.generatedImages || [])];
                                     if (newImages.length > index) newImages[index] = imageB64;
@@ -1007,7 +1007,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     } else {
                         set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
                         const { parts } = await promptService.generatePrompt({ ...get(), studioMode: 'product', generationMode: 'image', aspectRatio: get().aspectRatio.value });
-                        await withRetry(() => geminiService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, productControls.negativePrompt, (imageB64, index) => {
+                        await withRetry(() => vertexService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, productControls.negativePrompt, (imageB64, index) => {
                             set(state => {
                                 const newImages = [...(state.generatedImages || Array(numberOfImages).fill(null))];
                                 newImages[index] = imageB64;
@@ -1049,7 +1049,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                                 shotView: shot.view,
                                 aspectRatio: state.aspectRatio.value,
                             });
-                            await withRetry(() => geminiService.generatePhotoshootImage(parts, get().aspectRatio.value, 1, undefined, (imageB64) => {
+                            await withRetry(() => vertexService.generatePhotoshootImage(parts, get().aspectRatio.value, 1, undefined, (imageB64) => {
                                 set(currentState => {
                                     const newImages = [...(currentState.generatedImages || [])];
                                     if (newImages.length > index) newImages[index] = imageB64;
@@ -1074,7 +1074,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                             shotView: 'front',
                             aspectRatio: state.aspectRatio.value,
                         });
-                        await withRetry(() => geminiService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, undefined, (imageB64, index) => {
+                        await withRetry(() => vertexService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, undefined, (imageB64, index) => {
                             set(state => {
                                 const newImages = [...(state.generatedImages || Array(numberOfImages).fill(null))];
                                 newImages[index] = imageB64;
@@ -1091,7 +1091,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     const { numberOfImages, reimagineControls } = get();
                     set({ generatedImages: Array(numberOfImages).fill(null), activeImageIndex: 0 });
                     const { parts } = await promptService.generatePrompt({ ...get(), studioMode: 'reimagine', aspectRatio: get().aspectRatio.value });
-                    await withRetry(() => geminiService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, reimagineControls.negativePrompt, (imageB64, index) => {
+                    await withRetry(() => vertexService.generatePhotoshootImage(parts, get().aspectRatio.value, numberOfImages, reimagineControls.negativePrompt, (imageB64, index) => {
                         set(state => {
                             const newImages = [...(state.generatedImages || Array(numberOfImages).fill(null))];
                             newImages[index] = imageB64;
@@ -1123,7 +1123,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     const signal = generationController.signal;
 
                     try {
-                        let operation: any = await withRetry(() => geminiService.generatePhotoshootVideo(finalPrompt, aspectRatio.value as "9:16" | "16:9", videoControls.resolution, videoSourceImage), { onRetry: onRetry });
+                        let operation: any = await withRetry(() => vertexService.generatePhotoshootVideo(finalPrompt, aspectRatio.value as "9:16" | "16:9", videoControls.resolution, videoSourceImage), { onRetry: onRetry });
 
                         if (signal.aborted) return;
 
@@ -1133,7 +1133,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                             if (signal.aborted) return;
                             await new Promise(resolve => setTimeout(resolve, 10000));
                             if (signal.aborted) return;
-                            operation = await geminiService.getVideoOperationStatus(operation);
+                            operation = await vertexService.getVideoOperationStatus(operation);
                         }
 
                         if (signal.aborted) return;
@@ -1145,7 +1145,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
                         if (downloadLink) {
                             set({ loadingMessage: 'Fetching final video...' });
-                            const blobUrl = await geminiService.fetchVideoAsBlobUrl(downloadLink);
+                            const blobUrl = await vertexService.fetchVideoAsBlobUrl(downloadLink);
                             if (signal.aborted) {
                                 URL.revokeObjectURL(blobUrl);
                                 return;
@@ -1231,7 +1231,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
 
         try {
             const originalImageB64 = generatedImages[activeImageIndex]!;
-            const result = await withRetry(() => geminiService.generativeEdit({
+            const result = await withRetry(() => vertexService.generativeEdit({
                 originalImageB64,
                 maskImageB64: maskB64,
                 prompt,
@@ -1305,7 +1305,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
             if (!textPrompt) throw new Error("Could not generate a valid prompt for video generation.");
 
             set({ loadingMessage: 'Sending to video model...' });
-            let operation: any = await withRetry(() => geminiService.generatePhotoshootVideo(textPrompt, aspectRatio.value as "9:16" | "16:9", videoControls.resolution, referenceImageB64), { onRetry: onRetry });
+            let operation: any = await withRetry(() => vertexService.generatePhotoshootVideo(textPrompt, aspectRatio.value as "9:16" | "16:9", videoControls.resolution, referenceImageB64), { onRetry: onRetry });
 
             if (signal.aborted) return;
 
@@ -1319,7 +1319,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                 }
                 await new Promise(resolve => setTimeout(resolve, 10000)); // Poll every 10 seconds
                 if (signal.aborted) return;
-                operation = await geminiService.getVideoOperationStatus(operation);
+                operation = await vertexService.getVideoOperationStatus(operation);
             }
 
             if (signal.aborted) return;
@@ -1331,7 +1331,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
             const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
             if (downloadLink) {
                 set({ loadingMessage: 'Fetching final video...' });
-                const blobUrl = await geminiService.fetchVideoAsBlobUrl(downloadLink);
+                const blobUrl = await vertexService.fetchVideoAsBlobUrl(downloadLink);
                 if (signal.aborted) {
                     URL.revokeObjectURL(blobUrl);
                     return;
@@ -1411,7 +1411,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         aspectRatio: state.aspectRatio.value,
                     });
 
-                    await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
+                    await withRetry(() => vertexService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                         set(currentState => {
                             const newImages = [...(currentState.generatedImages || [])];
                             if (newImages.length > index) newImages[index] = imageB64;
@@ -1460,7 +1460,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                         aspectRatio: state.aspectRatio.value,
                     });
 
-                    await withRetry(() => geminiService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
+                    await withRetry(() => vertexService.generatePhotoshootImage(parts, state.aspectRatio.value, 1, overriddenControls.negativePrompt, (imageB64) => {
                         set(currentState => {
                             const newImages = [...(currentState.generatedImages || [])];
                             if (newImages.length > index) newImages[index] = imageB64;
@@ -1514,7 +1514,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                     aspectRatio: currentState.aspectRatio.value,
                 });
 
-                await withRetry(() => geminiService.generatePhotoshootImage(parts, currentState.aspectRatio.value, 1, undefined, (imageB64) => {
+                await withRetry(() => vertexService.generatePhotoshootImage(parts, currentState.aspectRatio.value, 1, undefined, (imageB64) => {
                     set(s => {
                         const newImages = [...(s.generatedImages || [])];
                         if (newImages.length > index) newImages[index] = imageB64;
@@ -1541,7 +1541,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
             set({ loadingMessage: `Background generation is busy. Retrying in ${Math.ceil(delay / 1000)}s... (Attempt ${attempt})` });
         };
         try {
-            const imageB64 = await withRetry(() => geminiService.generateWithImagen(prompt, get().aspectRatio.value), { onRetry: onRetry });
+            const imageB64 = await withRetry(() => vertexService.generateWithImagen(prompt, get().aspectRatio.value), { onRetry: onRetry });
             const customBg: Background = {
                 id: 'custom-ai',
                 name: prompt.substring(0, 30),
@@ -1638,7 +1638,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
 
                 console.log('🎨 [CHATBOT] Combined prompt:', finalPrompt);
 
-                const generatedImage = await geminiService.generateStyledImage(finalPrompt, context.referenceImages);
+                const generatedImage = await vertexService.generateStyledImage(finalPrompt, context.referenceImages);
 
                 // Update context with new generated image
                 const updatedContext = {
@@ -1690,7 +1690,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
 
                 console.log('🎨 [CHATBOT] Enhanced prompt:', imagePrompt);
 
-                const generatedImage = await geminiService.generateStyledImage(imagePrompt, images);
+                const generatedImage = await vertexService.generateStyledImage(imagePrompt, images);
 
                 // Store context for future follow-up requests
                 const context = {
@@ -1725,7 +1725,7 @@ export const createSharedSlice: StudioStoreSlice<SharedSlice> = (set, get) => ({
                 const { studioMode } = get();
                 const dynamicContext = `CURRENT USER STATE:\n- Current Page/Mode: ${studioMode}\n\n${README_CONTENT}`;
 
-                const response = await geminiService.getChatbotResponse(question, dynamicContext);
+                const response = await vertexService.getChatbotResponse(question, dynamicContext);
                 set(state => {
                     const newHistory = [...state.chatHistory, { role: 'model' as const, text: response }];
                     try {

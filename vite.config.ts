@@ -27,12 +27,11 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
           'supabase': ['@supabase/supabase-js'],
-          'gemini': ['@google/genai'],
         },
       },
     },
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', '@supabase/supabase-js', '@google/genai'],
+    include: ['react', 'react-dom', '@supabase/supabase-js'],
   },
 });

@@ -21,7 +21,7 @@ import { MyCreations } from './components/dashboard/MyCreations';
 import { PixelMuseEditor } from './components/pixelmuse/PixelMuseEditor';
 import { KLogo } from './components/shared/KLogo';
 import { CanvaFeaturesDisplay } from './components/shared/CanvaFeaturesDisplay';
-import type { User as UserType, UserPlan, Currency, PlanPrices, PaymentGatewaySettings, SupabaseSettings, GeminiSettings } from './types';
+import type { User as UserType, UserPlan, Currency, PlanPrices, PaymentGatewaySettings, SupabaseSettings, VertexAISettings } from './types';
 import { PLAN_DETAILS, getPlanDisplayName } from './services/permissionsService';
 import {
     Eye, EyeOff, Shield, X, Search, RefreshCw, RotateCcw, Zap, Loader2, CreditCard, Check, DollarSign, Link2, CheckCircle2, Key, Globe, ChevronDown, LayoutGrid, PanelLeft, ImageIcon, Layers, Sparkles
@@ -77,7 +77,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         brand: planPrices.brand ?? 4999,
     });
     const [selectedCurrency, setSelectedCurrency] = useState<Currency>('INR'); // Fixed to INR
-    const [gemini, setGemini] = useState(apiSettings.gemini || {});
+    const [vertex, setVertex] = useState(apiSettings.vertex || { projectId: '', location: 'us-central1', credentialsPath: '' });
     const [cloudinary, setCloudinary] = useState(apiSettings.cloudinary || {});
     const [canva, setCanva] = useState(apiSettings.canva || { clientId: '', clientSecret: '', accessToken: '', refreshToken: '' });
 
@@ -85,14 +85,14 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
     const [savingStripe, setSavingStripe] = useState(false);
     const [savingRazorpay, setSavingRazorpay] = useState(false);
     const [savingPrices, setSavingPrices] = useState(false);
-    const [savingGemini, setSavingGemini] = useState(false);
+    const [savingVertex, setSavingVertex] = useState(false);
     const [savingCloudinary, setSavingCloudinary] = useState(false);
     const [savingCanva, setSavingCanva] = useState(false);
 
     const [savedStripe, setSavedStripe] = useState(false);
     const [savedRazorpay, setSavedRazorpay] = useState(false);
     const [savedPrices, setSavedPrices] = useState(false);
-    const [savedGemini, setSavedGemini] = useState(false);
+    const [savedVertex, setSavedVertex] = useState(false);
     const [savedCloudinary, setSavedCloudinary] = useState(false);
     const [savedCanva, setSavedCanva] = useState(false);
 
@@ -119,7 +119,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                 brand: planPrices.brand ?? 4999,
             });
             setSelectedCurrency('INR'); // Always use INR
-            setGemini(apiSettings.gemini || {});
+            setVertex(apiSettings.vertex || { projectId: '', location: 'us-central1', credentialsPath: '' });
             setCloudinary(apiSettings.cloudinary || {});
             setCanva(apiSettings.canva || { clientId: '', clientSecret: '', accessToken: '', refreshToken: '' });
         }
@@ -217,13 +217,13 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
         }, 3000);
     };
 
-    const handleSaveGemini = async () => {
-        setSavingGemini(true);
-        setSavedGemini(false);
-        await updateApiSettings('gemini', gemini);
-        setSavingGemini(false);
-        setSavedGemini(true);
-        setTimeout(() => setSavedGemini(false), 3000);
+    const handleSaveVertex = async () => {
+        setSavingVertex(true);
+        setSavedVertex(false);
+        await updateApiSettings('vertex', vertex);
+        setSavingVertex(false);
+        setSavedVertex(true);
+        setTimeout(() => setSavedVertex(false), 3000);
     };
 
     const handleSaveCloudinary = async () => {
@@ -581,7 +581,7 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                 <strong>Info:</strong> Supabase credentials are configured via environment variables for security. Update them in your .env file or hosting platform settings.
                             </div>
                             <div className="bg-yellow-900/50 border border-yellow-500/30 text-yellow-300 text-sm rounded-lg p-3">
-                                <strong>Note:</strong> Changes to Gemini API key take effect immediately. The cache refreshes automatically within 5 minutes or on the next API call.
+                                <strong>Note:</strong> Changes to Vertex AI config take effect immediately. The cache refreshes automatically within 5 minutes or on the next API call. Make sure the Supabase Edge Function is deployed.
                             </div>
                             <section>
                                 <h3 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2"><Link2 size={20} /> API Keys & Integrations</h3>
@@ -605,24 +605,53 @@ const AdminPanelModal: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ i
                                             </p>
                                         </div>
                                     </div>
-                                    {/* Gemini */}
+                                    {/* Vertex AI */}
                                     <div className="p-4 bg-zinc-800/50 rounded-lg border border-white/10 space-y-3">
-                                        <h4 className="font-bold text-zinc-100">Google Gemini</h4>
-                                        <div className="space-y-1">
-                                            <label className="text-xs text-zinc-400">Gemini API Key</label>
-                                            <PasswordInput value={gemini.apiKey} onChange={(e) => setGemini({ ...gemini, apiKey: e.target.value })} placeholder="AIzaSy..." />
+                                        <h4 className="font-bold text-zinc-100">Google Vertex AI</h4>
+                                        <div className="space-y-2">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Project ID</label>
+                                                <input
+                                                    type="text"
+                                                    value={vertex.projectId || ''}
+                                                    onChange={(e) => setVertex({ ...vertex, projectId: e.target.value })}
+                                                    placeholder="your-gcp-project-id"
+                                                    className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Location</label>
+                                                <input
+                                                    type="text"
+                                                    value={vertex.location || 'us-central1'}
+                                                    onChange={(e) => setVertex({ ...vertex, location: e.target.value })}
+                                                    placeholder="us-central1"
+                                                    className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-zinc-400">Credentials Path (Optional)</label>
+                                                <input
+                                                    type="text"
+                                                    value={vertex.credentialsPath || ''}
+                                                    onChange={(e) => setVertex({ ...vertex, credentialsPath: e.target.value })}
+                                                    placeholder="/path/to/service-account.json"
+                                                    className="w-full bg-zinc-800 border border-zinc-700 rounded-md p-2 text-sm placeholder-zinc-500 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                                <p className="text-xs text-zinc-400">Leave empty to use Application Default Credentials</p>
+                                            </div>
                                         </div>
                                         <button
-                                            onClick={handleSaveGemini}
-                                            disabled={savingGemini}
+                                            onClick={handleSaveVertex}
+                                            disabled={savingVertex}
                                             className="w-full sm:w-auto text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[160px]"
                                         >
-                                            {savingGemini && <Loader2 size={16} className="animate-spin" />}
-                                            {savedGemini && <Check size={16} className="animate-bounce" />}
-                                            {savingGemini ? 'Saving...' : savedGemini ? 'Saved!' : 'Save Gemini Key'}
+                                            {savingVertex && <Loader2 size={16} className="animate-spin" />}
+                                            {savedVertex && <Check size={16} className="animate-bounce" />}
+                                            {savingVertex ? 'Saving...' : savedVertex ? 'Saved!' : 'Save Vertex AI Config'}
                                         </button>
                                         <p className="text-xs text-zinc-500 mt-2">
-                                            Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Google AI Studio</a>
+                                            <strong>Note:</strong> Changes to Vertex AI config take effect immediately. The cache refreshes automatically within 5 minutes or on the next API call. Make sure the Supabase Edge Function is deployed.
                                         </p>
                                     </div>
 

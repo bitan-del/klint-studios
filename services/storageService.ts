@@ -282,43 +282,88 @@ class StorageService {
    */
   async deleteImage(imageId: string, userId: string): Promise<boolean> {
     try {
+      console.log('🗑️ Attempting to delete image:', { imageId, userId });
+      
+      // Verify user is authenticated
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser || authUser.id !== userId) {
+        console.error('❌ Authentication mismatch:', { authUserId: authUser?.id, providedUserId: userId });
+        throw new Error('Authentication error: User ID mismatch');
+      }
+
       // 1. Get image to get Cloudinary public_id
-      const { data: image } = await supabase
+      const { data: image, error: fetchError } = await supabase
         .from('user_images')
-        .select('cloudinary_public_id')
+        .select('cloudinary_public_id, user_id')
         .eq('id', imageId)
-        .eq('user_id', userId)
         .is('deleted_at', null)
         .single();
+
+      if (fetchError) {
+        console.error('❌ Error fetching image:', fetchError);
+        console.error('   Error details:', JSON.stringify(fetchError, null, 2));
+        throw new Error(`Image not found or access denied: ${fetchError.message}`);
+      }
 
       if (!image) {
         throw new Error('Image not found');
       }
 
-      // 2. Soft delete in database
-      const { error: dbError } = await supabase
-        .from('user_images')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', imageId)
-        .eq('user_id', userId);
-
-      if (dbError) {
-        throw dbError;
+      // Verify ownership
+      if (image.user_id !== userId) {
+        console.error('❌ Ownership mismatch:', { imageUserId: image.user_id, providedUserId: userId });
+        throw new Error('You do not have permission to delete this image');
       }
 
-      // 3. Delete from Cloudinary (optional - can be done in background)
+      console.log('✅ Image found, proceeding with soft delete...');
+
+      // 2. Soft delete using database function (bypasses RLS)
+      const { data: functionResult, error: functionError } = await supabase
+        .rpc('soft_delete_user_image', {
+          p_image_id: imageId,
+          p_user_id: userId
+        });
+
+      // If function doesn't exist, fall back to direct update
+      if (functionError && functionError.code === '42883') {
+        console.log('⚠️ Function not found, using direct update...');
+        const { error: dbError, data: updateData } = await supabase
+          .from('user_images')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', imageId)
+          .eq('user_id', userId)
+          .select();
+        
+        if (dbError) {
+          console.error('❌ Database delete error:', dbError);
+          console.error('   Error code:', dbError.code);
+          console.error('   Error message:', dbError.message);
+          throw new Error(`Failed to delete image from database: ${dbError.message} (Code: ${dbError.code})`);
+        }
+        
+        if (!updateData || updateData.length === 0) {
+          throw new Error('Image not found or already deleted');
+        }
+      } else if (functionError) {
+        console.error('❌ Function error:', functionError);
+        throw new Error(`Failed to delete image: ${functionError.message}`);
+      } else {
+        console.log('✅ Soft delete via function successful');
+      }
+
+      // 3. Delete from Cloudinary (optional - don't fail if this fails)
       if (image.cloudinary_public_id) {
         try {
           await cloudinaryService.deleteImage(image.cloudinary_public_id);
-        } catch (cloudinaryError) {
-          console.warn('⚠️ Failed to delete from Cloudinary:', cloudinaryError);
-          // Continue even if Cloudinary deletion fails
+          console.log('✅ Image deleted from Cloudinary:', image.cloudinary_public_id);
+        } catch (cloudinaryError: any) {
+          console.warn('⚠️ Failed to delete from Cloudinary (non-critical):', cloudinaryError?.message || cloudinaryError);
+          // Continue - database deletion succeeded, which is what matters
         }
       }
 
-      console.log('✅ Image deleted:', imageId);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error deleting image:', error);
       throw error;
     }

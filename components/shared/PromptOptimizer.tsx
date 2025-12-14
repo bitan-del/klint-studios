@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Sparkles, Loader2 } from 'lucide-react';
-import { geminiService } from '../../services/geminiService';
+import { vertexService } from "../../services/vertexService";
 import { withRetry } from '../../utils/colorUtils';
 
 interface PromptOptimizerProps {
@@ -17,7 +17,7 @@ export const PromptOptimizer: React.FC<PromptOptimizerProps> = ({ prompt, setPro
     if (!prompt.trim() || isOptimizing) return;
     setIsOptimizing(true);
     try {
-      const optimizedPrompt = await withRetry(() => geminiService.optimizePrompt(prompt, context));
+      const optimizedPrompt = await withRetry(() => vertexService.optimizePrompt(prompt, context));
       setPrompt(optimizedPrompt);
     } catch (error) {
       console.error('Failed to optimize prompt:', error);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, Download, Sparkles, Wand2, Image as ImageIcon, Layers, Zap, Copy, Plus, Info, Lightbulb, TrendingUp, Star, Lock } from 'lucide-react';
-import { geminiService } from '../../services/geminiService';
+import { vertexService } from "../../services/vertexService";
 import { useAuth } from '../../context/AuthContext';
 
 interface ImagePromptModalProps {
@@ -109,7 +109,7 @@ export const ImagePromptModal: React.FC<ImagePromptModalProps> = ({ isOpen, onCl
                     // Use a lightweight prompt to analyze the image (optimized for cost)
                     const analysisPrompt = `Generate a concise AI image generation prompt (max 100 words) describing: subject, style, lighting, colors, composition, camera details. Format as comma-separated keywords.`;
 
-                    const generatedPrompt = await geminiService.analyzeImage(base64Image, analysisPrompt);
+                    const generatedPrompt = await vertexService.analyzeImage(base64Image, analysisPrompt);
                     
                     // Cache the result
                     promptCache.set(imageId, generatedPrompt);

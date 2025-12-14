@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { ArrowLeft, Upload, Sparkles, Image as ImageIcon, Copy, Check, Loader2, FolderOpen } from 'lucide-react';
-import { geminiService } from '../../services/geminiService';
+import { vertexService } from "../../services/vertexService";
 import { ImageLibraryModal } from '../common/ImageLibraryModal';
 
 interface StoryboardWorkflowProps {
@@ -62,7 +62,7 @@ export const StoryboardWorkflow: React.FC<StoryboardWorkflowProps> = ({ onBack }
 
 Return ONLY the prompt text, no explanations or metadata.`;
 
-            const result = await geminiService.analyzeImage(uploadedImage, analysisPrompt);
+            const result = await vertexService.analyzeImage(uploadedImage, analysisPrompt);
             
             console.log('🎨 Prompt generated:', result.substring(0, 200));
             

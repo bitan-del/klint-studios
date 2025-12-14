@@ -428,8 +428,10 @@ export interface SupabaseSettings {
   anonKey: string;
 }
 
-export interface GeminiSettings {
-  apiKey: string;
+export interface VertexAISettings {
+  projectId: string;
+  location: string;
+  credentialsPath?: string; // Path to service account JSON file (optional, can use Application Default Credentials)
 }
 
 export interface CloudinarySettings {
@@ -448,7 +450,7 @@ export interface CanvaSettings {
 
 export interface ApiSettings {
   supabase: SupabaseSettings;
-  gemini: GeminiSettings;
+  vertex: VertexAISettings;
   cloudinary: CloudinarySettings;
   canva?: CanvaSettings;
 }

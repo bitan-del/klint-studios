@@ -60,7 +60,7 @@ class VideoService {
                     error.message.includes('referrer') || 
                     error.message.includes('API_KEY_HTTP_REFERRER_BLOCKED') ||
                     error.message.includes('HTTP referrer restrictions')) {
-                    throw error; // Already has good message from geminiService
+                    throw error; // Already has good message from vertexService
                 }
                 
                 // Preserve safety filter errors with their detailed messages
@@ -68,7 +68,7 @@ class VideoService {
                     throw error; // Already has good message
                 }
                 if (error.message.includes('API key') || error.message.includes('not configured')) {
-                    throw new Error('Gemini API key not configured. Please add it in Admin Panel → Integrations.');
+                    throw new Error('Vertex AI not configured. Please add it in Admin Panel → Integrations.');
                 } else if (error.message.includes('quota') || error.message.includes('limit')) {
                     throw new Error('API quota exceeded. Please check your Google Cloud billing.');
                 } else if (error.message.includes('not enabled') || error.message.includes('permission')) {
@@ -90,8 +90,8 @@ class VideoService {
      * Generate video using Veo 3 API
      */
     private async generateWithVeo3(userId: string, config: VideoGenerationConfig): Promise<string> {
-        // Import geminiService dynamically to avoid circular dependencies if any
-        const { geminiService } = await import('./geminiService');
+        // Import vertexService dynamically to avoid circular dependencies if any
+        const { vertexService } = await import('./vertexService');
 
         // Create a safe, neutral prompt that's less likely to trigger safety filters
         const basePrompt = config.prompt || 'Animate this image with smooth, natural motion';
@@ -101,7 +101,7 @@ class VideoService {
             ? `${basePrompt}. Create a high-quality, cinematic video with professional camera movement, natural transitions, and subtle environmental effects. Focus on gentle motion, lighting changes, and atmospheric details.`
             : basePrompt;
 
-        console.log('🎬 [VIDEO] Calling Veo 3 API via GeminiService...', {
+            console.log('🎬 [VIDEO] Calling Veo 3 API via VertexService...', {
             model: 'veo-3.1-fast-generate-preview',
             quality: config.quality,
             ratio: config.ratio
@@ -110,7 +110,7 @@ class VideoService {
         try {
             // 1. Start the operation
             console.log('🚀 [VIDEO] Starting Veo 3 generation...');
-            const operation = await geminiService.generatePhotoshootVideo(
+            const operation = await vertexService.generatePhotoshootVideo(
                 enhancedPrompt,
                 config.ratio as any,
                 config.quality as any,
@@ -127,7 +127,7 @@ class VideoService {
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 attempts++;
 
-                const status = await geminiService.getVideoOperationStatus(operation);
+                const status = await vertexService.getVideoOperationStatus(operation);
                 console.log(`⏳ [VIDEO] Polling status (${attempts}/${maxAttempts}):`, status.metadata?.state || 'Unknown');
 
                 if (status.done) {
@@ -260,7 +260,7 @@ class VideoService {
     }
 
     /**
-     * Get Gemini API key from database
+     * Get Vertex AI config from database (deprecated - now handled by vertexService)
      */
     private async getGeminiApiKey(): Promise<string | null> {
         try {

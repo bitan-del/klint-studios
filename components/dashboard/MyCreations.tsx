@@ -139,14 +139,21 @@ export const MyCreations: React.FC<MyCreationsProps> = ({ onBack }) => {
 
     setDeleting(imageId);
     try {
+      console.log('🗑️ Delete initiated for image:', imageId);
       await storageService.deleteImage(imageId, user.id);
+      console.log('✅ Delete successful, updating UI...');
       // Remove from local state
       setImages(images.filter(img => img.id !== imageId));
       // Reload storage info
       await loadStorageInfo();
-    } catch (error) {
-      console.error('Error deleting image:', error);
-      alert('Failed to delete image. Please try again.');
+      console.log('✅ UI updated successfully');
+    } catch (error: any) {
+      console.error('❌ Error deleting image:', error);
+      console.error('   Error message:', error?.message);
+      console.error('   Full error:', error);
+      // Show detailed error to user
+      const errorMessage = error?.message || 'Unknown error occurred';
+      alert(`Failed to delete image: ${errorMessage}\n\nCheck the browser console for more details.`);
     } finally {
       setDeleting(null);
       setShowDeleteConfirm(null);

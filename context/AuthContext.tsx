@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import type { User, UserPlan, UserRole, PaymentSettings, PlanPrices, Currency, PaymentGatewaySettings, ApiSettings, SupabaseSettings, GeminiSettings, CloudinarySettings, CanvaSettings } from '../types';
+import type { User, UserPlan, UserRole, PaymentSettings, PlanPrices, Currency, PaymentGatewaySettings, ApiSettings, SupabaseSettings, VertexAISettings, CloudinarySettings, CanvaSettings } from '../types';
 import { hasPermission as checkPermission, Feature, PLAN_DETAILS } from '../services/permissionsService';
 import { supabase } from '../services/supabaseClient';
 import { databaseService } from '../services/databaseService';
@@ -27,7 +27,7 @@ interface AuthState {
   setCurrency: (currency: Currency) => void;
   // Admin API Settings
   apiSettings: ApiSettings;
-  updateApiSettings: (service: 'supabase' | 'gemini' | 'cloudinary' | 'canva', settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings> | Partial<CanvaSettings>) => void;
+  updateApiSettings: (service: 'supabase' | 'vertex' | 'cloudinary' | 'canva', settings: Partial<SupabaseSettings> | Partial<VertexAISettings> | Partial<CloudinarySettings> | Partial<CanvaSettings>) => void;
   // Subscription Management
   needsPayment: boolean;
   checkSubscriptionStatus: () => Promise<void>;
@@ -61,8 +61,10 @@ const initialApiSettings: ApiSettings = {
     url: import.meta.env.VITE_SUPABASE_URL || '',
     anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || ''
   },
-  gemini: {
-    apiKey: import.meta.env.VITE_GEMINI_API_KEY || ''
+  vertex: {
+    projectId: import.meta.env.VITE_VERTEX_PROJECT_ID || '',
+    location: import.meta.env.VITE_VERTEX_LOCATION || 'us-central1',
+    credentialsPath: import.meta.env.VITE_VERTEX_CREDENTIALS_PATH || undefined
   },
   cloudinary: {
     cloudName: '',
@@ -95,12 +97,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const loadAdminSettings = async () => {
       try {
-        // Load Gemini API key
-        const geminiKey = await databaseService.getAdminSetting('gemini_api_key');
-        if (geminiKey) {
+        // Load Vertex AI settings
+        const vertexProjectId = await databaseService.getAdminSetting('vertex_project_id');
+        const vertexLocation = await databaseService.getAdminSetting('vertex_location');
+        const vertexCredentialsPath = await databaseService.getAdminSetting('vertex_credentials_path');
+        if (vertexProjectId && vertexLocation) {
           setApiSettings(current => ({
             ...current,
-            gemini: { apiKey: geminiKey }
+            vertex: {
+              projectId: vertexProjectId,
+              location: vertexLocation,
+              credentialsPath: vertexCredentialsPath || undefined
+            }
           }));
         }
 
@@ -638,29 +646,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Update API settings (stores in localStorage for Gemini)
   const updateApiSettings = async (
-    service: 'supabase' | 'gemini' | 'cloudinary' | 'canva',
-    settings: Partial<SupabaseSettings> | Partial<GeminiSettings> | Partial<CloudinarySettings> | Partial<CanvaSettings>
+    service: 'supabase' | 'vertex' | 'cloudinary' | 'canva',
+    settings: Partial<SupabaseSettings> | Partial<VertexAISettings> | Partial<CloudinarySettings> | Partial<CanvaSettings>
   ) => {
     if (user?.role !== 'admin') return;
 
-    if (service === 'gemini') {
-      const geminiSettings = settings as GeminiSettings;
+    if (service === 'vertex') {
+      const vertexSettings = settings as VertexAISettings;
 
-      // Save to database so ALL users across ALL devices use the new key
-      const success = await databaseService.setAdminSetting('gemini_api_key', geminiSettings.apiKey);
+      // Save to database so ALL users across ALL devices use the new config
+      const projectIdSuccess = await databaseService.setAdminSetting('vertex_project_id', vertexSettings.projectId);
+      const locationSuccess = await databaseService.setAdminSetting('vertex_location', vertexSettings.location);
+      const credentialsPathSuccess = vertexSettings.credentialsPath 
+        ? await databaseService.setAdminSetting('vertex_credentials_path', vertexSettings.credentialsPath)
+        : true;
 
-      if (success) {
-        console.log('✅ Gemini API key saved to database');
-        // Refresh the cached key in geminiService
-        const { refreshGeminiApiKey } = await import('../services/geminiService');
-        refreshGeminiApiKey();
-        setApiSettings(current => ({ ...current, gemini: geminiSettings }));
+      if (projectIdSuccess && locationSuccess && credentialsPathSuccess) {
+        console.log('✅ Vertex AI settings saved to database');
+        // Refresh the cached config in vertexService
+        const { refreshVertexConfig } = await import('../services/vertexService');
+        refreshVertexConfig();
+        setApiSettings(current => ({ ...current, vertex: vertexSettings }));
 
         // Show a message to user that changes take effect immediately
-        console.log('✅ API key updated! All new requests will use the new key.');
+        console.log('✅ Vertex AI config updated! All new requests will use the new settings.');
         console.log('ℹ️  If you have other browser tabs open, they will automatically refresh within 5 minutes or on next API call.');
       } else {
-        console.error('❌ Failed to save Gemini API key to database');
+        console.error('❌ Failed to save Vertex AI settings to database');
       }
     } else if (service === 'cloudinary') {
       const cloudinarySettings = settings as CloudinarySettings;

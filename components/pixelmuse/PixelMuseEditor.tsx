@@ -4,7 +4,7 @@ import { PromptBar } from './PromptBar';
 import { Header } from './Header';
 import { ImageEditor } from './ImageEditor';
 import { MyCreations } from '../dashboard/MyCreations';
-import { geminiService } from '../../services/geminiService';
+import { vertexService } from "../../services/vertexService";
 import { useAuth } from '../../context/AuthContext';
 import { storageService, type UserImage } from '../../services/storageService';
 import { resizeImageToAspectRatio } from '../../utils/imageResizer';
@@ -19,8 +19,7 @@ interface PixelMuseEditorProps {
   onBack?: () => void;
 }
 
-// Helper function to adapt the new generateImage signature to use existing geminiService
-// Helper function to adapt the new generateImage signature to use existing geminiService
+// Helper function to adapt the new generateImage signature to use vertexService
 const generateImage = async (
   prompt: string,
   images: string[] = [],
@@ -41,7 +40,7 @@ const generateImage = async (
         // For text-to-image, images array is empty
         // For image-to-image/editing, images array contains the input image(s)
         // Pass aspectRatio to generateStyledImage so it can create proper template dimensions
-        const result = await geminiService.generateStyledImage(prompt, images, quality, style, aspectRatio as AspectRatio['value']);
+        const result = await vertexService.generateStyledImage(prompt, images, quality, style, aspectRatio as AspectRatio['value']);
 
         // DO NOT resize/crop after generation - the model already respects the aspect ratio
         // The generateStyledImage function handles aspect ratio internally via template
@@ -63,11 +62,11 @@ const generateImage = async (
   }
 };
 
-// Helper function to enhance prompt using geminiService
+// Helper function to enhance prompt using vertexService
 const enhancePrompt = async (prompt: string): Promise<string> => {
   try {
     // Use the chatbot response to enhance the prompt
-    const response = await geminiService.getChatbotResponse(
+    const response = await vertexService.getChatbotResponse(
       `Enhance this image generation prompt to be more descriptive, vivid, and detailed for a text-to-image AI. Return ONLY the enhanced prompt, without any conversational preamble, labels, or explanation. Original prompt: "${prompt}"`,
       ''
     );

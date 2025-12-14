@@ -1,6 +1,6 @@
 import type { AIModel, ApparelItem, Scene, GenerationMode, Animation, AspectRatio, ApparelCreativeControls, ProductCreativeControls, DesignPlacementControls, DesignInput, StagedAsset, ReimagineCreativeControls } from '../types';
 import { FABRIC_STYLE_OPTIONS, MOCKUP_STYLE_OPTIONS, DESIGN_LIGHTING_STYLE_OPTIONS, DESIGN_CAMERA_ANGLE_OPTIONS, PRINT_STYLE_OPTIONS, DESIGN_PLACEMENT_OPTIONS } from '../constants';
-import { geminiService } from './geminiService';
+import { vertexService } from './vertexService';
 
 interface BasePromptParams {
     styleDescription?: string;
