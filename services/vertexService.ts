@@ -475,40 +475,48 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
             }
 
             // Combine style image with reference images
+            // If style is 'realistic', we don't have a style image, so we just use user images
             let allImages = styleImageUrl ? [styleImageUrl, ...imageUrls] : imageUrls;
 
-            // OPTIMIZATION: Resize all reference images to target aspect ratio to reduce payload size
-            // This prevents Edge Function OOM and timeouts
+            // OPTIMIZATION: Resize all reference images to reduce payload size
+            // We use resizeImageToMaxDimension (1024px) to preserve aspect ratio and avoid padding
+            // Padding (adding white bars) confuses the AI for reference images
             if (allImages.length > 0) {
                 try {
-                    const { resizeImageToAspectRatio } = await import('../utils/imageResizer');
+                    const { resizeImageToMaxDimension, resizeImageToAspectRatio } = await import('../utils/imageResizer');
 
                     console.log(`Processing ${allImages.length} images for Vertex AI...`);
 
                     // Process images in parallel
-                    allImages = await Promise.all(allImages.map(async (imgUrl) => {
+                    allImages = await Promise.all(allImages.map(async (imgUrl, index) => {
                         try {
-                            // If it's already a data URL, resize it directly
-                            if (imgUrl.startsWith('data:')) {
-                                return await resizeImageToAspectRatio(imgUrl, aspectRatio);
-                            }
-                            // If it's a remote URL, fetch it first then resize
-                            else if (imgUrl.startsWith('http')) {
+                            // For the Style Image (index 0 if styleImageUrl exists), we SHOULD match aspect ratio if valid
+                            // But for user reference images, we should keep original aspect ratio to preserve context
+                            const isStyleImage = styleImageUrl && index === 0;
+
+                            let processedUrl = imgUrl;
+
+                            // If it's a remote URL, fetch it first
+                            if (imgUrl.startsWith('http')) {
                                 const response = await fetch(imgUrl);
                                 const blob = await response.blob();
-                                return new Promise((resolve) => {
+                                processedUrl = await new Promise((resolve) => {
                                     const reader = new FileReader();
-                                    reader.onloadend = async () => {
-                                        const base64 = reader.result as string;
-                                        const resized = await resizeImageToAspectRatio(base64, aspectRatio);
-                                        resolve(resized);
-                                    };
+                                    reader.onloadend = () => resolve(reader.result as string);
                                     reader.readAsDataURL(blob);
                                 });
                             }
-                            return imgUrl;
+
+                            // Resize logic
+                            if (isStyleImage) {
+                                // Style image: Fit to target aspect ratio (padding is ok here as it's just style)
+                                return await resizeImageToAspectRatio(processedUrl, aspectRatio);
+                            } else {
+                                // User Reference image: Downscale only, preserve aspect ratio!
+                                return await resizeImageToMaxDimension(processedUrl, 1024, 1024);
+                            }
                         } catch (e) {
-                            console.warn('Failed to optimized image:', e);
+                            console.warn('Failed to optimize image:', e);
                             return imgUrl; // Fallback to original
                         }
                     }));
@@ -570,6 +578,11 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
 
             // Add aspect ratio instruction
             finalPrompt += `\n\nOutput aspect ratio: ${aspectRatio}. Fill the entire canvas with image content, no white borders or padding.`;
+
+            // Explicitly instruct to use reference images if present
+            if (imageUrls.length > 0) {
+                finalPrompt += `\n\nIMPORTANT: Use the attached reference image(s) as the primary visual source for the subject, composition, and details.`;
+            }
 
             try {
                 const result = await callVertexAPI('generate-styled-image', {
