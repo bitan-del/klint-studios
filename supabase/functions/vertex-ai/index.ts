@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const TIMEOUT_MS = 55000; // 55 seconds (Supabase limit is 60s)
+const TIMEOUT_MS = 115000; // 115 seconds (User requested 120s, keeping 5s buffer)
 
 class TimeoutError extends Error {
   constructor(message: string) {
