@@ -7,13 +7,44 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const TIMEOUT_MS = 55000; // 55 seconds (Supabase limit is 60s)
+
+class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}) {
+  const { timeout = TIMEOUT_MS } = options as any;
+
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error: any) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      throw new TimeoutError(`Request timed out after ${timeout}ms`);
+    }
+    throw error;
+  }
+}
+
 // Initialize Vertex AI client
 async function getVertexAIClient() {
   console.log('🔧 Getting Vertex AI client configuration...')
-  
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  
+
   if (!supabaseUrl || !serviceRoleKey) {
     console.error('❌ Missing Supabase environment variables:', {
       hasUrl: !!supabaseUrl,
@@ -21,9 +52,9 @@ async function getVertexAIClient() {
     })
     throw new Error('Supabase environment variables not configured in Edge Function')
   }
-  
+
   console.log('✅ Supabase client initialized')
-  
+
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
   // Get Vertex AI config from database
@@ -59,7 +90,7 @@ async function getVertexAIClient() {
   if (!projectId) {
     throw new Error('Vertex AI project ID not configured. Set vertex_project_id in admin_settings or VERTEX_PROJECT_ID environment variable.')
   }
-  
+
   return { projectId, location }
 }
 
@@ -151,52 +182,57 @@ serve(async (req) => {
       case 'generate-content':
         console.log('🔄 Routing to handleGenerateContent')
         return await handleGenerateContent(projectId, location, body, corsHeaders)
-      
+
       case 'generate-content-with-images':
         console.log('🔄 Routing to handleGenerateContentWithImages')
         return await handleGenerateContentWithImages(projectId, location, body, corsHeaders)
-      
+
       case 'generate-images':
         console.log('🔄 Routing to handleGenerateImages')
         return await handleGenerateImages(projectId, location, body, corsHeaders)
-      
+
       case 'generate-styled-image':
         console.log('🔄 Routing to handleGenerateStyledImage')
         return await handleGenerateStyledImage(projectId, location, body, corsHeaders)
-      
+
       case 'generate-video':
         console.log('🔄 Routing to handleGenerateVideo')
         return await handleGenerateVideo(projectId, location, body, corsHeaders)
-      
+
       case 'video-operation-status':
         console.log('🔄 Routing to handleVideoOperationStatus')
         return await handleVideoOperationStatus(projectId, location, body, corsHeaders)
-      
+
       default:
         console.error('❌ Unknown endpoint received:', JSON.stringify(trimmedEndpoint))
         console.error('📋 Endpoint length:', trimmedEndpoint.length)
         console.error('📋 Endpoint char codes:', Array.from(trimmedEndpoint).map(c => c.charCodeAt(0)))
         console.error('📋 Available endpoints: generate-content, generate-content-with-images, generate-images, generate-styled-image, generate-video, video-operation-status')
-        
+
         // Try case-insensitive matching as fallback
         const lowerEndpoint = trimmedEndpoint.toLowerCase()
         if (lowerEndpoint === 'generate-styled-image') {
           console.log('⚠️ Endpoint matched case-insensitively, routing to handleGenerateStyledImage')
           return await handleGenerateStyledImage(projectId, location, body, corsHeaders)
         }
-        
+
         throw new Error(`Unknown endpoint: ${trimmedEndpoint}`)
     }
   } catch (error: any) {
     console.error('❌ Vertex AI Edge Function Error:', error)
     console.error('📊 Error stack:', error.stack)
+
+    const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError' || error.message?.includes('timed out');
+    const status = isTimeout ? 504 : 500;
+    const message = isTimeout ? 'Vertex AI request timed out. Please try again with a simpler prompt or lower quality setting.' : (error.message || 'Internal server error');
+
     return new Response(
       JSON.stringify({
-        error: error.message || 'Internal server error',
+        error: message,
         details: error.toString()
       }),
       {
-        status: 500,
+        status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
@@ -229,7 +265,7 @@ async function handleGenerateContent(projectId: string, location: string, body: 
     })
   }
 
-  let response = await fetch(apiUrl, {
+  let response = await fetchWithTimeout(apiUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -245,8 +281,8 @@ async function handleGenerateContent(projectId: string, location: string, body: 
       console.log('⚠️ Gemini 3 Pro not available, falling back to Gemini 2.5 Flash')
       const fallbackModel = 'gemini-2.5-flash'
       const fallbackUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${fallbackModel}:generateContent`
-      
-      response = await fetch(fallbackUrl, {
+
+      response = await fetchWithTimeout(fallbackUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -277,7 +313,7 @@ async function handleGenerateContent(projectId: string, location: string, body: 
 // Get access token for Vertex AI
 async function getAccessToken(): Promise<string> {
   console.log('🔑 Getting access token...')
-  
+
   // Option 1: Try metadata server (if running on GCP)
   try {
     const metadataResponse = await fetch(
@@ -286,7 +322,7 @@ async function getAccessToken(): Promise<string> {
         headers: { 'Metadata-Flavor': 'Google' }
       }
     )
-    
+
     if (metadataResponse.ok) {
       const tokenData = await metadataResponse.json()
       console.log('✅ Got token from GCP metadata server')
@@ -299,7 +335,7 @@ async function getAccessToken(): Promise<string> {
 
   // Option 2: Use service account JSON from environment variable (Supabase Edge Function secret)
   const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-  
+
   if (!serviceAccountJson) {
     console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON secret is not set!')
     console.error('   Check: Supabase Dashboard → Edge Functions → Secrets')
@@ -309,9 +345,9 @@ async function getAccessToken(): Promise<string> {
       'The value should be the full JSON content of your service account key file.'
     )
   }
-  
+
   console.log('✅ GOOGLE_SERVICE_ACCOUNT_JSON secret found, parsing...')
-  
+
   try {
     const serviceAccount = JSON.parse(serviceAccountJson)
     console.log('✅ Service account parsed, client_email:', serviceAccount.client_email)
@@ -333,15 +369,15 @@ async function getAccessToken(): Promise<string> {
 async function getTokenFromServiceAccount(serviceAccount: any): Promise<string> {
   // Import JWT library for Deno
   const { create, getNumericDate } = await import('https://deno.land/x/djwt@v2.8/mod.ts')
-  
+
   const now = getNumericDate(new Date())
   let privateKey = serviceAccount.private_key
-  
+
   // Handle escaped newlines
   if (privateKey.includes('\\n')) {
     privateKey = privateKey.replace(/\\n/g, '\n')
   }
-  
+
   // Convert PEM to ArrayBuffer for crypto.subtle
   const pemHeader = '-----BEGIN PRIVATE KEY-----'
   const pemFooter = '-----END PRIVATE KEY-----'
@@ -349,10 +385,10 @@ async function getTokenFromServiceAccount(serviceAccount: any): Promise<string> 
     .replace(pemHeader, '')
     .replace(pemFooter, '')
     .replace(/\s/g, '')
-  
+
   // Base64 decode
   const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
-  
+
   // Import the private key
   const key = await crypto.subtle.importKey(
     'pkcs8',
@@ -364,7 +400,7 @@ async function getTokenFromServiceAccount(serviceAccount: any): Promise<string> 
     false,
     ['sign']
   )
-  
+
   // Create JWT payload
   const payload = {
     iss: serviceAccount.client_email,
@@ -374,14 +410,14 @@ async function getTokenFromServiceAccount(serviceAccount: any): Promise<string> 
     exp: now + 3600,
     scope: 'https://www.googleapis.com/auth/cloud-platform',
   }
-  
+
   // Create and sign JWT
   const jwt = await create(
     { alg: 'RS256', typ: 'JWT' },
     payload,
     key
   )
-  
+
   // Exchange JWT for access token
   const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -444,7 +480,7 @@ async function handleGenerateContentWithImages(projectId: string, location: stri
     })
   }
 
-  let response = await fetch(apiUrl, {
+  let response = await fetchWithTimeout(apiUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -460,8 +496,8 @@ async function handleGenerateContentWithImages(projectId: string, location: stri
       console.log('⚠️ Gemini 3 Pro not available, falling back to Gemini 2.5 Flash')
       const fallbackModel = 'gemini-2.5-flash'
       const fallbackUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${fallbackModel}:generateContent`
-      
-      response = await fetch(fallbackUrl, {
+
+      response = await fetchWithTimeout(fallbackUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -533,7 +569,7 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
   let model = config.model
   const imageSize = config.imageSize
   const useGlobal = config.useGlobal || false
-  
+
   // Gemini 3 Pro Image Preview requires 'global' location, not regional
   const effectiveLocation = useGlobal ? 'global' : location
   console.log(`📊 Quality: ${quality}, Model: ${model}, ImageSize: ${imageSize || 'default'}, Location: ${effectiveLocation}`)
@@ -547,7 +583,7 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
       // Process image - expect base64 data URL
       let imageData: string
       let mimeType: string
-      
+
       if (imageUrl.startsWith('data:')) {
         // Full data URL format: data:image/png;base64,...
         const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/)
@@ -565,7 +601,7 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
         imageData = imageUrl
         mimeType = 'image/png'
       }
-      
+
       parts.push({
         inlineData: {
           mimeType,
@@ -597,12 +633,12 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
   // Create imageConfig if we have either aspectRatio OR imageSize
   if (aspectRatio || (imageSize && model === 'gemini-3-pro-image-preview')) {
     requestBody.generationConfig.imageConfig = {}
-    
+
     // Add aspect ratio if provided
     if (aspectRatio) {
       requestBody.generationConfig.imageConfig.aspectRatio = aspectRatio
     }
-    
+
     // Add imageSize for gemini-3-pro-image-preview (supports 1K, 2K, 4K)
     if (imageSize && model === 'gemini-3-pro-image-preview') {
       requestBody.generationConfig.imageConfig.imageSize = imageSize
@@ -621,8 +657,8 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
     apiUrl = `https://${effectiveLocation}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${effectiveLocation}/publishers/google/models/${model}:generateContent`
   }
   console.log(`🌐 API URL: ${apiUrl}`)
-  
-  let response = await fetch(apiUrl, {
+
+  let response = await fetchWithTimeout(apiUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -640,22 +676,22 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
     } catch (e) {
       // Not JSON, use raw text
     }
-    
+
     console.error(`❌ Gemini 3 Pro Image error (${response.status}):`, errorText)
-    
+
     // Handle 429 (Rate Limit / Quota Exhausted) - retry with backoff before falling back
     if (response.status === 429) {
       console.log('⚠️ Rate limit (429) detected, retrying with exponential backoff...')
-      
+
       // Retry up to 3 times with exponential backoff (2s, 4s, 8s)
       let retrySuccess = false
       for (let retry = 0; retry < 3; retry++) {
         const delay = Math.pow(2, retry + 1) * 1000 // 2s, 4s, 8s
         console.log(`⏳ Retry ${retry + 1}/3: Waiting ${delay}ms before retry...`)
         await new Promise(resolve => setTimeout(resolve, delay))
-        
+
         // Retry the same request
-        response = await fetch(apiUrl, {
+        response = await fetchWithTimeout(apiUrl, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -663,13 +699,13 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
           },
           body: JSON.stringify(requestBody),
         })
-        
+
         if (response.ok) {
           console.log(`✅ Retry ${retry + 1} successful!`)
           retrySuccess = true
           break
         }
-        
+
         // If still 429, continue to next retry
         if (response.status === 429) {
           const retryErrorText = await response.text().catch(() => '')
@@ -679,7 +715,7 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
           break
         }
       }
-      
+
       // If all retries failed, fall back to Gemini 2.5 Flash
       if (!retrySuccess && response.status === 429) {
         console.log('⚠️ All retries exhausted, falling back to Gemini 2.5 Flash Image')
@@ -690,8 +726,8 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
         }
         apiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`
         console.log(`🔄 Fallback URL: ${apiUrl}`)
-        
-        response = await fetch(apiUrl, {
+
+        response = await fetchWithTimeout(apiUrl, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -711,8 +747,8 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
       }
       apiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`
       console.log(`🔄 Fallback URL: ${apiUrl}`)
-      
-      response = await fetch(apiUrl, {
+
+      response = await fetchWithTimeout(apiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -733,7 +769,7 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
   }
 
   const result = await response.json()
-  
+
   // Extract image from response
   if (result.candidates && result.candidates.length > 0) {
     for (const candidate of result.candidates) {
@@ -743,7 +779,7 @@ async function handleGenerateStyledImage(projectId: string, location: string, bo
             const base64Image = part.inlineData.data
             const mimeType = part.inlineData.mimeType
             const imageDataUrl = `data:${mimeType};base64,${base64Image}`
-            
+
             return new Response(
               JSON.stringify({ image: imageDataUrl }),
               {
@@ -771,7 +807,7 @@ async function handleGenerateVideo(projectId: string, location: string, body: an
   // Veo API implementation
   // TODO: Implement based on actual Vertex AI Veo API structure
   // This is a placeholder
-  
+
   return new Response(
     JSON.stringify({
       operation: {
@@ -800,7 +836,7 @@ async function handleVideoOperationStatus(projectId: string, location: string, b
 
   // TODO: Implement actual operation status check
   // This is a placeholder
-  
+
   return new Response(
     JSON.stringify({
       operation: {

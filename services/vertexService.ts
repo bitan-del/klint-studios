@@ -3,9 +3,9 @@ import { BACKGROUNDS_LIBRARY, LIGHTING_PRESETS, SHOT_TYPES_LIBRARY, EXPRESSIONS,
 
 // Get Supabase URL for Edge Function
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const API_BASE_URL = SUPABASE_URL 
-  ? `${SUPABASE_URL}/functions/v1/vertex-ai`
-  : 'http://localhost:54321/functions/v1/vertex-ai'; // Fallback for local Supabase
+const API_BASE_URL = SUPABASE_URL
+    ? `${SUPABASE_URL}/functions/v1/vertex-ai`
+    : 'http://localhost:54321/functions/v1/vertex-ai'; // Fallback for local Supabase
 
 // Cache for Vertex AI config
 let cachedConfig: { projectId: string; location: string; credentialsPath?: string } | null = null;
@@ -98,7 +98,7 @@ async function callVertexAPI(endpoint: string, body: any): Promise<any> {
     // Get Supabase client for authentication
     const { supabase } = await import('./supabaseClient');
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     if (!session) {
         throw new Error('Not authenticated. Please log in to use Vertex AI features.');
     }
@@ -437,8 +437,16 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
             throw new Error('Vertex AI not configured. Please set up project ID and location in Admin Panel → Integrations.');
         }
 
-        try {
-            // Map quality names
+        // Standalone function to handle generation with retry logic
+        // This avoids 'this' context issues during recursion
+        const executeStyledImageGeneration = async (
+            prompt: string,
+            imageUrls: string[],
+            quality: 'standard' | 'hd' | 'uhd' | 'regular' | 'qhd',
+            style: string,
+            aspectRatio: AspectRatio['value']
+        ): Promise<string> => {
+            // Map quality names to API values
             const qualityMap: Record<string, 'standard' | 'hd' | 'uhd'> = {
                 'regular': 'standard',
                 'standard': 'standard',
@@ -446,7 +454,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
                 'qhd': 'uhd',
                 'uhd': 'uhd'
             };
-            
+
             const mappedQuality = qualityMap[quality] || 'standard';
 
             // Load style image if needed
@@ -455,7 +463,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
                 try {
                     const { loadStyleImage } = await import('../utils/styleImageLoader');
                     styleImageUrl = await loadStyleImage(style);
-                    
+
                     // Resize style image to match aspect ratio
                     if (styleImageUrl) {
                         const { resizeImageToAspectRatio } = await import('../utils/imageResizer');
@@ -467,7 +475,49 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
             }
 
             // Combine style image with reference images
-            const allImages = styleImageUrl ? [styleImageUrl, ...imageUrls] : imageUrls;
+            let allImages = styleImageUrl ? [styleImageUrl, ...imageUrls] : imageUrls;
+
+            // OPTIMIZATION: Resize all reference images to target aspect ratio to reduce payload size
+            // This prevents Edge Function OOM and timeouts
+            if (allImages.length > 0) {
+                try {
+                    const { resizeImageToAspectRatio } = await import('../utils/imageResizer');
+
+                    console.log(`Processing ${allImages.length} images for Vertex AI...`);
+
+                    // Process images in parallel
+                    allImages = await Promise.all(allImages.map(async (imgUrl) => {
+                        try {
+                            // If it's already a data URL, resize it directly
+                            if (imgUrl.startsWith('data:')) {
+                                return await resizeImageToAspectRatio(imgUrl, aspectRatio);
+                            }
+                            // If it's a remote URL, fetch it first then resize
+                            else if (imgUrl.startsWith('http')) {
+                                const response = await fetch(imgUrl);
+                                const blob = await response.blob();
+                                return new Promise((resolve) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = async () => {
+                                        const base64 = reader.result as string;
+                                        const resized = await resizeImageToAspectRatio(base64, aspectRatio);
+                                        resolve(resized);
+                                    };
+                                    reader.readAsDataURL(blob);
+                                });
+                            }
+                            return imgUrl;
+                        } catch (e) {
+                            console.warn('Failed to optimized image:', e);
+                            return imgUrl; // Fallback to original
+                        }
+                    }));
+
+                    console.log('✅ All images optimized for Vertex AI');
+                } catch (error) {
+                    console.warn('⚠️ Image optimization failed, sending originals:', error);
+                }
+            }
 
             // Build enhanced prompt with style instructions
             const STYLE_PROMPTS: Record<string, string> = {
@@ -521,15 +571,40 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
             // Add aspect ratio instruction
             finalPrompt += `\n\nOutput aspect ratio: ${aspectRatio}. Fill the entire canvas with image content, no white borders or padding.`;
 
-            const result = await callVertexAPI('generate-styled-image', {
-                prompt: finalPrompt,
-                imageUrls: allImages,
-                quality: mappedQuality,
-                style,
-                aspectRatio
-            });
+            try {
+                const result = await callVertexAPI('generate-styled-image', {
+                    prompt: finalPrompt,
+                    imageUrls: allImages,
+                    quality: mappedQuality,
+                    style,
+                    aspectRatio
+                });
 
-            return result.image;
+                return result.image;
+            } catch (error: any) {
+                // Smart Retry: If high quality times out (504), retry with standard quality
+                const isTimeout = error.message?.includes('timed out') || error.message?.includes('504') || error.message?.includes('Timeout');
+                const isHighQuality = mappedQuality !== 'standard';
+
+                if (isTimeout && isHighQuality) {
+                    console.warn(`⚠️ High quality (${mappedQuality}) timed out. Retrying with Standard quality...`);
+
+                    // Recursive call with standard quality
+                    return executeStyledImageGeneration(
+                        prompt,
+                        imageUrls,
+                        'standard',
+                        style,
+                        aspectRatio
+                    );
+                }
+
+                throw error;
+            }
+        };
+
+        try {
+            return await executeStyledImageGeneration(prompt, imageUrls, quality, style, aspectRatio);
         } catch (error) {
             console.error("Error generating styled image with Vertex AI:", error);
             throw error;
@@ -555,7 +630,7 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
                 'qhd': 'uhd',
                 'uhd': 'uhd'
             };
-            
+
             const mappedQuality = qualityMap[quality] || 'standard';
 
             const result = await callVertexAPI('generate-styled-image', {
