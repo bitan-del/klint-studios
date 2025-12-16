@@ -51,7 +51,7 @@ export const resizeImage = (base64Str: string, scale: number): Promise<string> =
  * Preserves the entire image content by adding white padding
  */
 export const resizeImageToAspectRatio = async (
-  imageDataUrl: string, 
+  imageDataUrl: string,
   aspectRatio: '1:1' | '4:5' | '16:9' | '9:16' | '3:4' | '4:3'
 ): Promise<string> => {
   const dimensions: Record<string, { width: number; height: number }> = {
@@ -70,7 +70,7 @@ export const resizeImageToAspectRatio = async (
     const img = new Image();
     img.onload = () => {
       const sourceRatio = img.width / img.height;
-      
+
       // Calculate dimensions to fit image inside target canvas (preserve full image)
       let drawWidth = targetWidth;
       let drawHeight = targetHeight;
@@ -103,6 +103,48 @@ export const resizeImageToAspectRatio = async (
           img,
           offsetX, offsetY, drawWidth, drawHeight
         );
+        resolve(canvas.toDataURL('image/png'));
+      } else {
+        reject(new Error('Could not get canvas context'));
+      }
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = imageDataUrl;
+  });
+};
+
+/**
+ * Resizes an image to fit within max dimensions while preserving aspect ratio.
+ * Does NOT add padding. Use this for reference images where context matters.
+ */
+export const resizeImageToMaxDimension = async (
+  imageDataUrl: string,
+  maxWidth: number = 1024,
+  maxHeight: number = 1024
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+
+      // Calculate new dimensions
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.floor(width * ratio);
+        height = Math.floor(height * ratio);
+      } else {
+        // No resize needed
+        resolve(imageDataUrl);
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/png'));
       } else {
         reject(new Error('Could not get canvas context'));
