@@ -14,6 +14,7 @@ import type { ImageQuality, QualityUsage } from '../../types/quality';
 import { VideoGenerationModal } from '../shared/VideoGenerationModal';
 import type { VideoGenerationConfig } from '../../types/video';
 import { videoService } from '../../services/videoService';
+import { falService } from '../../services/falService';
 
 interface SimplifiedWorkflowProps {
     workflowId: string;
@@ -422,24 +423,23 @@ export const SimplifiedWorkflow: React.FC<SimplifiedWorkflowProps> = ({ workflow
                 // Standard generation for all other workflows
                 const imagePromises = Array.from({ length: config.singleOutput ? 1 : imageCount }).map(async (_, index) => {
                     try {
-                        // Use generateStyledImage if:
-                        // 1. Reference images are provided, OR
-                        // 2. A style is selected (not 'realistic'), OR
-                        // 3. An uploaded image exists
-                        if (uploadedImages.length > 0 || selectedStyle !== 'realistic' || uploadedImage) {
-                            const allImages = [uploadedImage, ...uploadedImages].filter(Boolean) as string[];
-                            console.log('🎨 [SIMPLIFIED] Generating with aspect ratio:', aspectRatio);
-                            const imageB64 = await vertexService.generateStyledImage(prompt || '', allImages, selectedQuality, selectedStyle, aspectRatio);
-                            return imageB64;
-                        } else {
-                            // Otherwise use standard generation (text-to-image only)
-                            const imageB64 = await vertexService.generateSimplifiedPhotoshoot(
-                                prompt,
-                                aspectRatio,
-                                null // No image for pure text-to-image
-                            );
-                            return imageB64;
-                        }
+                        console.log('🎨 [FAL] Generating image with Nano Banana Pro (Flux Pro)...');
+                        // Use FAL Service (Nano Banana Pro / Flux Pro)
+                        // This replaces the Vertex AI call
+                        const falUrl = await falService.generateImage(prompt || '', aspectRatio, 'fal-ai/flux-pro/v1.1');
+
+                        // Convert Fal URL to Base64 to maintain compatibility with existing upload logic
+                        // (The rest of the app expects base64 strings for display and upload)
+                        const response = await fetch(falUrl);
+                        const blob = await response.blob();
+                        const base64 = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result as string);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(blob);
+                        });
+
+                        return base64;
                     } catch (error) {
                         console.error(`Failed to generate image ${index + 1}:`, error);
                         return null;
