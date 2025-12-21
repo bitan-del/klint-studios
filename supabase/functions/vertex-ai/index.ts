@@ -223,8 +223,29 @@ serve(async (req) => {
     console.error('📊 Error stack:', error.stack)
 
     const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError' || error.message?.includes('timed out');
-    const status = isTimeout ? 504 : 500;
-    const message = isTimeout ? 'Vertex AI request timed out. Please try again with a simpler prompt or lower quality setting.' : (error.message || 'Internal server error');
+
+    // Attempt to extract status code from error
+    let status = 500;
+    if (isTimeout) {
+      status = 504;
+    } else if (error.message?.includes('429') || error.message?.includes('Quota') || error.message?.includes('exhausted')) {
+      status = 429;
+    } else if (error.message?.includes('503') || error.message?.includes('Overloaded')) {
+      status = 503;
+    } else if (error.status && typeof error.status === 'number') {
+      // If the error object itself has a status code (sometimes populated by libs)
+      status = error.status;
+    } else if (error.message) {
+      // Try to parse "Vertex AI API error: 429 ..."
+      const match = error.message.match(/Vertex AI API error: (\d{3})/);
+      if (match && match[1]) {
+        status = parseInt(match[1]);
+      }
+    }
+
+    const message = isTimeout
+      ? 'Vertex AI request timed out. Please try again with a simpler prompt or lower quality setting.'
+      : (error.message || 'Internal server error');
 
     return new Response(
       JSON.stringify({

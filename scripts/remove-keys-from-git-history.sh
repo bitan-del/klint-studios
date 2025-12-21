@@ -77,3 +77,4 @@ echo "   1. Revoke old keys in Google AI Studio"
 echo "   2. Update keys in Supabase database"
 echo "   3. Update keys in Vercel/environment variables"
 
+

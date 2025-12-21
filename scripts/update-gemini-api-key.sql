@@ -69,3 +69,4 @@ BEGIN
   RAISE NOTICE '📝 Update VITE_GEMINI_API_KEY in .env file for local development';
 END $$;
 
+

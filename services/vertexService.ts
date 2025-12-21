@@ -182,6 +182,74 @@ const mockGenerateWithImagen = async (prompt: string, aspectRatio: AspectRatio['
     return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 };
 
+// Helper for retry logic and fallback
+const executeWithRetry = async <T>(
+    operation: () => Promise<T>,
+    fallbackOperation?: () => Promise<T>,
+    maxRetries: number = 6
+): Promise<T> => {
+    let lastError: any;
+
+    // Try primary operation
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await operation();
+        } catch (error: any) {
+            lastError = error;
+            // Check if it's a rate limit error (429) or temporary server error (503) from our backend
+            const errorMessage = error.message || error.toString();
+            // Our backend returns "Vertex AI API error: 429..." or 503
+            const isRateLimit = errorMessage.includes('429') || errorMessage.includes('Quota') || errorMessage.includes('Resource has been exhausted');
+            const isServerOverload = errorMessage.includes('503') || errorMessage.includes('Overloaded') || errorMessage.includes('Service Unavailable');
+            const isNotFound = errorMessage.includes('404') || errorMessage.includes('NOT_FOUND');
+
+            // If 404 (Model not found/deployed), fail immediately to fallback (don't retry same model)
+            if (isNotFound) {
+                console.warn(`⚠️ Primary model not found (${errorMessage}). Switching to fallback...`);
+                break;
+            }
+
+            if (isRateLimit || isServerOverload) {
+                // Aggressive Backoff: 2s, 4s, 8s, 16s, 32s, 64s
+                const delay = Math.pow(2, i + 1) * 1000;
+                console.warn(`⚠️ Vertex AI Rate Limit/Overload (${errorMessage}). Retrying in ${delay / 1000}s... (Attempt ${i + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                // If it's not a retryable error (e.g. 400 Bad Request), throw immediately
+                throw error;
+            }
+        }
+    }
+
+    // If primary failed and we have a fallback
+    // Only fall back if explicitly provided AND the last error was actually retryable (meaning we exhausted retries)
+    if (fallbackOperation) {
+        console.warn('⚠️ Primary model failed after maximum retries. Switching to fallback model (Gemini 2.5 Flash) as a last resort...');
+        // We can optionally retry the fallback too, but usually one try of fallback is enough if it's separate quota
+        // Let's be safe and give it basic retries too
+        for (let i = 0; i < 3; i++) {
+            try {
+                return await fallbackOperation();
+            } catch (error: any) {
+                lastError = error;
+                const errorMessage = error.message || error.toString();
+                const isRateLimit = errorMessage.includes('429') || errorMessage.includes('Quota');
+                const isServerOverload = errorMessage.includes('503');
+
+                if (isRateLimit || isServerOverload) {
+                    const delay = Math.pow(2, i) * 1000;
+                    console.warn(`⚠️ Fallback Model Rate Limit (${errorMessage}). Retrying in ${delay / 1000}s... (Attempt ${i + 1}/3)`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                    throw error;
+                }
+            }
+        }
+    }
+
+    throw lastError;
+};
+
 // Main service object
 export const vertexService = {
     getChatbotResponse: async (question: string, context: string): Promise<string> => {
@@ -194,29 +262,24 @@ ${context}
 ---
 QUESTION: ${question}`;
 
+        const systemInstruction = "You are Chason, an expert Creative Director and AI Guide for 'Klint Studios'. Your goal is to actively guide users to the right tools and workflows to achieve their creative vision. \n\nYour Knowledge Base:\nUse the provided CONTEXT (app documentation) to understand features. \n\nKey Behaviors:\n1. **Step-by-Step Guidance:** Do NOT overwhelm the user with long lists. Give ONE instruction at a time. Ask if they are ready for the next step.\n2. **Direct Navigation:** When suggesting a tool, ALWAYS provide a direct link using this format: `[Go to Tool Name](action:mode_name)`. Valid modes are: `apparel`, `product`, `design`, `reimagine`, `video`.\n3. **Be Action-Oriented:** Instead of describing, tell them what to click. Example: 'First, let's go to the [Product Studio](action:product) to upload your image.'\n4. **Be Creative:** If the user's request is vague, suggest specific, high-quality aesthetic ideas.\n5. **Tone:** Professional, encouraging, and sophisticated. You are a top-tier design consultant.\n6. **Formatting:** Use bold text for feature names and UI elements.\n\nIf a user asks something outside the app's scope, politely pivot back to how Klint Studios can help them create visuals.";
+
+        // Primary: Gemini 3 Pro Preview
+        const primaryOp = () => callVertexAPI('generate-content', {
+            model: 'gemini-3-pro-preview-11-2025',
+            prompt,
+            systemInstruction
+        }).then(r => r.text);
+
+        // Fallback: Gemini 2.5 Flash
+        const fallbackOp = () => callVertexAPI('generate-content', {
+            model: 'gemini-2.5-flash',
+            prompt,
+            systemInstruction
+        }).then(r => r.text);
+
         try {
-            // Try Gemini 3 Pro first (preview), fallback to 2.5 Flash if not available
-            let result;
-            try {
-                result = await callVertexAPI('generate-content', {
-                    model: 'gemini-3-pro-preview-11-2025',
-                    prompt,
-                    systemInstruction: "You are Chason, an expert Creative Director and AI Guide for 'Klint Studios'. Your goal is to actively guide users to the right tools and workflows to achieve their creative vision. \n\nYour Knowledge Base:\nUse the provided CONTEXT (app documentation) to understand features. \n\nKey Behaviors:\n1. **Step-by-Step Guidance:** Do NOT overwhelm the user with long lists. Give ONE instruction at a time. Ask if they are ready for the next step.\n2. **Direct Navigation:** When suggesting a tool, ALWAYS provide a direct link using this format: `[Go to Tool Name](action:mode_name)`. Valid modes are: `apparel`, `product`, `design`, `reimagine`, `video`.\n3. **Be Action-Oriented:** Instead of describing, tell them what to click. Example: 'First, let's go to the [Product Studio](action:product) to upload your image.'\n4. **Be Creative:** If the user's request is vague, suggest specific, high-quality aesthetic ideas.\n5. **Tone:** Professional, encouraging, and sophisticated. You are a top-tier design consultant.\n6. **Formatting:** Use bold text for feature names and UI elements.\n\nIf a user asks something outside the app's scope, politely pivot back to how Klint Studios can help them create visuals.",
-                });
-            } catch (error: any) {
-                // Fallback to Gemini 2.5 Flash if 3 Pro is not available
-                if (error.message?.includes('404') || error.message?.includes('NOT_FOUND')) {
-                    console.log('⚠️ Gemini 3 Pro not available, falling back to Gemini 2.5 Flash');
-                    result = await callVertexAPI('generate-content', {
-                        model: 'gemini-2.5-flash',
-                        prompt,
-                        systemInstruction: "You are Chason, an expert Creative Director and AI Guide for 'Klint Studios'. Your goal is to actively guide users to the right tools and workflows to achieve their creative vision. \n\nYour Knowledge Base:\nUse the provided CONTEXT (app documentation) to understand features. \n\nKey Behaviors:\n1. **Step-by-Step Guidance:** Do NOT overwhelm the user with long lists. Give ONE instruction at a time. Ask if they are ready for the next step.\n2. **Direct Navigation:** When suggesting a tool, ALWAYS provide a direct link using this format: `[Go to Tool Name](action:mode_name)`. Valid modes are: `apparel`, `product`, `design`, `reimagine`, `video`.\n3. **Be Action-Oriented:** Instead of describing, tell them what to click. Example: 'First, let's go to the [Product Studio](action:product) to upload your image.'\n4. **Be Creative:** If the user's request is vague, suggest specific, high-quality aesthetic ideas.\n5. **Tone:** Professional, encouraging, and sophisticated. You are a top-tier design consultant.\n6. **Formatting:** Use bold text for feature names and UI elements.\n\nIf a user asks something outside the app's scope, politely pivot back to how Klint Studios can help them create visuals.",
-                    });
-                } else {
-                    throw error;
-                }
-            }
-            return result.text;
+            return await executeWithRetry(primaryOp, fallbackOp);
         } catch (error) {
             console.error("Error getting chatbot response from Vertex AI:", error);
             return mockGetChatbotResponse(question, context);
@@ -229,27 +292,22 @@ QUESTION: ${question}`;
 
         try {
             const { mimeType, data } = await processImageInput(imageB64);
-            // Try Gemini 3 Pro first, fallback to 2.5 Flash
-            let result;
-            try {
-                result = await callVertexAPI('generate-content-with-images', {
-                    model: 'gemini-3-pro-preview-11-2025',
-                    prompt: customPrompt,
-                    images: [{ mimeType, data }],
-                });
-            } catch (error: any) {
-                if (error.message?.includes('404') || error.message?.includes('NOT_FOUND')) {
-                    console.log('⚠️ Gemini 3 Pro not available, falling back to Gemini 2.5 Flash');
-                    result = await callVertexAPI('generate-content-with-images', {
-                        model: 'gemini-2.5-flash',
-                        prompt: customPrompt,
-                        images: [{ mimeType, data }],
-                    });
-                } else {
-                    throw error;
-                }
-            }
-            return result.text;
+
+            // Primary: Gemini 3 Pro
+            const primaryOp = () => callVertexAPI('generate-content-with-images', {
+                model: 'gemini-3-pro-preview-11-2025',
+                prompt: customPrompt,
+                images: [{ mimeType, data }],
+            }).then(r => r.text);
+
+            // Fallback: Gemini 2.5 Flash
+            const fallbackOp = () => callVertexAPI('generate-content-with-images', {
+                model: 'gemini-2.5-flash',
+                prompt: customPrompt,
+                images: [{ mimeType, data }],
+            }).then(r => r.text);
+
+            return await executeWithRetry(primaryOp, fallbackOp);
         } catch (error) {
             console.error("Error analyzing image with Vertex AI:", error);
             return mockAnalyzeImage(imageB64, customPrompt);
@@ -266,26 +324,20 @@ User's Input: "${prompt}"
 
 Rewrite the user's input into a professional, high-quality prompt. Return ONLY the rewritten prompt text. Do not add any conversational filler or explanations.`;
 
+        // Primary: Gemini 3 Pro
+        const primaryOp = () => callVertexAPI('generate-content', {
+            model: 'gemini-3-pro-preview-11-2025',
+            prompt: fullPrompt,
+        }).then(r => r.text);
+
+        // Fallback: Gemini 2.5 Flash
+        const fallbackOp = () => callVertexAPI('generate-content', {
+            model: 'gemini-2.5-flash',
+            prompt: fullPrompt,
+        }).then(r => r.text);
+
         try {
-            // Try Gemini 3 Pro first, fallback to 2.5 Flash
-            let result;
-            try {
-                result = await callVertexAPI('generate-content', {
-                    model: 'gemini-3-pro-preview-11-2025',
-                    prompt: fullPrompt,
-                });
-            } catch (error: any) {
-                if (error.message?.includes('404') || error.message?.includes('NOT_FOUND')) {
-                    console.log('⚠️ Gemini 3 Pro not available, falling back to Gemini 2.5 Flash');
-                    result = await callVertexAPI('generate-content', {
-                        model: 'gemini-2.5-flash',
-                        prompt: fullPrompt,
-                    });
-                } else {
-                    throw error;
-                }
-            }
-            return result.text.trim();
+            return await executeWithRetry(primaryOp, fallbackOp).then(text => text.trim());
         } catch (error) {
             console.error("Error optimizing prompt with Vertex AI:", error);
             return mockOptimizePrompt(prompt, context);
@@ -297,12 +349,17 @@ Rewrite the user's input into a professional, high-quality prompt. Return ONLY t
         if (!config) return mockGenerateWithImagen(prompt, aspectRatio);
 
         try {
-            const result = await callVertexAPI('generate-images', {
-                prompt,
-                aspectRatio,
-                numberOfImages: 1,
-            });
-            // Adjust based on actual API response structure
+            // Note: Imagen doesn't have a direct equivalent fallback in the same way (Imagen 3 vs 3 fast), 
+            // but we can at least retry the same model
+            const result = await executeWithRetry(
+                () => callVertexAPI('generate-images', {
+                    prompt,
+                    aspectRatio,
+                    numberOfImages: 1,
+                }),
+                undefined // No fallback model for now
+            );
+
             if (result.images && result.images.length > 0) {
                 return result.images[0];
             }
